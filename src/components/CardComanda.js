@@ -1,20 +1,39 @@
-'use client';
-
 export default function CardComanda({ comanda, onClick }) {
-  // Definimos cores baseadas no tipo da comanda (igual você fazia no CSS)
-  const styles = {
-    'Balcão': 'border-purple-500 text-purple-600',
-    'Delivery': 'border-orange-500 text-orange-600',
-    'Retirada': 'border-blue-500 text-blue-600'
-  };
+  const valorTotal = comanda.produtos?.reduce((acc, p) => acc + p.preco, 0) || 0;
+  const valorPago = comanda.produtos?.filter(p => p.pago).reduce((acc, p) => acc + p.preco, 0) || 0;
+  const restante = valorTotal - valorPago;
 
   return (
-    <div 
-      onClick={onClick}
-      className={`w-32 h-44 bg-white shadow-md rounded-2xl flex flex-col justify-between p-4 cursor-pointer hover:scale-105 transition-transform border-t-4 ${styles[comanda.tipo] || 'border-gray-300'}`}
+    <button 
+      onClick={onClick} 
+      className="w-32 h-44 bg-white border border-gray-100 rounded-2xl p-3 flex flex-col hover:border-purple-300 hover:shadow-lg transition cursor-pointer text-left relative overflow-hidden active:scale-95"
     >
-      <p className="text-xs font-bold uppercase tracking-wider text-gray-400">{comanda.tipo}</p>
-      <h3 className="text-lg font-bold leading-tight">{comanda.nome}</h3>
-    </div>
+      <div className="flex justify-between items-start mb-2 w-full">
+        <h3 className="font-black text-gray-800 text-sm leading-tight truncate pr-1">{comanda.nome}</h3>
+        <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0 ${comanda.tipo === 'Delivery' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>
+          {comanda.tipo.substring(0, 3)}
+        </span>
+      </div>
+
+      {/* AS TAGS APARECENDO AQUI BEM ABAIXO DO NOME */}
+      {comanda.tags && comanda.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2 max-h-[32px] overflow-hidden">
+          {comanda.tags.slice(0, 3).map(tag => (
+            <span key={tag} className="text-[9px] bg-purple-50 border border-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-bold truncate max-w-full">
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-auto pt-2 border-t border-gray-50 w-full">
+        <div className="flex justify-between items-center text-[10px] text-gray-400 font-bold mb-1">
+          <span>Itens: {comanda.produtos?.length || 0}</span>
+        </div>
+        <p className="font-black text-green-600 text-lg tracking-tight">
+          <span className="text-[10px] text-green-500/70">R$</span> {restante.toFixed(2)}
+        </p>
+      </div>
+    </button>
   );
 }

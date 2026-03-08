@@ -6,27 +6,30 @@ import ModalPeso from '@/components/ModalPeso';
 import ModalPagamento from '@/components/ModalPagamento';
 import GraficoFaturamento from '@/components/GraficoFaturamento';
 import AdminProdutos from '@/components/AdminProdutos';
+import AdminUsuarios from '@/components/AdminUsuarios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 const TAGS_INICIAIS = ['Individual', 'Casal', 'Família', 'Estudantes', 'Academia', 'Com Crianças', 'Consumo Local', 'Para Viagem', 'Fidelidade'];
 const CORES_PIZZA = ['#0d9488', '#4f46e5', '#059669', '#ef4444']; 
 
 export default function Home() {
-  const [autenticado, setAutenticado] = useState(false);
+  const getHoje = () => new Date().toISOString().split('T')[0];
+  const getMesAtual = () => getHoje().substring(0, 7);
+  const getAnoAtual = () => getHoje().substring(0, 4);
+
+  const [sessao, setSessao] = useState(null); 
   const [credenciais, setCredenciais] = useState({ email: '', senha: '' });
+  const [loadingLogin, setLoadingLogin] = useState(false);
   
-  const [perfil, setPerfil] = useState({ nome: 'Bom a Bessa', logo: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png', mostrarFaturamento: true, mostrarPublico: true });
-  
-  // DADOS DO BANCO DE DADOS
   const [comandas, setComandas] = useState([]);
   const [menuCategorias, setMenuCategorias] = useState([]);
   const [tagsGlobais, setTagsGlobais] = useState(TAGS_INICIAIS);
-  const [isLoading, setIsLoading] = useState(true);
+  const [configPeso, setConfigPeso] = useState([]); 
+  const [isLoading, setIsLoading] = useState(false);
 
-  // MODAIS E MENUS
   const [mostrarMenuPerfil, setMostrarMenuPerfil] = useState(false);
-  const [mostrarConfig, setMostrarConfig] = useState(false);
   const [mostrarAdminProdutos, setMostrarAdminProdutos] = useState(false);
+  const [mostrarAdminUsuarios, setMostrarAdminUsuarios] = useState(false);
   const [mostrarConfigTags, setMostrarConfigTags] = useState(false);
   const [mostrarModalPeso, setMostrarModalPeso] = useState(false);
   const [mostrarModalPagamento, setMostrarModalPagamento] = useState(false);
@@ -38,64 +41,92 @@ export default function Home() {
   const [modoExclusao, setModoExclusao] = useState(false);
   const [selecionadasExclusao, setSelecionadasExclusao] = useState([]);
 
-  // LÓGICA DE DATAS
-  const getHoje = () => new Date().toISOString().split('T')[0];
-  const getMesAtual = () => getHoje().substring(0, 7);
-  const getAnoAtual = () => getHoje().substring(0, 4);
   const [filtroTempo, setFiltroTempo] = useState({ tipo: 'dia', valor: getHoje(), inicio: '', fim: '' });
-
   const comandaAtiva = comandas.find(c => c.id === idSelecionado);
 
   // ==========================================
-  // 1. CARREGAMENTO INICIAL DO SUPABASE
+  // 1. AUTENTICAÇÃO E PERMISSÕES
   // ==========================================
+  useEffect(() => {
+    const sessionData = localStorage.getItem('bessa_session');
+    if (sessionData) {
+      try {
+        const parsed = JSON.parse(sessionData);
+        if (parsed.data === getHoje() && parsed.empresa_id) {
+          setSessao(parsed);
+        } else {
+          localStorage.removeItem('bessa_session');
+        }
+      } catch(e) {
+        localStorage.removeItem('bessa_session');
+      }
+    }
+  }, []);
+
+  const fazerLogin = async () => {
+    if (!credenciais.email || !credenciais.senha) return alert("Preencha e-mail e senha.");
+    setLoadingLogin(true);
+    const { data, error } = await supabase.from('usuarios').select('*').eq('email', credenciais.email.trim()).eq('senha', credenciais.senha).single();
+
+    if (data && !error) { 
+      const sessionObj = { ...data, data: getHoje() };
+      setSessao(sessionObj);
+      localStorage.setItem('bessa_session', JSON.stringify(sessionObj));
+    } else { alert("⚠️ Credenciais inválidas."); }
+    setLoadingLogin(false);
+  };
+
+  const fazerLogout = () => {
+    localStorage.removeItem('bessa_session');
+    setSessao(null); setCredenciais({ email: '', senha: '' }); setMostrarMenuPerfil(false); setAbaAtiva('comandas');
+  };
+
   const fetchData = async () => {
-    setIsLoading(true);
+    // A BLINDAGEM ESTÁ AQUI: Só busca se a sessão E a empresa existirem
+    if (!sessao?.empresa_id) return;
     
-    // Busca o Cardápio
-    const { data: catData } = await supabase.from('categorias').select('*, itens:produtos(*)');
+    setIsLoading(true);
+    const { data: catData } = await supabase.from('categorias').select('*, itens:produtos(*)').eq('empresa_id', sessao.empresa_id);
     if (catData) setMenuCategorias(catData);
 
-    // Busca as Comandas + Produtos + Pagamentos (Tudo aninhado e renomeado pro Front-end)
-    const { data: comData } = await supabase
-      .from('comandas')
-      .select('*, produtos:comanda_produtos(*), pagamentos(*)');
-    
+    const { data: comData } = await supabase.from('comandas').select('*, produtos:comanda_produtos(*), pagamentos(*)').eq('empresa_id', sessao.empresa_id);
     if (comData) setComandas(comData);
+
+    const { data: pesoData } = await supabase.from('config_peso').select('*').eq('empresa_id', sessao.empresa_id);
+    if (pesoData) setConfigPeso(pesoData.map(p => ({ id: p.id, nome: p.nome, preco: parseFloat(p.preco_kg), custo: parseFloat(p.custo_kg || 0) })));
     setIsLoading(false);
   };
 
   useEffect(() => {
-    if (autenticado) fetchData();
-  }, [autenticado]);
+    if (!sessao?.empresa_id) return;
+    fetchData(); 
+    const canalAtualizacoes = supabase
+      .channel('schema-db-changes')
+      .on('postgres', { event: '*', schema: 'public', table: 'comandas' }, () => { fetchData(); })
+      .on('postgres', { event: '*', schema: 'public', table: 'comanda_produtos' }, () => { fetchData(); })
+      .on('postgres', { event: '*', schema: 'public', table: 'pagamentos' }, () => { fetchData(); })
+      .subscribe();
+    return () => { supabase.removeChannel(canalAtualizacoes); };
+  }, [sessao]);
 
   // ==========================================
-  // 2. OPERAÇÕES DE CAIXA (CRUD NO SUPABASE)
+  // 2. OPERAÇÕES DE CAIXA
   // ==========================================
   const adicionarComanda = async (tipo) => {
-    if (modoExclusao) return;
+    if (modoExclusao || !sessao?.empresa_id) return;
     const qtdHoje = comandas.filter(c => c.data === getHoje()).length;
-    const novaComanda = { nome: `Comanda ${qtdHoje + 1}`, tipo, data: getHoje(), status: 'aberta', tags: [] };
-    
-    // Insere no banco e recebe o UUID gerado
+    const novaComanda = { nome: `Comanda ${qtdHoje + 1}`, tipo, data: getHoje(), status: 'aberta', tags: [], empresa_id: sessao.empresa_id };
     const { data, error } = await supabase.from('comandas').insert([novaComanda]).select().single();
     if (data && !error) setComandas([...comandas, { ...data, produtos: [], pagamentos: [] }]);
   };
 
   const adicionarProdutoNaComanda = async (produto) => {
-    const payload = {
-      comanda_id: idSelecionado,
-      nome: produto.nome,
-      preco: produto.preco,
-      custo: produto.custo || 0,
-      pago: false,
-      observacao: ''
-    };
+    if (!sessao?.empresa_id) return;
+    const payload = { comanda_id: idSelecionado, nome: produto.nome, preco: produto.preco, custo: produto.custo || 0, pago: false, observacao: '', empresa_id: sessao.empresa_id };
     const { data, error } = await supabase.from('comanda_produtos').insert([payload]).select().single();
     if (data && !error) {
       setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: [...c.produtos, data] } : c));
-      setMostrarModalPeso(false);
-      setAbaDetalheMobile('resumo');
+      setMostrarModalPeso(false); setAbaDetalheMobile('resumo');
     }
   };
 
@@ -103,27 +134,27 @@ export default function Home() {
     if (!comandaAtiva) return;
     const novoNome = prompt("Renomear comanda para:", comandaAtiva.nome);
     if (novoNome && novoNome.trim() !== "") {
-      const { error } = await supabase.from('comandas').update({ nome: novoNome }).eq('id', idSelecionado);
-      if (!error) setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, nome: novoNome } : c));
+      await supabase.from('comandas').update({ nome: novoNome }).eq('id', idSelecionado);
+      setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, nome: novoNome } : c));
     }
   };
 
   const toggleTag = async (tag) => {
     const novasTags = comandaAtiva.tags.includes(tag) ? comandaAtiva.tags.filter(t => t !== tag) : [...comandaAtiva.tags, tag];
-    const { error } = await supabase.from('comandas').update({ tags: novasTags }).eq('id', idSelecionado);
-    if (!error) setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, tags: novasTags } : c));
+    await supabase.from('comandas').update({ tags: novasTags }).eq('id', idSelecionado);
+    setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, tags: novasTags } : c));
   };
 
   const excluirProduto = async (idProduto) => {
-    const { error } = await supabase.from('comanda_produtos').delete().eq('id', idProduto);
-    if (!error) setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: c.produtos.filter(p => p.id !== idProduto) } : c));
+    await supabase.from('comanda_produtos').delete().eq('id', idProduto);
+    setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: c.produtos.filter(p => p.id !== idProduto) } : c));
   };
 
   const editarProduto = async (idProduto, obsAtual) => {
     const novaObs = prompt("Digite a observação:", obsAtual || "");
     if (novaObs !== null) {
-      const { error } = await supabase.from('comanda_produtos').update({ observacao: novaObs }).eq('id', idProduto);
-      if (!error) setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: c.produtos.map(p => p.id === idProduto ? { ...p, observacao: novaObs } : p) } : c));
+      await supabase.from('comanda_produtos').update({ observacao: novaObs }).eq('id', idProduto);
+      setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: c.produtos.map(p => p.id === idProduto ? { ...p, observacao: novaObs } : p) } : c));
     }
   };
 
@@ -131,56 +162,39 @@ export default function Home() {
     if (!comandaAtiva) return;
     if (comandaAtiva.pagamentos.length > 0) return alert("⚠️ BLOQUEADO! Comanda com pagamentos parciais.");
     if (confirm("Deseja excluir a comanda definitivamente?")) { 
-      const idParaApagar = idSelecionado;
-      setIdSelecionado(null); 
-      const { error } = await supabase.from('comandas').delete().eq('id', idParaApagar);
-      if (!error) setComandas(prev => prev.filter(c => c.id !== idParaApagar)); 
+      const idParaApagar = idSelecionado; setIdSelecionado(null); 
+      await supabase.from('comandas').delete().eq('id', idParaApagar);
+      setComandas(prev => prev.filter(c => c.id !== idParaApagar)); 
     }
   };
 
   const encerrarMesa = async () => { 
-    const { error } = await supabase.from('comandas').update({ status: 'fechada' }).eq('id', idSelecionado);
-    if (!error) {
-      setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, status: 'fechada' } : c)); 
-      setIdSelecionado(null); 
-    }
+    await supabase.from('comandas').update({ status: 'fechada' }).eq('id', idSelecionado);
+    setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, status: 'fechada' } : c)); 
+    setIdSelecionado(null); 
   };
 
   const processarPagamento = async (valorFinal, formaPagamento, itensSelecionados, modoDivisao) => {
+    if (!sessao?.empresa_id) return;
     let novosProdutos = [...comandaAtiva.produtos];
     let idsParaPagar = [];
 
     if (modoDivisao) {
-      itensSelecionados.forEach(idx => { 
-        novosProdutos[idx].pago = true; 
-        idsParaPagar.push(novosProdutos[idx].id);
-      });
+      itensSelecionados.forEach(idx => { novosProdutos[idx].pago = true; idsParaPagar.push(novosProdutos[idx].id); });
     } else {
-      novosProdutos = novosProdutos.map(p => ({ ...p, pago: true }));
-      idsParaPagar = novosProdutos.map(p => p.id);
+      novosProdutos = novosProdutos.map(p => ({ ...p, pago: true })); idsParaPagar = novosProdutos.map(p => p.id);
     }
 
     const todosPagos = novosProdutos.every(p => p.pago);
-    
-    // 1. Grava o Pagamento
-    const payloadPagamento = { comanda_id: idSelecionado, valor: valorFinal, forma: formaPagamento, data: getHoje() };
+    const payloadPagamento = { comanda_id: idSelecionado, valor: valorFinal, forma: formaPagamento, data: getHoje(), empresa_id: sessao.empresa_id };
     const { data: pgData, error: errPg } = await supabase.from('pagamentos').insert([payloadPagamento]).select().single();
     
     if (!errPg) {
-      // 2. Atualiza os produtos para 'pago = true' no banco
-      if (idsParaPagar.length > 0) {
-        await supabase.from('comanda_produtos').update({ pago: true }).in('id', idsParaPagar);
-      }
-      // 3. Se tudo foi pago, fecha a comanda no banco
-      if (todosPagos) {
-        await supabase.from('comandas').update({ status: 'fechada' }).eq('id', idSelecionado);
-      }
+      if (idsParaPagar.length > 0) await supabase.from('comanda_produtos').update({ pago: true }).in('id', idsParaPagar);
+      if (todosPagos) await supabase.from('comandas').update({ status: 'fechada' }).eq('id', idSelecionado);
       
-      // 4. Atualiza a tela
       setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: novosProdutos, pagamentos: [...c.pagamentos, pgData], status: todosPagos ? 'fechada' : 'aberta' } : c));
       setMostrarModalPagamento(false);
-    } else {
-      alert("Erro ao processar pagamento no banco de dados.");
     }
   };
 
@@ -188,16 +202,28 @@ export default function Home() {
     if (comandas.filter(c => selecionadasExclusao.includes(c.id)).some(c => c.pagamentos.length > 0)) return alert("⚠️ Desmarque as comandas que já possuem pagamentos.");
     if (confirm(`Excluir ${selecionadasExclusao.length} comandas do banco?`)) { 
       await supabase.from('comandas').delete().in('id', selecionadasExclusao);
-      setComandas(comandas.filter(c => !selecionadasExclusao.includes(c.id))); 
-      setModoExclusao(false); 
-      setSelecionadasExclusao([]); 
+      setComandas(comandas.filter(c => !selecionadasExclusao.includes(c.id))); setModoExclusao(false); setSelecionadasExclusao([]); 
     }
   };
 
   const toggleSelecaoExclusao = (id) => setSelecionadasExclusao(selecionadasExclusao.includes(id) ? selecionadasExclusao.filter(item => item !== id) : [...selecionadasExclusao, id]);
 
+  const reabrirComandaFechada = async (id) => {
+    if (confirm("Deseja reabrir esta comanda? Ela voltará para a aba Caixa.")) {
+      await supabase.from('comandas').update({ status: 'aberta' }).eq('id', id);
+      setComandas(comandas.map(c => c.id === id ? { ...c, status: 'aberta' } : c));
+    }
+  };
+
+  const excluirComandaFechada = async (id) => {
+    if (confirm("ATENÇÃO: Deseja excluir esta comanda definitivamente? O faturamento e pagamentos dela serão perdidos.")) {
+      await supabase.from('comandas').delete().eq('id', id);
+      setComandas(comandas.filter(c => c.id !== id));
+    }
+  };
+
   // ==========================================
-  // 3. LÓGICA DE CÁLCULOS E GRÁFICOS
+  // 3. LÓGICA DE CÁLCULOS
   // ==========================================
   const isComandaInFiltro = (dataComanda) => {
     if (!dataComanda) return false;
@@ -210,9 +236,9 @@ export default function Home() {
 
   const comandasFiltradas = comandas.filter(c => isComandaInFiltro(c.data));
   const comandasAbertas = comandas.filter(c => c.status === 'aberta');
-  const comandasFechadasFiltradas = comandasFiltradas.filter(c => c.status === 'fechada');
+  const comandasFechadasHoje = comandas.filter(c => c.status === 'fechada' && c.data === getHoje());
+
   const pagamentosFiltrados = comandasFiltradas.flatMap(c => c.pagamentos);
-  
   const faturamentoTotal = pagamentosFiltrados.reduce((acc, p) => acc + p.valor, 0);
   const custoTotalFiltrado = comandasFiltradas.reduce((acc, c) => acc + c.produtos.filter(p => p.pago).reduce((sum, p) => sum + (p.custo || 0), 0), 0);
   const lucroEstimado = faturamentoTotal - custoTotalFiltrado;
@@ -232,21 +258,6 @@ export default function Home() {
 
   const dadosTipos = Object.keys(contagemTipos).map(k => ({ nome: k, qtd: contagemTipos[k] })).filter(d => d.qtd > 0);
   const dadosTags = Object.keys(contagemTags).map(k => ({ nome: k, qtd: contagemTags[k] })).sort((a, b) => b.qtd - a.qtd);
-
-  const renderHistorico = () => {
-    if (filtroTempo.tipo === 'periodo' || comandas.length === 0) return null;
-    let chavesPassadas = [...new Set(comandas.map(c => filtroTempo.tipo === 'dia' ? c.data : filtroTempo.tipo === 'mes' ? c.data.substring(0, 7) : c.data.substring(0, 4)))].filter(k => k !== filtroTempo.valor).sort().reverse().slice(0, 3);
-    if(chavesPassadas.length === 0) return null;
-    return (
-      <div className="flex gap-4 mb-6 overflow-x-auto pb-2">
-        <div className="flex items-center text-gray-400 text-xs font-bold uppercase whitespace-nowrap">Histórico:</div>
-        {chavesPassadas.map(chave => {
-          let fatPassado = comandas.filter(c => c.data.startsWith(chave)).flatMap(c => c.pagamentos).reduce((acc, p) => acc + p.valor, 0);
-          return <div key={chave} className="bg-gray-200/50 px-4 py-2 rounded-xl text-sm whitespace-nowrap"><span className="font-bold text-gray-500 mr-2">{chave}:</span><span className="font-black text-gray-700">R$ {fatPassado.toFixed(2)}</span></div>
-        })}
-      </div>
-    );
-  };
 
   const renderCardapioComanda = () => {
     let categoriasParaRenderizar = [];
@@ -280,59 +291,73 @@ export default function Home() {
   // ==========================================
   // RENDERIZAÇÃO DA TELA
   // ==========================================
-  if (!autenticado) {
+  if (!sessao) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm">
-          <div className="flex justify-center mb-6"><img src={perfil.logo} alt="Logo" className="w-24 h-24 rounded-full border-4 border-purple-100 object-cover" /></div>
+          <div className="flex justify-center mb-6"><img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" alt="Logo" className="w-24 h-24 rounded-full border-4 border-purple-100 object-cover" /></div>
           <h2 className="text-2xl font-black text-center text-purple-800 mb-2">Acesso Restrito</h2>
-          <p className="text-center text-gray-400 text-sm mb-6">Entre com suas credenciais do painel.</p>
+          <p className="text-center text-gray-400 text-sm mb-6">Identifique-se para acessar o sistema.</p>
           <div className="space-y-4">
-            <input type="email" placeholder="E-mail (admin@bessa.com)" className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:border-purple-500" value={credenciais.email} onChange={e => setCredenciais({...credenciais, email: e.target.value})} />
-            <input type="password" placeholder="Senha (123456)" className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:border-purple-500" value={credenciais.senha} onChange={e => setCredenciais({...credenciais, senha: e.target.value})} />
-            <button onClick={() => { if(credenciais.email === 'admin@bessa.com' && credenciais.senha === '123456') setAutenticado(true); else alert('Use admin@bessa.com e 123456'); }} className="w-full bg-purple-600 text-white font-bold p-3 rounded-xl hover:bg-purple-700 transition shadow-lg">Entrar no Sistema</button>
+            <input type="email" placeholder="E-mail" className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:border-purple-500" value={credenciais.email} onChange={e => setCredenciais({...credenciais, email: e.target.value})} />
+            <input type="password" placeholder="Senha" className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:border-purple-500" value={credenciais.senha} onChange={e => setCredenciais({...credenciais, senha: e.target.value})} onKeyDown={e => e.key === 'Enter' && fazerLogin()} />
+            <button onClick={fazerLogin} disabled={loadingLogin} className="w-full bg-purple-600 text-white font-bold p-3 rounded-xl hover:bg-purple-700 transition shadow-lg disabled:opacity-50">
+              {loadingLogin ? 'Verificando...' : 'Entrar no Sistema'}
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  if (isLoading) {
+  if (isLoading && comandas.length === 0) {
     return <div className="min-h-screen bg-gray-100 flex items-center justify-center text-purple-600 font-bold text-xl animate-pulse">Carregando Banco de Dados...</div>;
   }
 
   return (
     <main className="min-h-screen bg-gray-100 p-2 md:p-6 flex flex-col">
-      <header className="flex items-center justify-between bg-white p-3 md:p-4 rounded-2xl shadow-sm mb-4 sticky top-0 z-10">
+      <header className="flex items-center justify-between bg-white p-3 md:p-4 rounded-2xl shadow-sm mb-4 sticky top-0 z-50">
         {comandaAtiva ? (
           <button onClick={() => setIdSelecionado(null)} className="flex items-center gap-2 text-purple-700 font-bold bg-purple-50 px-4 py-2 rounded-xl hover:bg-purple-100 transition"><span className="text-xl">←</span> <span className="hidden md:inline">Voltar</span></button>
         ) : (
-          <div className="relative">
+          <div className="relative shrink-0 mr-4">
             <button onClick={() => setMostrarMenuPerfil(!mostrarMenuPerfil)} className="flex items-center gap-2 hover:opacity-80 transition cursor-pointer">
-              <img src={perfil.logo} className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-purple-100 object-cover" alt="Perfil" />
-              <span className="font-black text-purple-800 tracking-tight hidden md:inline">{perfil.nome}</span>
-              <span className="text-xs text-gray-400">▼</span>
+              <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-purple-100 object-cover" alt="Perfil" />
+              <div className="flex flex-col text-left hidden md:flex">
+                <span className="font-black text-purple-800 tracking-tight leading-tight">{sessao.nome_usuario}</span>
+                <span className="text-[10px] text-gray-400 font-bold uppercase">{sessao.role}</span>
+              </div>
+              <span className="text-xs text-gray-400 ml-1">▼</span>
             </button>
             {mostrarMenuPerfil && (
               <div className="absolute top-12 left-0 bg-white shadow-xl rounded-xl p-2 w-56 border border-gray-100 z-50">
-                <button onClick={() => { setMostrarConfig(true); setMostrarMenuPerfil(false); }} className="w-full text-left p-2 text-sm font-bold text-gray-700 hover:bg-purple-50 rounded-lg">⚙️ Configurações de Perfil</button>
-                <button onClick={() => { setMostrarAdminProdutos(true); setMostrarMenuPerfil(false); }} className="w-full text-left p-2 text-sm font-bold text-gray-700 hover:bg-purple-50 rounded-lg">📦 Gerenciar Cardápio</button>
-                <button onClick={() => { setMostrarConfigTags(true); setMostrarMenuPerfil(false); }} className="w-full text-left p-2 text-sm font-bold text-gray-700 hover:bg-purple-50 rounded-lg">🏷️ Configurar Tags</button>
+                {sessao.role === 'dono' && <button onClick={() => { setMostrarAdminUsuarios(true); setMostrarMenuPerfil(false); }} className="w-full text-left p-2 text-sm font-black text-purple-700 hover:bg-purple-50 rounded-lg">👥 Gerenciar Equipe</button>}
+                {(sessao.role === 'dono' || sessao.perm_cardapio) && <button onClick={() => { setMostrarAdminProdutos(true); setMostrarMenuPerfil(false); }} className="w-full text-left p-2 text-sm font-bold text-gray-700 hover:bg-purple-50 rounded-lg">📦 Gerenciar Cardápio</button>}
+                {sessao.role === 'dono' && <button onClick={() => { setMostrarConfigTags(true); setMostrarMenuPerfil(false); }} className="w-full text-left p-2 text-sm font-bold text-gray-700 hover:bg-purple-50 rounded-lg">🏷️ Configurar Tags</button>}
                 <div className="h-px bg-gray-100 my-1"></div>
-                <button onClick={() => { setAutenticado(false); setMostrarMenuPerfil(false); }} className="w-full text-left p-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-lg">🚪 Sair</button>
+                <button onClick={fazerLogout} className="w-full text-left p-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-lg">🚪 Sair</button>
               </div>
             )}
           </div>
         )}
 
         {!comandaAtiva && (
-          <div className="flex bg-gray-100 rounded-xl p-1 overflow-x-auto text-sm md:text-base">
+          <div className="flex bg-gray-100 rounded-xl p-1 overflow-x-auto text-sm md:text-base flex-1 md:flex-none">
             <button onClick={() => setAbaAtiva('comandas')} className={`px-3 md:px-5 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'comandas' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500 hover:text-purple-600'}`}>Caixa</button>
-            {perfil.mostrarFaturamento && <button onClick={() => setAbaAtiva('faturamento')} className={`px-3 md:px-5 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'faturamento' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500 hover:text-purple-600'}`}>Faturamento</button>}
-            {perfil.mostrarPublico && <button onClick={() => setAbaAtiva('analises')} className={`px-3 md:px-5 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'analises' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500 hover:text-purple-600'}`}>Estudo de Público</button>}
+            <button onClick={() => setAbaAtiva('fechadas')} className={`px-3 md:px-5 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'fechadas' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500 hover:text-purple-600'}`}>Fechadas do Dia</button>
+            {(sessao.role === 'dono' || sessao.perm_faturamento) && <button onClick={() => setAbaAtiva('faturamento')} className={`px-3 md:px-5 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'faturamento' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500 hover:text-purple-600'}`}>Faturamento</button>}
+            {(sessao.role === 'dono' || sessao.perm_estudo) && <button onClick={() => setAbaAtiva('analises')} className={`px-3 md:px-5 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'analises' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500 hover:text-purple-600'}`}>Estudo de Público-Alvo</button>}
           </div>
         )}
-        {comandaAtiva && <h2 className="text-lg font-black text-purple-800 truncate max-w-[150px] md:max-w-xs text-right cursor-pointer" onClick={editarNomeComanda}>{comandaAtiva?.nome} ✏️</h2>}
+        
+        {comandaAtiva && (
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="hidden md:flex flex-wrap gap-1 justify-end">
+              {comandaAtiva.tags.map(t => <span key={t} className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold uppercase border border-purple-200">{t}</span>)}
+            </div>
+            <h2 className="text-lg font-black text-purple-800 truncate max-w-[150px] md:max-w-xs text-right cursor-pointer shrink-0" onClick={editarNomeComanda}>{comandaAtiva?.nome} ✏️</h2>
+          </div>
+        )}
       </header>
 
       {!comandaAtiva ? (
@@ -360,6 +385,48 @@ export default function Home() {
               ))}
             </div>
           </div>
+        ) : abaAtiva === 'fechadas' ? (
+          <div className="max-w-6xl mx-auto w-full animate-in fade-in duration-300">
+            <h2 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2">🛒 Mesas Encerradas Hoje <span className="text-sm font-normal text-gray-400">({comandasFechadasHoje.length} comandas)</span></h2>
+            {comandasFechadasHoje.length === 0 ? (
+              <div className="bg-white p-10 rounded-3xl text-center shadow-sm border border-gray-100">
+                <p className="text-gray-400 font-bold text-lg mb-2">Ainda não há comandas fechadas hoje.</p>
+                <p className="text-gray-300 text-sm">Quando você cobrar e encerrar uma mesa, o recibo aparecerá aqui.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {comandasFechadasHoje.map(c => {
+                  const valorTotalComanda = c.pagamentos.reduce((acc, p) => acc + p.valor, 0);
+                  return (
+                    <div key={c.id} className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 flex flex-col">
+                      <div className="flex justify-between items-start border-b border-gray-50 pb-3 mb-3">
+                        <div>
+                          <h3 className="font-black text-gray-800 text-lg leading-tight flex items-center gap-2">
+                            {c.nome} {c.tags.length > 0 && <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded uppercase">{c.tags[0]}</span>}
+                          </h3>
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md mt-1 inline-block ${c.tipo === 'Delivery' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>{c.tipo}</span>
+                        </div>
+                        <span className="text-green-600 font-black text-xl tracking-tight">R$ {valorTotalComanda.toFixed(2)}</span>
+                      </div>
+                      <div className="flex-1 mb-4">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Resumo dos Itens</p>
+                        <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">{c.produtos.map(p => p.nome).join(', ')}</p>
+                        <p className="text-xs text-gray-400 mt-1 font-medium italic">({c.produtos.length} produtos)</p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-xl flex items-center justify-between border border-gray-100 mb-3">
+                        <span className="text-xs font-bold text-gray-500 uppercase">Pagamento</span>
+                        <div className="flex flex-wrap gap-1 justify-end">{c.pagamentos.map((p, i) => <span key={i} className="text-[10px] font-bold px-2 py-1 rounded bg-white border border-gray-200 text-gray-700 shadow-sm">{p.forma}</span>)}</div>
+                      </div>
+                      <div className="flex gap-2 pt-3 border-t border-gray-50">
+                        <button onClick={() => reabrirComandaFechada(c.id)} className="flex-1 bg-blue-50 text-blue-600 font-bold p-2 rounded-xl text-xs hover:bg-blue-100 transition text-center">🔄 Reabrir</button>
+                        <button onClick={() => excluirComandaFechada(c.id)} className="flex-1 bg-red-50 text-red-600 font-bold p-2 rounded-xl text-xs hover:bg-red-100 transition text-center">🗑️ Excluir</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         ) : abaAtiva === 'faturamento' ? (
           <div className="max-w-5xl mx-auto w-full animate-in slide-in-from-bottom-4 duration-300">
             <div className="bg-white p-4 rounded-2xl shadow-sm mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -371,15 +438,11 @@ export default function Home() {
                 {filtroTempo.tipo === 'mes' && <input type="month" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className="p-2 border rounded-xl outline-none text-sm font-bold w-full" />}
                 {filtroTempo.tipo === 'ano' && <input type="number" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className="p-2 border rounded-xl outline-none text-sm font-bold w-full" />}
                 {filtroTempo.tipo === 'periodo' && (
-                  <>
-                    <input type="date" value={filtroTempo.inicio} onChange={e => setFiltroTempo({...filtroTempo, inicio: e.target.value})} className="p-2 border rounded-xl outline-none text-xs font-bold w-full" />
-                    <span className="self-center font-bold text-gray-400">até</span>
-                    <input type="date" value={filtroTempo.fim} onChange={e => setFiltroTempo({...filtroTempo, fim: e.target.value})} className="p-2 border rounded-xl outline-none text-xs font-bold w-full" />
-                  </>
+                  <><input type="date" value={filtroTempo.inicio} onChange={e => setFiltroTempo({...filtroTempo, inicio: e.target.value})} className="p-2 border rounded-xl outline-none text-xs font-bold w-full" /><span className="self-center font-bold text-gray-400">até</span><input type="date" value={filtroTempo.fim} onChange={e => setFiltroTempo({...filtroTempo, fim: e.target.value})} className="p-2 border rounded-xl outline-none text-xs font-bold w-full" /></>
                 )}
               </div>
             </div>
-            {renderHistorico()}
+            
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-5 rounded-3xl shadow-md col-span-2">
                 <h3 className="text-purple-100 text-xs font-bold uppercase mb-1">Venda Bruta</h3>
@@ -479,22 +542,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* MODAL CONFIGURAÇÕES E TAGS */}
-      {mostrarConfig && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
-            <h2 className="text-xl font-bold text-purple-800 mb-6 text-center">Configurações</h2>
-            <label className="block mb-2 text-sm font-bold text-gray-600">Nome do Estabelecimento</label>
-            <input type="text" value={perfil.nome} onChange={e => setPerfil({...perfil, nome: e.target.value})} className="w-full p-3 border border-gray-200 rounded-xl mb-4 outline-none focus:border-purple-500" />
-            <h3 className="font-bold text-gray-700 mb-4 border-b pb-2 mt-4">Módulos</h3>
-            <label className="flex items-center gap-3 mb-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg"><input type="checkbox" checked={perfil.mostrarFaturamento} onChange={e => setPerfil({...perfil, mostrarFaturamento: e.target.checked})} className="w-5 h-5 accent-purple-600" /><span className="font-medium text-gray-700">Aba Faturamento</span></label>
-            <label className="flex items-center gap-3 mb-6 cursor-pointer p-2 hover:bg-gray-50 rounded-lg"><input type="checkbox" checked={perfil.mostrarPublico} onChange={e => setPerfil({...perfil, mostrarPublico: e.target.checked})} className="w-5 h-5 accent-purple-600" /><span className="font-medium text-gray-700">Estudo de Público</span></label>
-            <button onClick={() => setMostrarConfig(false)} className="w-full bg-purple-600 text-white font-bold p-3 rounded-xl hover:bg-purple-700 transition">Salvar</button>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL CONFIGURAR TAGS */}
       {mostrarConfigTags && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
            <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
@@ -522,8 +569,10 @@ export default function Home() {
         </div>
       )}
 
-      {mostrarAdminProdutos && <AdminProdutos onFechar={() => { setMostrarAdminProdutos(false); fetchData(); }} />}
-      {mostrarModalPeso && <ModalPeso opcoesPeso={[{ id: '1', nome: 'Preço Normal', preco: 39.90 }]} onAdicionar={adicionarProdutoNaComanda} onCancelar={() => setMostrarModalPeso(false)} />}
+      {/* RENDERIZADOS APENAS SE A SESSÃO ESTIVER PRONTA E SEGURA */}
+      {mostrarAdminUsuarios && sessao && <AdminUsuarios empresaId={sessao.empresa_id} usuarioAtualId={sessao.id} onFechar={() => setMostrarAdminUsuarios(false)} />}
+      {mostrarAdminProdutos && sessao && <AdminProdutos empresaId={sessao.empresa_id} onFechar={() => { setMostrarAdminProdutos(false); fetchData(); }} />}
+      {mostrarModalPeso && <ModalPeso opcoesPeso={configPeso} onAdicionar={adicionarProdutoNaComanda} onCancelar={() => setMostrarModalPeso(false)} />}
       {mostrarModalPagamento && <ModalPagamento comanda={comandaAtiva} onConfirmar={processarPagamento} onCancelar={() => setMostrarModalPagamento(false)} />}
     </main>
   );
