@@ -1,46 +1,72 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function ModalPeso({ opcoesPeso, onAdicionar, onCancelar }) {
-  const [peso, setPeso] = useState('');
-  const [precoKg, setPrecoKg] = useState(opcoesPeso.length > 0 ? opcoesPeso[0].preco : 0);
+  const [pesoGramas, setPesoGramas] = useState('');
+  const [opcaoSelecionada, setOpcaoSelecionada] = useState('');
 
-  const total = peso ? (parseFloat(peso) / 1000 * precoKg).toFixed(2) : "0.00";
+  useEffect(() => {
+    if (opcoesPeso && opcoesPeso.length > 0) {
+      setOpcaoSelecionada(opcoesPeso[0].id);
+    }
+  }, [opcoesPeso]);
+
+  const handleAdicionar = () => {
+    const peso = parseFloat(pesoGramas);
+    if (!peso || peso <= 0) return alert('Digite um peso válido em gramas.');
+    
+    const config = opcoesPeso.find(o => o.id === opcaoSelecionada);
+    if (!config) return alert('Selecione uma opção de preço.');
+
+    const multiplicador = peso / 1000;
+    const valorFinal = config.preco * multiplicador;
+    const custoFinal = (config.custo || 0) * multiplicador;
+
+    // A MÁGICA AQUI: Organizando o nome para "Açaí no Peso - Nome (Gramas)"
+    onAdicionar({
+      nome: `Açaí no Peso - ${config.nome} (${peso}g)`,
+      preco: valorFinal,
+      custo: custoFinal
+    });
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center">
-        <h2 className="text-2xl font-bold text-purple-700 mb-6">Peso do Açaí</h2>
+      <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95">
+        <h2 className="text-xl font-black text-purple-800 mb-6 flex items-center gap-2">⚖️ Açaí no Peso</h2>
         
+        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Tabela de Preço</label>
         <select 
-          className="w-full p-3 rounded-xl border border-purple-200 mb-4 outline-none font-bold text-purple-800"
-          onChange={(e) => setPrecoKg(parseFloat(e.target.value))}
+          value={opcaoSelecionada} 
+          onChange={e => setOpcaoSelecionada(e.target.value)}
+          className="w-full p-3 border border-purple-200 rounded-xl outline-none focus:border-purple-500 bg-purple-50 text-purple-900 font-bold mb-4"
         >
-          {opcoesPeso.map(op => (
-            <option key={op.id} value={op.preco}>{op.nome} - R$ {op.preco.toFixed(2)}/kg</option>
-          ))}
+          {opcoesPeso && opcoesPeso.length > 0 ? (
+            opcoesPeso.map(op => (
+              <option key={op.id} value={op.id}>{op.nome} - R$ {op.preco.toFixed(2)}/kg</option>
+            ))
+          ) : (
+            <option value="">Nenhuma configuração encontrada</option>
+          )}
         </select>
 
-        <input 
-          type="number"
-          placeholder="Ex: 500 (gramas)"
-          className="w-full text-3xl p-4 border-2 border-purple-500 rounded-2xl text-center mb-4 outline-none focus:bg-purple-50"
-          value={peso}
-          onChange={(e) => setPeso(e.target.value)}
-          autoFocus
-        />
+        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Peso Lido na Balança</label>
+        <div className="relative mb-8">
+          <input 
+            type="number" 
+            autoFocus
+            placeholder="Ex: 450" 
+            className="w-full p-4 border-2 border-purple-200 rounded-xl outline-none focus:border-purple-500 text-2xl font-black text-center" 
+            value={pesoGramas} 
+            onChange={e => setPesoGramas(e.target.value)} 
+            onKeyDown={e => e.key === 'Enter' && handleAdicionar()}
+          />
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">gramas</span>
+        </div>
 
-        <p className="text-xl font-bold text-green-600 mb-6">Total: R$ {total}</p>
-
-        <div className="flex gap-4">
-          <button onClick={onCancelar} className="flex-1 p-4 rounded-2xl border border-purple-200 text-purple-700 font-bold hover:bg-purple-50 transition">Cancelar</button>
-          <button 
-            onClick={() => onAdicionar({ nome: `Açaí Peso (${peso}g)`, preco: parseFloat(total), custo: 0 })} // Custo do peso pode ser adicionado depois se quiser
-            disabled={!peso || peso <= 0}
-            className="flex-1 p-4 rounded-2xl bg-purple-600 text-white font-bold disabled:opacity-50 hover:bg-purple-700 transition"
-          >
-            Enviar
-          </button>
+        <div className="flex gap-2">
+          <button onClick={onCancelar} className="flex-1 bg-gray-100 text-gray-600 font-bold p-3 rounded-xl hover:bg-gray-200 transition">Cancelar</button>
+          <button onClick={handleAdicionar} className="flex-[2] bg-purple-600 text-white font-bold p-3 rounded-xl hover:bg-purple-700 transition shadow-lg">Lançar Peso</button>
         </div>
       </div>
     </div>

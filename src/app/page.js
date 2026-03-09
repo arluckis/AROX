@@ -13,7 +13,17 @@ const TAGS_INICIAIS = ['Individual', 'Casal', 'Família', 'Estudantes', 'Academi
 const CORES_PIZZA = ['#0d9488', '#4f46e5', '#059669', '#ef4444']; 
 
 export default function Home() {
-  const getHoje = () => new Date().toISOString().split('T')[0];
+  
+  // Fuso Horário Local (Brasil) Blindado para a Vercel não virar o dia antes da hora
+  const getHoje = () => {
+    const dataBr = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+    const d = new Date(dataBr);
+    const ano = d.getFullYear();
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    const dia = String(d.getDate()).padStart(2, '0');
+    return `${ano}-${mes}-${dia}`;
+  };
+  
   const getMesAtual = () => getHoje().substring(0, 7);
   const getAnoAtual = () => getHoje().substring(0, 4);
 
@@ -82,9 +92,7 @@ export default function Home() {
   };
 
   const fetchData = async () => {
-    // A BLINDAGEM ESTÁ AQUI: Só busca se a sessão E a empresa existirem
     if (!sessao?.empresa_id) return;
-    
     setIsLoading(true);
     const { data: catData } = await supabase.from('categorias').select('*, itens:produtos(*)').eq('empresa_id', sessao.empresa_id);
     if (catData) setMenuCategorias(catData);
@@ -223,7 +231,7 @@ export default function Home() {
   };
 
   // ==========================================
-  // 3. LÓGICA DE CÁLCULOS
+  // 3. LÓGICA DE CÁLCULOS E RANKING
   // ==========================================
   const isComandaInFiltro = (dataComanda) => {
     if (!dataComanda) return false;
@@ -248,6 +256,51 @@ export default function Home() {
   const totalDinheiro = pagamentosFiltrados.filter(p => p.forma === 'Dinheiro').reduce((acc, p) => acc + p.valor, 0);
   const totalIfood = pagamentosFiltrados.filter(p => p.forma === 'iFood').reduce((acc, p) => acc + p.valor, 0);
   const dadosPizza = [{ name: 'Pix', value: totalPix }, { name: 'Cartão', value: totalCartao }, { name: 'Dinheiro', value: totalDinheiro }, { name: 'iFood', value: totalIfood }].filter(d => d.value > 0);
+
+  // NOVO: RANKING DE PRODUTOS POR FATURAMENTO (COM DETALHE NO MOUSE E NOME REAL DO PESO)
+  const contagemProdutos = {};
+  comandasFiltradas.forEach(c => {
+    c.produtos.filter(p => p.pago).forEach(p => {
+      const nomeMin = p.nome.toLowerCase();
+      const isPeso = nomeMin.includes('peso') || nomeMin.includes('balança') || nomeMin.includes('balanca');
+      
+      let nomeChave = p.nome;
+      
+      if (isPeso) {
+        // A MÁGICA: Remove apenas a parte do peso "(450g)" e mantém o nome e a categoria reais!
+        // Ex: "Açaí no Peso (450g) - Premium" vira "Açaí no Peso - Premium"
+        nomeChave = p.nome.replace(/\s*\(\d+(?:\.\d+)?\s*g\)/i, '').trim();
+      }
+      
+      // Cria a gaveta do produto se ela não existir
+      if (!contagemProdutos[nomeChave]) {
+        contagemProdutos[nomeChave] = { faturamento: 0, volume: 0, isPeso: isPeso };
+      }
+
+      // SOMA O DINHEIRO (R$)
+      contagemProdutos[nomeChave].faturamento += p.preco;
+
+      // SOMA AS GRAMAS OU AS UNIDADES
+      if (isPeso) {
+        const matchGramas = p.nome.match(/(\d+(?:\.\d+)?)\s*g/i);
+        const gramas = matchGramas ? parseFloat(matchGramas[1]) : 0;
+        contagemProdutos[nomeChave].volume += gramas;
+      } else {
+        contagemProdutos[nomeChave].volume += 1;
+      }
+    });
+  });
+  
+  // Transforma em array e ordena do MAIOR faturamento para o menor
+  const rankingProdutos = Object.keys(contagemProdutos)
+    .map(nome => ({ 
+      nome, 
+      valor: contagemProdutos[nome].faturamento, 
+      volume: contagemProdutos[nome].volume,
+      isPeso: contagemProdutos[nome].isPeso 
+    }))
+    .sort((a, b) => b.valor - a.valor) 
+    .slice(0, 7);
 
   const contagemTipos = { Balcão: 0, Delivery: 0, iFood: 0 };
   const contagemTags = {};
@@ -453,6 +506,7 @@ export default function Home() {
                 <p className="text-3xl font-black">R$ {lucroEstimado.toFixed(2)}</p>
               </div>
             </div>
+            
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col gap-4">
                 <h3 className="text-gray-800 text-sm font-bold uppercase text-center border-b pb-2">Meios de Pagamento</h3>
@@ -465,6 +519,57 @@ export default function Home() {
                 <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={dadosPizza} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{dadosPizza.map((e, i) => <Cell key={i} fill={CORES_PIZZA[i % CORES_PIZZA.length]} />)}</Pie><RechartsTooltip formatter={(val) => `R$ ${val.toFixed(2)}`} /><Legend /></PieChart></ResponsiveContainer>
               </div>
             </div>
+
+            {/* O NOVO GRÁFICO DE RANKING POR RENTABILIDADE E TOOLTIP CUSTOMIZADO */}
+            {rankingProdutos.length > 0 && (
+              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 mb-6 h-80">
+                <h3 className="text-gray-800 text-sm font-bold uppercase text-center mb-4">🏆 Produtos Mais Rentáveis (Top 7)</h3>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={rankingProdutos} layout="vertical" margin={{ top: 0, right: 60, left: 20, bottom: 0 }}>
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="nome" type="category" axisLine={false} tickLine={false} tick={{fill: '#4b5563', fontSize: 11, fontWeight: 'bold'}} width={180} />
+                    
+                    {/* TOOLTIP INTELIGENTE (MOSTRA DINHEIRO E VOLUME FÍSICO) */}
+                    <RechartsTooltip 
+                      cursor={{fill: '#f3e8ff'}} 
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-white p-3 shadow-lg rounded-xl border border-purple-100">
+                              <p className="text-xs font-black text-purple-800 mb-1">{data.nome}</p>
+                              <p className="text-sm font-bold text-green-600">Receita: R$ {data.valor.toFixed(2)}</p>
+                              <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">
+                                {data.isPeso 
+                                  ? `Volume Processado: ${(data.volume / 1000).toFixed(3)} kg` 
+                                  : `Quantidade Vendida: ${data.volume} unid.`}
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    
+                    {/* BARRAS PROPORCIONAIS AO VALOR R$ */}
+                    <Bar 
+                      dataKey="valor" 
+                      fill="#8b5cf6" 
+                      radius={[0, 4, 4, 0]} 
+                      barSize={20} 
+                      label={{ 
+                        position: 'right', 
+                        formatter: (val) => `R$ ${val.toFixed(2)}`,
+                        fill: '#6b7280', 
+                        fontSize: 11, 
+                        fontWeight: 'bold' 
+                      }} 
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
             <GraficoFaturamento comandas={comandasFiltradas} />
           </div>
         ) : (
@@ -539,33 +644,6 @@ export default function Home() {
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {mostrarConfigTags && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-           <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
-             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-purple-800">Tags de Comportamento</h2>
-                <button onClick={() => setMostrarConfigTags(false)} className="bg-gray-100 p-2 rounded-full font-bold">✕</button>
-             </div>
-             <div className="flex gap-2 mb-6">
-                <input type="text" id="inputNovaTag" placeholder="Nova tag (Ex: Ifood Retirada)" className="flex-1 p-3 border border-gray-200 rounded-xl outline-none" onKeyDown={(e) => {
-                  if (e.key === 'Enter' && e.target.value) { setTagsGlobais([...tagsGlobais, e.target.value]); e.target.value = ''; }
-                }} />
-                <button onClick={() => {
-                  const input = document.getElementById('inputNovaTag');
-                  if (input.value) { setTagsGlobais([...tagsGlobais, input.value]); input.value = ''; }
-                }} className="bg-purple-600 text-white px-4 rounded-xl font-bold">+</button>
-             </div>
-             <div className="flex flex-wrap gap-2 max-h-60 overflow-y-auto">
-                {tagsGlobais.map(t => (
-                  <div key={t} className="bg-gray-100 px-3 py-1.5 rounded-lg text-sm font-bold text-gray-700 flex items-center gap-2">
-                    {t} <button onClick={() => setTagsGlobais(tagsGlobais.filter(tag => tag !== t))} className="text-red-500 hover:text-red-700 ml-1">✕</button>
-                  </div>
-                ))}
-             </div>
-           </div>
         </div>
       )}
 

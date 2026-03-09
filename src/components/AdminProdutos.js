@@ -8,14 +8,17 @@ export default function AdminProdutos({ empresaId, onFechar }) {
   const [configPeso, setConfigPeso] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Estados dos formulários
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '', custo: '', idCategoria: '' });
   const [editandoItem, setEditandoItem] = useState(null);
+  
   const [novaCategoria, setNovaCategoria] = useState('');
+  
   const [novoPeso, setNovoPeso] = useState({ nome: '', preco: '', custo: '' });
+  const [editandoPeso, setEditandoPeso] = useState(null); // NOVO: Estado para controlar a edição do peso
 
   const fetchDados = async () => {
     setLoading(true);
-    // TUDO FILTRADO PELA EMPRESA
     const { data: catData } = await supabase.from('categorias').select('*, produtos(*)').eq('empresa_id', empresaId); 
     if (catData) setCategorias(catData.map(cat => ({ id: cat.id, nome: cat.nome, itens: cat.produtos || [] })));
 
@@ -26,6 +29,7 @@ export default function AdminProdutos({ empresaId, onFechar }) {
 
   useEffect(() => { if (empresaId) fetchDados(); }, [empresaId]);
 
+  // --- CATEGORIAS ---
   const adicionarCategoria = async () => {
     if (!novaCategoria) return;
     await supabase.from('categorias').insert([{ nome: novaCategoria, empresa_id: empresaId }]);
@@ -38,6 +42,7 @@ export default function AdminProdutos({ empresaId, onFechar }) {
     if (confirm("Excluir categoria?")) { await supabase.from('categorias').delete().eq('id', id); fetchDados(); }
   };
 
+  // --- PRODUTOS ---
   const salvarProduto = async () => {
     if (!novoItem.nome || !novoItem.preco || !novoItem.idCategoria) return alert("Preencha todos os campos!");
     const precoNum = parseFloat(novoItem.preco); const custoNum = parseFloat(novoItem.custo || 0);
@@ -55,11 +60,39 @@ export default function AdminProdutos({ empresaId, onFechar }) {
   const toggleFavorito = async (produto) => { await supabase.from('produtos').update({ favorito: !produto.favorito }).eq('id', produto.id); fetchDados(); };
   const carregarParaEdicao = (catId, produto) => { setEditandoItem(produto); setNovoItem({ nome: produto.nome, preco: produto.preco, custo: produto.custo || '', idCategoria: catId }); setAbaConfig('produtos'); };
 
-  const adicionarPeso = async () => {
+  // --- AÇAÍ NO PESO ---
+  const salvarPeso = async () => {
     if (!novoPeso.nome || !novoPeso.preco) return alert("Preencha o nome e o preço de venda por kg.");
-    const payload = { nome: novoPeso.nome, preco_kg: parseFloat(novoPeso.preco), custo_kg: parseFloat(novoPeso.custo || 0), empresa_id: empresaId };
-    await supabase.from('config_peso').insert([payload]);
-    fetchDados(); setNovoPeso({ nome: '', preco: '', custo: '' });
+    
+    const payload = { 
+      nome: novoPeso.nome, 
+      preco_kg: parseFloat(novoPeso.preco), 
+      custo_kg: parseFloat(novoPeso.custo || 0), 
+      empresa_id: empresaId 
+    };
+
+    if (editandoPeso) {
+      // Se estiver editando, faz um UPDATE
+      const { error } = await supabase.from('config_peso').update(payload).eq('id', editandoPeso.id);
+      if (error) return alert("⚠️ Erro ao atualizar: " + error.message);
+    } else {
+      // Se não, faz um INSERT
+      const { error } = await supabase.from('config_peso').insert([payload]);
+      if (error) return alert("⚠️ Erro ao adicionar: " + error.message);
+    }
+
+    fetchDados(); 
+    setEditandoPeso(null);
+    setNovoPeso({ nome: '', preco: '', custo: '' });
+  };
+
+  const carregarParaEdicaoPeso = (pesoConfig) => {
+    setEditandoPeso(pesoConfig);
+    setNovoPeso({ 
+      nome: pesoConfig.nome, 
+      preco: pesoConfig.preco_kg, 
+      custo: pesoConfig.custo_kg || '' 
+    });
   };
 
   const excluirPeso = async (id) => {
@@ -142,11 +175,21 @@ export default function AdminProdutos({ empresaId, onFechar }) {
 
             {abaConfig === 'peso' && (
               <div className="flex-1 flex flex-col">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 bg-purple-50 p-4 rounded-2xl">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 bg-purple-50 p-4 rounded-2xl border border-purple-100">
                   <input type="text" placeholder="Ex: Preço Normal" className="p-3 rounded-xl border border-purple-200 outline-none" value={novoPeso.nome} onChange={e => setNovoPeso({...novoPeso, nome: e.target.value})} />
                   <input type="number" placeholder="Venda /kg (R$)" className="p-3 rounded-xl border border-purple-200 outline-none" value={novoPeso.preco} onChange={e => setNovoPeso({...novoPeso, preco: e.target.value})} />
                   <input type="number" placeholder="Custo /kg (R$)" className="p-3 rounded-xl border border-purple-200 outline-none" value={novoPeso.custo} onChange={e => setNovoPeso({...novoPeso, custo: e.target.value})} />
-                  <button onClick={adicionarPeso} className="bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 shadow-md">Adicionar</button>
+                  
+                  {/* Botões de Salvar/Cancelar atualizados para a Edição do Peso */}
+                  <div className="flex gap-2">
+                    <button onClick={salvarPeso} className="flex-1 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 shadow-md transition">
+                      {editandoPeso ? 'Salvar' : 'Adicionar'}
+                    </button>
+                    {editandoPeso && (
+                      <button onClick={() => { setEditandoPeso(null); setNovoPeso({ nome: '', preco: '', custo: '' }); }} className="bg-gray-300 text-gray-700 px-3 rounded-xl font-bold">✕</button>
+                    )}
+                  </div>
+
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   {configPeso.map(p => (
@@ -155,7 +198,13 @@ export default function AdminProdutos({ empresaId, onFechar }) {
                       <div className="flex items-center gap-4 text-sm">
                         <span className="text-red-400 font-medium">Custo: R$ {(p.custo_kg || 0).toFixed(2)}/kg</span>
                         <span className="font-black text-green-600">Venda: R$ {parseFloat(p.preco_kg).toFixed(2)}/kg</span>
-                        <button onClick={() => excluirPeso(p.id)} className="text-red-500 font-bold bg-red-50 px-3 py-1 rounded-lg">Excluir</button>
+                        
+                        {/* Botões de Ação Atualizados */}
+                        <div className="flex gap-2 ml-2">
+                          <button onClick={() => carregarParaEdicaoPeso(p)} className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded-md">✏️</button>
+                          <button onClick={() => excluirPeso(p.id)} className="text-red-500 font-bold bg-red-50 p-1.5 rounded-md">🗑️</button>
+                        </div>
+
                       </div>
                     </div>
                   ))}
