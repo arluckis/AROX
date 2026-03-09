@@ -9,7 +9,7 @@ import AdminProdutos from '@/components/AdminProdutos';
 import AdminUsuarios from '@/components/AdminUsuarios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
-const CORES_PIZZA = ['#0d9488', '#4f46e5', '#059669', '#ef4444']; 
+const CORES_PIZZA = ['#0d9488', '#4f46e5', '#059669', '#ef4444', '#f59e0b']; 
 
 export default function Home() {
   
@@ -29,11 +29,13 @@ export default function Home() {
   const [sessao, setSessao] = useState(null); 
   const [credenciais, setCredenciais] = useState({ email: '', senha: '' });
   const [loadingLogin, setLoadingLogin] = useState(false);
+  const [nomeEmpresa, setNomeEmpresa] = useState('Carregando...'); // NOVO: Nome da Empresa
   
+  // ESTADO DO CAIXA (Preparando para a próxima atualização)
+  const [caixaAtual, setCaixaAtual] = useState({ data_abertura: getHoje(), status: 'aberto' });
+
   const [comandas, setComandas] = useState([]);
   const [menuCategorias, setMenuCategorias] = useState([]);
-  
-  // NOVO: As tags agora iniciam vazias e vêm do banco de dados!
   const [tagsGlobais, setTagsGlobais] = useState([]);
   const [configPeso, setConfigPeso] = useState([]); 
   const [isLoading, setIsLoading] = useState(false);
@@ -55,9 +57,6 @@ export default function Home() {
   const [filtroTempo, setFiltroTempo] = useState({ tipo: 'dia', valor: getHoje(), inicio: '', fim: '' });
   const comandaAtiva = comandas.find(c => c.id === idSelecionado);
 
-  // ==========================================
-  // 1. AUTENTICAÇÃO E PERMISSÕES
-  // ==========================================
   useEffect(() => {
     const sessionData = localStorage.getItem('bessa_session');
     if (sessionData) {
@@ -95,6 +94,11 @@ export default function Home() {
   const fetchData = async () => {
     if (!sessao?.empresa_id) return;
     setIsLoading(true);
+    
+    // Busca o Nome da Empresa
+    const { data: empData } = await supabase.from('empresas').select('nome').eq('id', sessao.empresa_id).single();
+    if (empData) setNomeEmpresa(empData.nome);
+
     const { data: catData } = await supabase.from('categorias').select('*, itens:produtos(*)').eq('empresa_id', sessao.empresa_id);
     if (catData) setMenuCategorias(catData);
 
@@ -104,21 +108,15 @@ export default function Home() {
     const { data: pesoData } = await supabase.from('config_peso').select('*').eq('empresa_id', sessao.empresa_id);
     if (pesoData) setConfigPeso(pesoData.map(p => ({ id: p.id, nome: p.nome, preco: parseFloat(p.preco_kg), custo: parseFloat(p.custo_kg || 0) })));
 
-    // NOVO: Busca as Tags do banco de dados
     const { data: tagsData } = await supabase.from('tags').select('*').eq('empresa_id', sessao.empresa_id);
-    
-    // LÓGICA DE SEEDING (Semeando dados no primeiro acesso)
     if (tagsData && tagsData.length > 0) {
-      setTagsGlobais(tagsData); // Se já tem tags, apenas mostra
+      setTagsGlobais(tagsData); 
     } else {
-      // Se não tem nenhuma tag (empresa nova), insere as padrões automaticamente!
       const TAGS_INICIAIS = ['Individual', 'Casal', 'Família', 'Estudantes', 'Academia', 'Com Crianças', 'Consumo Local', 'Para Viagem', 'Fidelidade'];
       const tagsSemente = TAGS_INICIAIS.map(t => ({ nome: t, empresa_id: sessao.empresa_id }));
-      
       const { data: tagsInseridas } = await supabase.from('tags').insert(tagsSemente).select();
       if (tagsInseridas) setTagsGlobais(tagsInseridas);
     }
-
     setIsLoading(false);
   };
 
@@ -130,13 +128,13 @@ export default function Home() {
       .on('postgres', { event: '*', schema: 'public', table: 'comandas' }, () => { fetchData(); })
       .on('postgres', { event: '*', schema: 'public', table: 'comanda_produtos' }, () => { fetchData(); })
       .on('postgres', { event: '*', schema: 'public', table: 'pagamentos' }, () => { fetchData(); })
-      .on('postgres', { event: '*', schema: 'public', table: 'tags' }, () => { fetchData(); }) // Escuta as tags em tempo real
+      .on('postgres', { event: '*', schema: 'public', table: 'tags' }, () => { fetchData(); }) 
       .subscribe();
     return () => { supabase.removeChannel(canalAtualizacoes); };
   }, [sessao]);
 
   // ==========================================
-  // 2. OPERAÇÕES DE CAIXA
+  // OPERAÇÕES DE CAIXA
   // ==========================================
   const adicionarComanda = async (tipo) => {
     if (modoExclusao || !sessao?.empresa_id) return;
@@ -235,7 +233,7 @@ export default function Home() {
   const toggleSelecaoExclusao = (id) => setSelecionadasExclusao(selecionadasExclusao.includes(id) ? selecionadasExclusao.filter(item => item !== id) : [...selecionadasExclusao, id]);
 
   const reabrirComandaFechada = async (id) => {
-    if (confirm("Deseja reabrir esta comanda? Ela voltará para a aba Caixa.")) {
+    if (confirm("Deseja reabrir esta comanda? Ela voltará para a aba Comandas em Aberto.")) {
       await supabase.from('comandas').update({ status: 'aberta' }).eq('id', id);
       setComandas(comandas.map(c => c.id === id ? { ...c, status: 'aberta' } : c));
     }
@@ -249,7 +247,7 @@ export default function Home() {
   };
 
   // ==========================================
-  // 3. LÓGICA DE CÁLCULOS E RANKING
+  // LÓGICA DE CÁLCULOS E RANKING
   // ==========================================
   const isComandaInFiltro = (dataComanda) => {
     if (!dataComanda) return false;
@@ -269,31 +267,25 @@ export default function Home() {
   const custoTotalFiltrado = comandasFiltradas.reduce((acc, c) => acc + c.produtos.filter(p => p.pago).reduce((sum, p) => sum + (p.custo || 0), 0), 0);
   const lucroEstimado = faturamentoTotal - custoTotalFiltrado;
 
-  const totalPix = pagamentosFiltrados.filter(p => p.forma === 'Pix').reduce((acc, p) => acc + p.valor, 0);
-  const totalCartao = pagamentosFiltrados.filter(p => p.forma === 'Cartão').reduce((acc, p) => acc + p.valor, 0);
-  const totalDinheiro = pagamentosFiltrados.filter(p => p.forma === 'Dinheiro').reduce((acc, p) => acc + p.valor, 0);
-  const totalIfood = pagamentosFiltrados.filter(p => p.forma === 'iFood').reduce((acc, p) => acc + p.valor, 0);
-  const dadosPizza = [{ name: 'Pix', value: totalPix }, { name: 'Cartão', value: totalCartao }, { name: 'Dinheiro', value: totalDinheiro }, { name: 'iFood', value: totalIfood }].filter(d => d.value > 0);
+  const pagamentosAgrupados = pagamentosFiltrados.reduce((acc, p) => {
+    acc[p.forma] = (acc[p.forma] || 0) + p.valor;
+    return acc;
+  }, {});
+  
+  const dadosPizza = Object.keys(pagamentosAgrupados).map(key => ({
+    name: key,
+    value: pagamentosAgrupados[key]
+  })).filter(d => d.value > 0);
 
-  // RANKING DE PRODUTOS POR FATURAMENTO (COM NOME REAL DO PESO)
   const contagemProdutos = {};
   comandasFiltradas.forEach(c => {
     c.produtos.filter(p => p.pago).forEach(p => {
       const nomeMin = p.nome.toLowerCase();
       const isPeso = nomeMin.includes('peso') || nomeMin.includes('balança') || nomeMin.includes('balanca');
-      
       let nomeChave = p.nome;
-      
-      if (isPeso) {
-        nomeChave = p.nome.replace(/\s*\(\d+(?:\.\d+)?\s*g\)/i, '').trim();
-      }
-      
-      if (!contagemProdutos[nomeChave]) {
-        contagemProdutos[nomeChave] = { faturamento: 0, volume: 0, isPeso: isPeso };
-      }
-
+      if (isPeso) { nomeChave = p.nome.replace(/\s*\(\d+(?:\.\d+)?\s*g\)/i, '').trim(); }
+      if (!contagemProdutos[nomeChave]) { contagemProdutos[nomeChave] = { faturamento: 0, volume: 0, isPeso: isPeso }; }
       contagemProdutos[nomeChave].faturamento += p.preco;
-
       if (isPeso) {
         const matchGramas = p.nome.match(/(\d+(?:\.\d+)?)\s*g/i);
         const gramas = matchGramas ? parseFloat(matchGramas[1]) : 0;
@@ -305,12 +297,7 @@ export default function Home() {
   });
   
   const rankingProdutos = Object.keys(contagemProdutos)
-    .map(nome => ({ 
-      nome, 
-      valor: contagemProdutos[nome].faturamento, 
-      volume: contagemProdutos[nome].volume,
-      isPeso: contagemProdutos[nome].isPeso 
-    }))
+    .map(nome => ({ nome, valor: contagemProdutos[nome].faturamento, volume: contagemProdutos[nome].volume, isPeso: contagemProdutos[nome].isPeso }))
     .sort((a, b) => b.valor - a.valor) 
     .slice(0, 7);
 
@@ -358,16 +345,16 @@ export default function Home() {
   // ==========================================
   if (!sessao) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm">
-          <div className="flex justify-center mb-6"><img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" alt="Logo" className="w-24 h-24 rounded-full border-4 border-purple-100 object-cover" /></div>
-          <h2 className="text-2xl font-black text-center text-purple-800 mb-2">Acesso Restrito</h2>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm border border-gray-100">
+          <div className="flex justify-center mb-6"><img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" alt="Logo" className="w-24 h-24 rounded-full border-4 border-purple-50 object-cover" /></div>
+          <h2 className="text-2xl font-black text-center text-purple-900 mb-2">Acesso Restrito</h2>
           <p className="text-center text-gray-400 text-sm mb-6">Identifique-se para acessar o sistema.</p>
           <div className="space-y-4">
-            <input type="email" placeholder="E-mail" className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:border-purple-500" value={credenciais.email} onChange={e => setCredenciais({...credenciais, email: e.target.value})} />
-            <input type="password" placeholder="Senha" className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:border-purple-500" value={credenciais.senha} onChange={e => setCredenciais({...credenciais, senha: e.target.value})} onKeyDown={e => e.key === 'Enter' && fazerLogin()} />
+            <input type="email" placeholder="E-mail" className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:border-purple-500 transition" value={credenciais.email} onChange={e => setCredenciais({...credenciais, email: e.target.value})} />
+            <input type="password" placeholder="Senha" className="w-full p-3 border border-gray-200 rounded-xl outline-none focus:border-purple-500 transition" value={credenciais.senha} onChange={e => setCredenciais({...credenciais, senha: e.target.value})} onKeyDown={e => e.key === 'Enter' && fazerLogin()} />
             <button onClick={fazerLogin} disabled={loadingLogin} className="w-full bg-purple-600 text-white font-bold p-3 rounded-xl hover:bg-purple-700 transition shadow-lg disabled:opacity-50">
-              {loadingLogin ? 'Verificando...' : 'Entrar no Sistema'}
+              {loadingLogin ? 'Autenticando...' : 'Entrar no Sistema'}
             </button>
           </div>
         </div>
@@ -376,51 +363,59 @@ export default function Home() {
   }
 
   if (isLoading && comandas.length === 0) {
-    return <div className="min-h-screen bg-gray-100 flex items-center justify-center text-purple-600 font-bold text-xl animate-pulse">Carregando Banco de Dados...</div>;
+    return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-purple-600 font-bold text-xl animate-pulse">Sincronizando Sistema...</div>;
   }
 
   return (
-    <main className="min-h-screen bg-gray-100 p-2 md:p-6 flex flex-col">
-      <header className="flex items-center justify-between bg-white p-3 md:p-4 rounded-2xl shadow-sm mb-4 sticky top-0 z-50">
+    <main className="min-h-screen bg-gray-50 p-2 md:p-6 flex flex-col">
+      <header className="flex items-center justify-between bg-white p-3 md:p-4 rounded-2xl shadow-sm border border-gray-100 mb-4 sticky top-0 z-50">
         {comandaAtiva ? (
           <button onClick={() => setIdSelecionado(null)} className="flex items-center gap-2 text-purple-700 font-bold bg-purple-50 px-4 py-2 rounded-xl hover:bg-purple-100 transition"><span className="text-xl">←</span> <span className="hidden md:inline">Voltar</span></button>
         ) : (
-          <div className="relative shrink-0 mr-4">
-            <button onClick={() => setMostrarMenuPerfil(!mostrarMenuPerfil)} className="flex items-center gap-2 hover:opacity-80 transition cursor-pointer">
-              <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-purple-100 object-cover" alt="Perfil" />
-              <div className="flex flex-col text-left hidden md:flex">
-                <span className="font-black text-purple-800 tracking-tight leading-tight">{sessao.nome_usuario}</span>
-                <span className="text-[10px] text-gray-400 font-bold uppercase">{sessao.role}</span>
+          <div className="flex items-center gap-4">
+            <div className="relative shrink-0 cursor-pointer" onClick={() => setMostrarMenuPerfil(!mostrarMenuPerfil)}>
+              <div className="flex items-center gap-3 hover:opacity-80 transition">
+                <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" className="w-10 h-10 rounded-full border-2 border-purple-100 object-cover" alt="Perfil" />
+                <div className="flex flex-col text-left hidden md:flex">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">{nomeEmpresa}</span>
+                  <span className="font-black text-purple-900 tracking-tight leading-none text-sm">{sessao.nome_usuario}</span>
+                </div>
+                <span className="text-xs text-gray-300 ml-1">▼</span>
               </div>
-              <span className="text-xs text-gray-400 ml-1">▼</span>
-            </button>
-            {mostrarMenuPerfil && (
-              <div className="absolute top-12 left-0 bg-white shadow-xl rounded-xl p-2 w-56 border border-gray-100 z-50">
-                {sessao.role === 'dono' && <button onClick={() => { setMostrarAdminUsuarios(true); setMostrarMenuPerfil(false); }} className="w-full text-left p-2 text-sm font-black text-purple-700 hover:bg-purple-50 rounded-lg">👥 Gerenciar Equipe</button>}
-                {(sessao.role === 'dono' || sessao.perm_cardapio) && <button onClick={() => { setMostrarAdminProdutos(true); setMostrarMenuPerfil(false); }} className="w-full text-left p-2 text-sm font-bold text-gray-700 hover:bg-purple-50 rounded-lg">📦 Gerenciar Cardápio</button>}
-                {sessao.role === 'dono' && <button onClick={() => { setMostrarConfigTags(true); setMostrarMenuPerfil(false); }} className="w-full text-left p-2 text-sm font-bold text-gray-700 hover:bg-purple-50 rounded-lg">🏷️ Configurar Tags</button>}
-                <div className="h-px bg-gray-100 my-1"></div>
-                <button onClick={fazerLogout} className="w-full text-left p-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-lg">🚪 Sair</button>
-              </div>
-            )}
+              {mostrarMenuPerfil && (
+                <div className="absolute top-14 left-0 bg-white shadow-xl rounded-2xl p-2 w-56 border border-gray-100 z-50">
+                  {sessao.role === 'dono' && <button onClick={() => { setMostrarAdminUsuarios(true); setMostrarMenuPerfil(false); }} className="w-full text-left p-2.5 text-sm font-black text-purple-700 hover:bg-purple-50 rounded-xl transition">👥 Gerenciar Equipe</button>}
+                  {(sessao.role === 'dono' || sessao.perm_cardapio) && <button onClick={() => { setMostrarAdminProdutos(true); setMostrarMenuPerfil(false); }} className="w-full text-left p-2.5 text-sm font-bold text-gray-700 hover:bg-purple-50 rounded-xl transition">📦 Gerenciar Cardápio</button>}
+                  {sessao.role === 'dono' && <button onClick={() => { setMostrarConfigTags(true); setMostrarMenuPerfil(false); }} className="w-full text-left p-2.5 text-sm font-bold text-gray-700 hover:bg-purple-50 rounded-xl transition">🏷️ Configurar Tags</button>}
+                  <div className="h-px bg-gray-100 my-1"></div>
+                  <button onClick={fazerLogout} className="w-full text-left p-2.5 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl transition">🚪 Sair do Sistema</button>
+                </div>
+              )}
+            </div>
+            
+            {/* INDICADOR DE CAIXA (Preparando o terreno) */}
+            <div className="hidden lg:flex items-center gap-2 bg-green-50 border border-green-100 px-3 py-1.5 rounded-lg ml-4">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+              <span className="text-xs font-bold text-green-700 uppercase tracking-wider">Caixa Aberto: {caixaAtual.data_abertura.split('-').reverse().join('/')}</span>
+            </div>
           </div>
         )}
 
         {!comandaAtiva && (
-          <div className="flex bg-gray-100 rounded-xl p-1 overflow-x-auto text-sm md:text-base flex-1 md:flex-none">
-            <button onClick={() => setAbaAtiva('comandas')} className={`px-3 md:px-5 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'comandas' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500 hover:text-purple-600'}`}>Caixa</button>
-            <button onClick={() => setAbaAtiva('fechadas')} className={`px-3 md:px-5 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'fechadas' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500 hover:text-purple-600'}`}>Fechadas do Dia</button>
-            {(sessao.role === 'dono' || sessao.perm_faturamento) && <button onClick={() => setAbaAtiva('faturamento')} className={`px-3 md:px-5 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'faturamento' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500 hover:text-purple-600'}`}>Faturamento</button>}
-            {(sessao.role === 'dono' || sessao.perm_estudo) && <button onClick={() => setAbaAtiva('analises')} className={`px-3 md:px-5 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'analises' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-500 hover:text-purple-600'}`}>Estudo de Público-Alvo</button>}
+          <div className="flex bg-gray-100/80 rounded-xl p-1 overflow-x-auto text-sm md:text-base flex-1 md:flex-none">
+            <button onClick={() => setAbaAtiva('comandas')} className={`px-4 md:px-6 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'comandas' ? 'bg-white text-purple-800 shadow-sm border border-gray-200/50' : 'text-gray-500 hover:text-purple-600'}`}>Comandas em Aberto</button>
+            <button onClick={() => setAbaAtiva('fechadas')} className={`px-4 md:px-6 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'fechadas' ? 'bg-white text-purple-800 shadow-sm border border-gray-200/50' : 'text-gray-500 hover:text-purple-600'}`}>Comandas Encerradas</button>
+            {(sessao.role === 'dono' || sessao.perm_faturamento) && <button onClick={() => setAbaAtiva('faturamento')} className={`px-4 md:px-6 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'faturamento' ? 'bg-white text-purple-800 shadow-sm border border-gray-200/50' : 'text-gray-500 hover:text-purple-600'}`}>Faturamento</button>}
+            {(sessao.role === 'dono' || sessao.perm_estudo) && <button onClick={() => setAbaAtiva('analises')} className={`px-4 md:px-6 py-2 rounded-lg font-bold transition whitespace-nowrap ${abaAtiva === 'analises' ? 'bg-white text-purple-800 shadow-sm border border-gray-200/50' : 'text-gray-500 hover:text-purple-600'}`}>Público-Alvo</button>}
           </div>
         )}
         
         {comandaAtiva && (
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="hidden md:flex flex-wrap gap-1 justify-end">
-              {comandaAtiva.tags.map(t => <span key={t} className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold uppercase border border-purple-200">{t}</span>)}
+              {comandaAtiva.tags.map(t => <span key={t} className="text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded font-bold uppercase border border-purple-100">{t}</span>)}
             </div>
-            <h2 className="text-lg font-black text-purple-800 truncate max-w-[150px] md:max-w-xs text-right cursor-pointer shrink-0" onClick={editarNomeComanda}>{comandaAtiva?.nome} ✏️</h2>
+            <h2 className="text-lg font-black text-purple-900 truncate max-w-[150px] md:max-w-xs text-right cursor-pointer shrink-0 hover:opacity-70 transition" onClick={editarNomeComanda}>{comandaAtiva?.nome} ✏️</h2>
           </div>
         )}
       </header>
@@ -430,32 +425,32 @@ export default function Home() {
           <div className="flex flex-col animate-in fade-in duration-300">
             {comandasAbertas.length > 0 && (
               <div className="flex justify-end mb-4">
-                {!modoExclusao ? <button onClick={() => setModoExclusao(true)} className="text-red-500 font-bold text-sm bg-red-50 px-4 py-2 rounded-lg border border-red-100 hover:bg-red-100 transition">Excluir Múltiplas</button> : (
-                  <div className="flex items-center gap-3 bg-red-50 px-4 py-2 rounded-lg border border-red-200">
+                {!modoExclusao ? <button onClick={() => setModoExclusao(true)} className="text-red-500 font-bold text-sm bg-red-50 px-4 py-2 rounded-xl border border-red-100 hover:bg-red-100 transition">Gerenciar Exclusões</button> : (
+                  <div className="flex items-center gap-3 bg-red-50 px-4 py-2 rounded-xl border border-red-200">
                     <span className="text-red-700 font-bold text-sm">{selecionadasExclusao.length} selecionadas</span>
                     <button onClick={() => { setModoExclusao(false); setSelecionadasExclusao([]); }} className="text-gray-500 font-bold text-sm hover:text-gray-700">Cancelar</button>
-                    <button onClick={confirmarExclusaoEmMassa} disabled={selecionadasExclusao.length === 0} className="bg-red-500 text-white font-bold text-sm px-4 py-1.5 rounded-md disabled:opacity-50 transition">Confirmar Exclusão</button>
+                    <button onClick={confirmarExclusaoEmMassa} disabled={selecionadasExclusao.length === 0} className="bg-red-500 text-white font-bold text-sm px-4 py-1.5 rounded-lg disabled:opacity-50 transition">Confirmar Exclusão</button>
                   </div>
                 )}
               </div>
             )}
             <div className="flex flex-wrap gap-4 md:gap-6">
-              <button onClick={() => adicionarComanda('Balcão')} disabled={modoExclusao} className={`w-32 h-44 border-2 border-purple-500 rounded-2xl flex flex-col items-center justify-center font-bold text-purple-600 bg-white transition shadow-sm ${modoExclusao ? 'opacity-40 cursor-not-allowed' : 'hover:bg-purple-50 hover:scale-105 cursor-pointer'}`}><span className="text-4xl mb-2">+</span><span>Balcão</span></button>
-              <button onClick={() => adicionarComanda('Delivery')} disabled={modoExclusao} className={`w-32 h-44 border-2 border-orange-500 rounded-2xl flex flex-col items-center justify-center font-bold text-orange-600 bg-white transition shadow-sm ${modoExclusao ? 'opacity-40 cursor-not-allowed' : 'hover:bg-orange-50 hover:scale-105 cursor-pointer'}`}><span className="text-4xl mb-2">+</span><span>Delivery</span></button>
+              <button onClick={() => adicionarComanda('Balcão')} disabled={modoExclusao} className={`w-32 h-44 border-2 border-purple-400 border-dashed rounded-3xl flex flex-col items-center justify-center font-bold text-purple-600 bg-purple-50/30 transition ${modoExclusao ? 'opacity-40 cursor-not-allowed' : 'hover:bg-purple-50 hover:scale-105 hover:border-solid cursor-pointer'}`}><span className="text-4xl mb-2 font-light">+</span><span>Balcão</span></button>
+              <button onClick={() => adicionarComanda('Delivery')} disabled={modoExclusao} className={`w-32 h-44 border-2 border-orange-400 border-dashed rounded-3xl flex flex-col items-center justify-center font-bold text-orange-600 bg-orange-50/30 transition ${modoExclusao ? 'opacity-40 cursor-not-allowed' : 'hover:bg-orange-50 hover:scale-105 hover:border-solid cursor-pointer'}`}><span className="text-4xl mb-2 font-light">+</span><span>Delivery</span></button>
               {comandasAbertas.map((item) => (
                 <div key={item.id} className="relative">
                   <CardComanda comanda={item} onClick={() => modoExclusao ? toggleSelecaoExclusao(item.id) : setIdSelecionado(item.id)} />
-                  {modoExclusao && <div className={`absolute inset-0 rounded-2xl border-4 pointer-events-none transition ${selecionadasExclusao.includes(item.id) ? 'border-red-500 bg-red-500/20' : 'border-transparent bg-black/5'}`} />}
+                  {modoExclusao && <div className={`absolute inset-0 rounded-3xl border-4 pointer-events-none transition ${selecionadasExclusao.includes(item.id) ? 'border-red-500 bg-red-500/20' : 'border-transparent bg-black/5'}`} />}
                 </div>
               ))}
             </div>
           </div>
         ) : abaAtiva === 'fechadas' ? (
           <div className="max-w-6xl mx-auto w-full animate-in fade-in duration-300">
-            <h2 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2">🛒 Mesas Encerradas Hoje <span className="text-sm font-normal text-gray-400">({comandasFechadasHoje.length} comandas)</span></h2>
+            <h2 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2">Comandas Encerradas <span className="text-sm font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md">Hoje ({comandasFechadasHoje.length})</span></h2>
             {comandasFechadasHoje.length === 0 ? (
-              <div className="bg-white p-10 rounded-3xl text-center shadow-sm border border-gray-100">
-                <p className="text-gray-400 font-bold text-lg mb-2">Ainda não há comandas fechadas hoje.</p>
+              <div className="bg-white p-12 rounded-3xl text-center shadow-sm border border-gray-100">
+                <p className="text-gray-400 font-bold text-lg mb-2">Ainda não há comandas encerradas hoje.</p>
                 <p className="text-gray-300 text-sm">Quando você cobrar e encerrar uma mesa, o recibo aparecerá aqui.</p>
               </div>
             ) : (
@@ -467,9 +462,9 @@ export default function Home() {
                       <div className="flex justify-between items-start border-b border-gray-50 pb-3 mb-3">
                         <div>
                           <h3 className="font-black text-gray-800 text-lg leading-tight flex items-center gap-2">
-                            {c.nome} {c.tags.length > 0 && <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded uppercase">{c.tags[0]}</span>}
+                            {c.nome} {c.tags.length > 0 && <span className="text-[10px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded uppercase border border-purple-100">{c.tags[0]}</span>}
                           </h3>
-                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md mt-1 inline-block ${c.tipo === 'Delivery' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>{c.tipo}</span>
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md mt-1 inline-block ${c.tipo === 'Delivery' ? 'bg-orange-50 text-orange-700 border border-orange-100' : 'bg-purple-50 text-purple-700 border border-purple-100'}`}>{c.tipo}</span>
                         </div>
                         <span className="text-green-600 font-black text-xl tracking-tight">R$ {valorTotalComanda.toFixed(2)}</span>
                       </div>
@@ -493,104 +488,122 @@ export default function Home() {
             )}
           </div>
         ) : abaAtiva === 'faturamento' ? (
-          <div className="max-w-5xl mx-auto w-full animate-in slide-in-from-bottom-4 duration-300">
-            <div className="bg-white p-4 rounded-2xl shadow-sm mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-              <div className="flex bg-gray-100 p-1 rounded-lg w-full md:w-auto">
-                {['dia', 'mes', 'ano', 'periodo'].map(t => <button key={t} onClick={() => setFiltroTempo({...filtroTempo, tipo: t, valor: t==='dia'?getHoje():t==='mes'?getMesAtual():getAnoAtual()})} className={`flex-1 px-3 py-1.5 rounded-md text-xs font-bold uppercase transition ${filtroTempo.tipo === t ? 'bg-purple-500 text-white' : 'text-gray-500'}`}>{t}</button>)}
+          <div className="max-w-6xl mx-auto w-full animate-in slide-in-from-bottom-4 duration-500">
+            {/* Filtros Superiores */}
+            <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="flex bg-gray-50 p-1 rounded-xl w-full md:w-auto border border-gray-100">
+                {['dia', 'mes', 'ano', 'periodo'].map(t => <button key={t} onClick={() => setFiltroTempo({...filtroTempo, tipo: t, valor: t==='dia'?getHoje():t==='mes'?getMesAtual():getAnoAtual()})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-bold uppercase transition ${filtroTempo.tipo === t ? 'bg-purple-900 text-white shadow-sm' : 'text-gray-500 hover:text-purple-700'}`}>{t}</button>)}
               </div>
               <div className="flex gap-2 w-full md:w-auto">
-                {filtroTempo.tipo === 'dia' && <input type="date" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className="p-2 border rounded-xl outline-none text-sm font-bold w-full" />}
-                {filtroTempo.tipo === 'mes' && <input type="month" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className="p-2 border rounded-xl outline-none text-sm font-bold w-full" />}
-                {filtroTempo.tipo === 'ano' && <input type="number" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className="p-2 border rounded-xl outline-none text-sm font-bold w-full" />}
+                {filtroTempo.tipo === 'dia' && <input type="date" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className="p-2 border border-gray-200 rounded-xl outline-none text-sm font-bold w-full focus:border-purple-500 bg-gray-50" />}
+                {filtroTempo.tipo === 'mes' && <input type="month" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className="p-2 border border-gray-200 rounded-xl outline-none text-sm font-bold w-full focus:border-purple-500 bg-gray-50" />}
+                {filtroTempo.tipo === 'ano' && <input type="number" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className="p-2 border border-gray-200 rounded-xl outline-none text-sm font-bold w-full focus:border-purple-500 bg-gray-50" />}
                 {filtroTempo.tipo === 'periodo' && (
-                  <><input type="date" value={filtroTempo.inicio} onChange={e => setFiltroTempo({...filtroTempo, inicio: e.target.value})} className="p-2 border rounded-xl outline-none text-xs font-bold w-full" /><span className="self-center font-bold text-gray-400">até</span><input type="date" value={filtroTempo.fim} onChange={e => setFiltroTempo({...filtroTempo, fim: e.target.value})} className="p-2 border rounded-xl outline-none text-xs font-bold w-full" /></>
+                  <><input type="date" value={filtroTempo.inicio} onChange={e => setFiltroTempo({...filtroTempo, inicio: e.target.value})} className="p-2 border border-gray-200 rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 bg-gray-50" /><span className="self-center font-bold text-gray-300">até</span><input type="date" value={filtroTempo.fim} onChange={e => setFiltroTempo({...filtroTempo, fim: e.target.value})} className="p-2 border border-gray-200 rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 bg-gray-50" /></>
                 )}
               </div>
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-5 rounded-3xl shadow-md col-span-2">
-                <h3 className="text-purple-100 text-xs font-bold uppercase mb-1">Venda Bruta</h3>
-                <p className="text-3xl font-black">R$ {faturamentoTotal.toFixed(2)}</p>
+            {/* Cards de Valores SaaS Style */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-center items-start relative overflow-hidden group">
+                <div className="absolute -right-4 -top-4 w-32 h-32 bg-purple-50 rounded-full opacity-50 group-hover:scale-110 transition-transform duration-500"></div>
+                <h3 className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-2 relative z-10">Faturamento Bruto</h3>
+                <p className="text-4xl md:text-5xl font-black text-gray-800 tracking-tight relative z-10">R$ {faturamentoTotal.toFixed(2)}</p>
               </div>
-              <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-5 rounded-3xl shadow-md col-span-2">
-                <h3 className="text-green-100 text-xs font-bold uppercase mb-1">Lucro Bruto Estimado</h3>
-                <p className="text-3xl font-black">R$ {lucroEstimado.toFixed(2)}</p>
+              <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-center items-start relative overflow-hidden group">
+                <div className="absolute -right-4 -top-4 w-32 h-32 bg-green-50 rounded-full opacity-50 group-hover:scale-110 transition-transform duration-500"></div>
+                <h3 className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-2 relative z-10">Lucro Bruto Estimado</h3>
+                <p className="text-4xl md:text-5xl font-black text-green-500 tracking-tight relative z-10">R$ {lucroEstimado.toFixed(2)}</p>
               </div>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:col-span-1 flex flex-col gap-4">
-                <h3 className="text-gray-800 text-sm font-bold uppercase text-center border-b pb-2">Meios de Pagamento</h3>
-                <div className="flex justify-between items-center"><span className="text-teal-600 font-bold">Pix</span><span className="font-black text-teal-800">R$ {totalPix.toFixed(2)}</span></div>
-                <div className="flex justify-between items-center"><span className="text-indigo-600 font-bold">Cartão</span><span className="font-black text-indigo-800">R$ {totalCartao.toFixed(2)}</span></div>
-                <div className="flex justify-between items-center"><span className="text-emerald-600 font-bold">Dinheiro</span><span className="font-black text-emerald-800">R$ {totalDinheiro.toFixed(2)}</span></div>
-                <div className="flex justify-between items-center"><span className="text-red-500 font-bold">iFood</span><span className="font-black text-red-700">R$ {totalIfood.toFixed(2)}</span></div>
+            {/* Seção Gráfica Analítica */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              {/* Gráfico de Pizza Limpo e com Legenda */}
+              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col h-[400px]">
+                <h3 className="text-gray-800 text-sm font-bold uppercase mb-4">Divisão por Pagamentos</h3>
+                {dadosPizza.length > 0 ? (
+                  <div className="flex-1 w-full relative">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={dadosPizza} innerRadius={80} outerRadius={110} paddingAngle={4} dataKey="value" stroke="none">
+                          {dadosPizza.map((e, i) => <Cell key={i} fill={CORES_PIZZA[i % CORES_PIZZA.length]} />)}
+                        </Pie>
+                        <RechartsTooltip formatter={(val) => `R$ ${val.toFixed(2)}`} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }} />
+                        <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                   <div className="flex-1 flex items-center justify-center text-gray-300 text-sm font-bold">Sem dados de pagamento no período</div>
+                )}
               </div>
-              <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 lg:col-span-2 h-64">
-                <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={dadosPizza} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{dadosPizza.map((e, i) => <Cell key={i} fill={CORES_PIZZA[i % CORES_PIZZA.length]} />)}</Pie><RechartsTooltip formatter={(val) => `R$ ${val.toFixed(2)}`} /><Legend /></PieChart></ResponsiveContainer>
+
+              {/* Ranking Profissional */}
+              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col h-[400px]">
+                <h3 className="text-gray-800 text-sm font-bold uppercase mb-4">Produtos Mais Rentáveis</h3>
+                {rankingProdutos.length > 0 ? (
+                  <div className="flex-1 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={rankingProdutos} layout="vertical" margin={{ top: 0, right: 60, left: 0, bottom: 0 }}>
+                        <XAxis type="number" hide />
+                        <YAxis dataKey="nome" type="category" axisLine={false} tickLine={false} tick={{fill: '#4b5563', fontSize: 11, fontWeight: 'bold'}} width={150} />
+                        
+                        <RechartsTooltip 
+                          cursor={{fill: '#f3f4f6'}} 
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-white p-4 shadow-xl rounded-2xl border border-gray-100">
+                                  <p className="text-xs font-black text-gray-800 mb-1">{data.nome}</p>
+                                  <p className="text-sm font-bold text-green-600">Receita: R$ {data.valor.toFixed(2)}</p>
+                                  <p className="text-[10px] text-gray-400 font-bold uppercase mt-2 border-t pt-1">
+                                    {data.isPeso ? `Volume: ${(data.volume / 1000).toFixed(3)} kg` : `Vendidos: ${data.volume} unid.`}
+                                  </p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        
+                        <Bar 
+                          dataKey="valor" 
+                          fill="#1e1b4b" 
+                          radius={[0, 6, 6, 0]} 
+                          barSize={24} 
+                          label={{ 
+                            position: 'right', 
+                            formatter: (val) => `R$ ${val.toFixed(2)}`,
+                            fill: '#6b7280', 
+                            fontSize: 11, 
+                            fontWeight: 'bold' 
+                          }} 
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-gray-300 text-sm font-bold">Sem vendas no período</div>
+                )}
               </div>
             </div>
 
-            {/* O NOVO GRÁFICO DE RANKING POR RENTABILIDADE E TOOLTIP CUSTOMIZADO */}
-            {rankingProdutos.length > 0 && (
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 mb-6 h-80">
-                <h3 className="text-gray-800 text-sm font-bold uppercase text-center mb-4">🏆 Produtos Mais Rentáveis (Top 7)</h3>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={rankingProdutos} layout="vertical" margin={{ top: 0, right: 60, left: 20, bottom: 0 }}>
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="nome" type="category" axisLine={false} tickLine={false} tick={{fill: '#4b5563', fontSize: 11, fontWeight: 'bold'}} width={180} />
-                    
-                    <RechartsTooltip 
-                      cursor={{fill: '#f3e8ff'}} 
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-white p-3 shadow-lg rounded-xl border border-purple-100">
-                              <p className="text-xs font-black text-purple-800 mb-1">{data.nome}</p>
-                              <p className="text-sm font-bold text-green-600">Receita: R$ {data.valor.toFixed(2)}</p>
-                              <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">
-                                {data.isPeso 
-                                  ? `Volume Processado: ${(data.volume / 1000).toFixed(3)} kg` 
-                                  : `Quantidade Vendida: ${data.volume} unid.`}
-                              </p>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    
-                    <Bar 
-                      dataKey="valor" 
-                      fill="#8b5cf6" 
-                      radius={[0, 4, 4, 0]} 
-                      barSize={20} 
-                      label={{ 
-                        position: 'right', 
-                        formatter: (val) => `R$ ${val.toFixed(2)}`,
-                        fill: '#6b7280', 
-                        fontSize: 11, 
-                        fontWeight: 'bold' 
-                      }} 
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            <GraficoFaturamento comandas={comandasFiltradas} />
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+              <GraficoFaturamento comandas={comandasFiltradas} />
+            </div>
           </div>
         ) : (
           <div className="max-w-4xl mx-auto animate-in zoom-in-95 duration-500">
-             <div className="bg-white p-4 rounded-2xl shadow-sm mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-              <div className="flex bg-gray-100 p-1 rounded-lg w-full md:w-auto">
-                {['dia', 'mes', 'ano'].map(t => <button key={t} onClick={() => setFiltroTempo({...filtroTempo, tipo: t, valor: t==='dia'?getHoje():t==='mes'?getMesAtual():getAnoAtual()})} className={`flex-1 px-3 py-1.5 rounded-md text-xs font-bold uppercase transition ${filtroTempo.tipo === t ? 'bg-purple-500 text-white' : 'text-gray-500'}`}>{t}</button>)}
+             <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="flex bg-gray-50 p-1 rounded-xl w-full md:w-auto border border-gray-100">
+                {['dia', 'mes', 'ano'].map(t => <button key={t} onClick={() => setFiltroTempo({...filtroTempo, tipo: t, valor: t==='dia'?getHoje():t==='mes'?getMesAtual():getAnoAtual()})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-bold uppercase transition ${filtroTempo.tipo === t ? 'bg-purple-900 text-white shadow-sm' : 'text-gray-500 hover:text-purple-700'}`}>{t}</button>)}
               </div>
               <div className="flex gap-2 w-full md:w-auto">
-                {filtroTempo.tipo === 'dia' && <input type="date" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className="p-2 border rounded-xl outline-none text-sm font-bold w-full" />}
-                {filtroTempo.tipo === 'mes' && <input type="month" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className="p-2 border rounded-xl outline-none text-sm font-bold w-full" />}
+                {filtroTempo.tipo === 'dia' && <input type="date" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className="p-2 border border-gray-200 rounded-xl outline-none text-sm font-bold w-full bg-gray-50 focus:border-purple-500" />}
+                {filtroTempo.tipo === 'mes' && <input type="month" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className="p-2 border border-gray-200 rounded-xl outline-none text-sm font-bold w-full bg-gray-50 focus:border-purple-500" />}
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -691,9 +704,7 @@ export default function Home() {
                   if (e.key === 'Enter' && e.target.value.trim() !== '') {
                     const val = e.target.value.trim();
                     if (!tagsGlobais.some(t => t.nome.toLowerCase() === val.toLowerCase())) {
-                       // 1. Salva no banco e traz o ID gerado
                        const { data } = await supabase.from('tags').insert([{ nome: val, empresa_id: sessao.empresa_id }]).select();
-                       // 2. Atualiza a tela NA HORA
                        if (data) setTagsGlobais([...tagsGlobais, data[0]]);
                     }
                     e.target.value = '';
@@ -705,9 +716,7 @@ export default function Home() {
                   const input = document.getElementById('novaTagInput');
                   const val = input.value.trim();
                   if (val !== '' && !tagsGlobais.some(t => t.nome.toLowerCase() === val.toLowerCase())) {
-                     // 1. Salva no banco e traz o ID gerado
                      const { data } = await supabase.from('tags').insert([{ nome: val, empresa_id: sessao.empresa_id }]).select();
-                     // 2. Atualiza a tela NA HORA
                      if (data) setTagsGlobais([...tagsGlobais, data[0]]);
                   }
                   input.value = '';
@@ -726,9 +735,7 @@ export default function Home() {
                   <button 
                     onClick={async () => {
                       if (confirm(`Excluir a tag '${tagObj.nome}' do sistema?`)) {
-                        // 1. Apaga do banco de dados
                         await supabase.from('tags').delete().eq('id', tagObj.id);
-                        // 2. Apaga da tela NA HORA
                         setTagsGlobais(tagsGlobais.filter(t => t.id !== tagObj.id));
                       }
                     }} 
