@@ -2,217 +2,233 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
-export default function AdminProdutos({ empresaId, onFechar }) {
+export default function AdminProdutos({ empresaId, onFechar, temaNoturno }) {
   const [abaConfig, setAbaConfig] = useState('produtos'); 
   const [categorias, setCategorias] = useState([]);
   const [configPeso, setConfigPeso] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados dos formulários
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '', custo: '', idCategoria: '' });
   const [editandoItem, setEditandoItem] = useState(null);
-  
   const [novaCategoria, setNovaCategoria] = useState('');
   
   const [novoPeso, setNovoPeso] = useState({ nome: '', preco: '', custo: '' });
-  const [editandoPeso, setEditandoPeso] = useState(null); // NOVO: Estado para controlar a edição do peso
+  const [editandoPeso, setEditandoPeso] = useState(null);
 
   const fetchDados = async () => {
     setLoading(true);
     const { data: catData } = await supabase.from('categorias').select('*, produtos(*)').eq('empresa_id', empresaId); 
-    if (catData) setCategorias(catData.map(cat => ({ id: cat.id, nome: cat.nome, itens: cat.produtos || [] })));
-
+    if (catData) setCategorias(catData);
+    
     const { data: pesoData } = await supabase.from('config_peso').select('*').eq('empresa_id', empresaId);
     if (pesoData) setConfigPeso(pesoData);
+    
     setLoading(false);
   };
 
-  useEffect(() => { if (empresaId) fetchDados(); }, [empresaId]);
+  useEffect(() => { fetchDados(); }, [empresaId]);
 
-  // --- CATEGORIAS ---
-  const adicionarCategoria = async () => {
-    if (!novaCategoria) return;
+  const salvarCategoria = async () => {
+    if (novaCategoria.trim() === '') return alert("Digite um nome.");
     await supabase.from('categorias').insert([{ nome: novaCategoria, empresa_id: empresaId }]);
-    fetchDados(); setNovaCategoria('');
+    setNovaCategoria(''); fetchDados();
   };
 
   const excluirCategoria = async (id) => {
-    const cat = categorias.find(c => c.id === id);
-    if (cat.itens.length > 0) return alert("Esta categoria possui produtos. Exclua ou mova-os primeiro.");
-    if (confirm("Excluir categoria?")) { await supabase.from('categorias').delete().eq('id', id); fetchDados(); }
+    if (confirm("Excluir esta categoria apagará TODOS os produtos dentro dela. Deseja continuar?")) {
+      await supabase.from('categorias').delete().eq('id', id);
+      fetchDados();
+    }
   };
 
-  // --- PRODUTOS ---
   const salvarProduto = async () => {
-    if (!novoItem.nome || !novoItem.preco || !novoItem.idCategoria) return alert("Preencha todos os campos!");
-    const precoNum = parseFloat(novoItem.preco); const custoNum = parseFloat(novoItem.custo || 0);
-    if (custoNum > precoNum) return alert("⚠️ ERRO: O Custo não pode ser maior que o Preço de Venda!");
-
-    const payload = { categoria_id: novoItem.idCategoria, nome: novoItem.nome, preco: precoNum, custo: custoNum, favorito: editandoItem ? editandoItem.favorito : false, empresa_id: empresaId };
-
-    if (editandoItem) await supabase.from('produtos').update(payload).eq('id', editandoItem.id);
-    else await supabase.from('produtos').insert([payload]);
-    
-    fetchDados(); setEditandoItem(null); setNovoItem({ nome: '', preco: '', custo: '', idCategoria: '' });
-  };
-
-  const excluirProduto = async (idProduto) => { if (confirm("Excluir este produto?")) { await supabase.from('produtos').delete().eq('id', idProduto); fetchDados(); } };
-  const toggleFavorito = async (produto) => { await supabase.from('produtos').update({ favorito: !produto.favorito }).eq('id', produto.id); fetchDados(); };
-  const carregarParaEdicao = (catId, produto) => { setEditandoItem(produto); setNovoItem({ nome: produto.nome, preco: produto.preco, custo: produto.custo || '', idCategoria: catId }); setAbaConfig('produtos'); };
-
-  // --- AÇAÍ NO PESO ---
-  const salvarPeso = async () => {
-    if (!novoPeso.nome || !novoPeso.preco) return alert("Preencha o nome e o preço de venda por kg.");
-    
+    if (!novoItem.nome || !novoItem.preco || !novoItem.idCategoria) return alert("Preencha nome, preço e categoria.");
     const payload = { 
-      nome: novoPeso.nome, 
-      preco_kg: parseFloat(novoPeso.preco), 
-      custo_kg: parseFloat(novoPeso.custo || 0), 
+      nome: novoItem.nome, 
+      preco: parseFloat(novoItem.preco.toString().replace(',', '.')), 
+      custo: novoItem.custo ? parseFloat(novoItem.custo.toString().replace(',', '.')) : 0,
+      categoria_id: novoItem.idCategoria,
       empresa_id: empresaId 
     };
 
-    if (editandoPeso) {
-      // Se estiver editando, faz um UPDATE
-      const { error } = await supabase.from('config_peso').update(payload).eq('id', editandoPeso.id);
-      if (error) return alert("⚠️ Erro ao atualizar: " + error.message);
+    if (editandoItem) {
+      await supabase.from('produtos').update(payload).eq('id', editandoItem.id);
     } else {
-      // Se não, faz um INSERT
-      const { error } = await supabase.from('config_peso').insert([payload]);
-      if (error) return alert("⚠️ Erro ao adicionar: " + error.message);
+      await supabase.from('produtos').insert([payload]);
     }
-
-    fetchDados(); 
-    setEditandoPeso(null);
-    setNovoPeso({ nome: '', preco: '', custo: '' });
+    
+    setEditandoItem(null);
+    setNovoItem({ nome: '', preco: '', custo: '', idCategoria: novoItem.idCategoria });
+    fetchDados();
   };
 
-  const carregarParaEdicaoPeso = (pesoConfig) => {
-    setEditandoPeso(pesoConfig);
-    setNovoPeso({ 
-      nome: pesoConfig.nome, 
-      preco: pesoConfig.preco_kg, 
-      custo: pesoConfig.custo_kg || '' 
-    });
+  const toggleFavorito = async (id, statusAtual) => {
+    await supabase.from('produtos').update({ favorito: !statusAtual }).eq('id', id);
+    fetchDados();
+  };
+
+  const excluirProduto = async (id) => {
+    if (confirm("Excluir este produto?")) {
+      await supabase.from('produtos').delete().eq('id', id);
+      fetchDados();
+    }
+  };
+
+  const carregarEdicaoProduto = (prod) => {
+    setEditandoItem(prod);
+    setNovoItem({ nome: prod.nome, preco: prod.preco, custo: prod.custo, idCategoria: prod.categoria_id });
+  };
+
+  const salvarPeso = async () => {
+    if (!novoPeso.nome || !novoPeso.preco) return alert("Preencha nome e preço por KG.");
+    const payload = { 
+      nome: novoPeso.nome, 
+      preco_kg: parseFloat(novoPeso.preco.toString().replace(',', '.')),
+      custo_kg: novoPeso.custo ? parseFloat(novoPeso.custo.toString().replace(',', '.')) : 0,
+      empresa_id: empresaId
+    };
+
+    if (editandoPeso) {
+      await supabase.from('config_peso').update(payload).eq('id', editandoPeso.id);
+    } else {
+      await supabase.from('config_peso').insert([payload]);
+    }
+    
+    setEditandoPeso(null); setNovoPeso({ nome: '', preco: '', custo: '' }); fetchDados();
+  };
+
+  const carregarEdicaoPeso = (peso) => {
+    setEditandoPeso(peso); setNovoPeso({ nome: peso.nome, preco: peso.preco_kg, custo: peso.custo_kg });
   };
 
   const excluirPeso = async (id) => {
-    if (configPeso.length === 1) return alert("Você precisa ter pelo menos uma opção de peso.");
-    if (confirm("Excluir esta configuração?")) { await supabase.from('config_peso').delete().eq('id', id); fetchDados(); }
+    if (confirm("Remover esta opção de peso?")) {
+      await supabase.from('config_peso').delete().eq('id', id); fetchDados();
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[55]">
-      <div className="bg-white rounded-3xl p-6 w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh]">
-        <div className="flex justify-between items-center mb-6 border-b pb-4">
-          <h2 className="text-2xl font-black text-purple-800">📦 Gerenciar Cardápio</h2>
-          <button onClick={onFechar} className="bg-gray-100 p-3 rounded-full hover:bg-gray-200 font-bold transition">✕</button>
-        </div>
-        <div className="flex gap-2 bg-gray-100 p-1 rounded-xl mb-6 overflow-x-auto">
-          <button onClick={() => setAbaConfig('produtos')} className={`px-6 py-2 rounded-lg font-bold text-sm transition ${abaConfig === 'produtos' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500'}`}>Produtos</button>
-          <button onClick={() => setAbaConfig('categorias')} className={`px-6 py-2 rounded-lg font-bold text-sm transition ${abaConfig === 'categorias' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500'}`}>Categorias</button>
-          <button onClick={() => setAbaConfig('peso')} className={`px-6 py-2 rounded-lg font-bold text-sm transition ${abaConfig === 'peso' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500'}`}>Açaí no Peso</button>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[55]">
+      <div className={`rounded-3xl p-6 w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] border ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
+        
+        <div className={`flex justify-between items-center mb-6 border-b pb-4 ${temaNoturno ? 'border-gray-800' : 'border-gray-100'}`}>
+          <h2 className={`text-xl md:text-2xl font-black ${temaNoturno ? 'text-white' : 'text-purple-800'}`}>📦 Gerenciar Cardápio</h2>
+          <button onClick={onFechar} className={`p-3 rounded-full font-bold transition ${temaNoturno ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-gray-100 hover:bg-gray-200'}`}>✕</button>
         </div>
 
-        {loading ? (
-          <div className="flex-1 flex items-center justify-center"><p className="text-purple-600 font-bold animate-pulse">Sincronizando...</p></div>
-        ) : (
-          <>
-            {abaConfig === 'produtos' && (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6 bg-purple-50 p-4 rounded-2xl border border-purple-100">
-                 <select className="p-3 rounded-xl border border-purple-200 outline-none focus:border-purple-500 text-sm" value={novoItem.idCategoria} onChange={e => setNovoItem({...novoItem, idCategoria: e.target.value})}>
-                    <option value="">{categorias.length === 0 ? "Crie uma categoria primeiro" : "Selecione a categoria..."}</option>
-                    {categorias.map(cat => <option key={cat.id} value={cat.id}>{cat.nome}</option>)}
-                </select>
-                  <input type="text" placeholder="Nome do Produto" className="p-3 rounded-xl border border-purple-200 outline-none focus:border-purple-500 text-sm" value={novoItem.nome} onChange={e => setNovoItem({...novoItem, nome: e.target.value})} />
-                  <input type="number" placeholder="Venda (R$)" className="p-3 rounded-xl border border-purple-200 outline-none focus:border-purple-500 text-sm" value={novoItem.preco} onChange={e => setNovoItem({...novoItem, preco: e.target.value})} />
-                  <input type="number" placeholder="Custo (R$)" className="p-3 rounded-xl border border-purple-200 outline-none focus:border-purple-500 text-sm" value={novoItem.custo} onChange={e => setNovoItem({...novoItem, custo: e.target.value})} />
-                  <div className="flex gap-2">
-                    <button onClick={salvarProduto} disabled={categorias.length === 0} className="flex-1 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition shadow-md disabled:opacity-50">{editandoItem ? 'Salvar' : 'Adicionar'}</button>
-                    {editandoItem && <button onClick={() => { setEditandoItem(null); setNovoItem({ nome: '', preco: '', custo: '', idCategoria: '' }); }} className="bg-gray-300 text-gray-700 px-3 rounded-xl font-bold">✕</button>}
+        <div className={`flex gap-2 p-1 rounded-xl mb-6 overflow-x-auto border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200'}`}>
+          <button onClick={() => setAbaConfig('produtos')} className={`px-6 py-2 rounded-lg font-bold text-sm transition whitespace-nowrap ${abaConfig === 'produtos' ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-purple-700 shadow-sm') : (temaNoturno ? 'text-gray-400' : 'text-gray-500')}`}>Cardápio Padrão</button>
+          <button onClick={() => setAbaConfig('peso')} className={`px-6 py-2 rounded-lg font-bold text-sm transition whitespace-nowrap flex items-center gap-2 ${abaConfig === 'peso' ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-purple-700 shadow-sm') : (temaNoturno ? 'text-gray-400' : 'text-gray-500')}`}>⚖️ Venda no Peso</button>
+          <button onClick={() => setAbaConfig('categorias')} className={`px-6 py-2 rounded-lg font-bold text-sm transition whitespace-nowrap ${abaConfig === 'categorias' ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-purple-700 shadow-sm') : (temaNoturno ? 'text-gray-400' : 'text-gray-500')}`}>Categorias</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto pr-2 scrollbar-hide">
+          {loading ? <p className="text-center text-purple-500 font-bold">A carregar...</p> : (
+            <>
+              {/* ABA PRODUTOS */}
+              {abaConfig === 'produtos' && (
+                <div>
+                   <div className={`p-5 rounded-2xl mb-6 border grid grid-cols-1 md:grid-cols-4 gap-4 shadow-sm ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-purple-50 border-purple-100'}`}>
+                    <select className={`p-3 rounded-xl border outline-none text-sm font-bold md:col-span-4 transition ${temaNoturno ? 'bg-gray-900 border-gray-600 text-white' : 'bg-white border-gray-200 text-gray-700'}`} value={novoItem.idCategoria} onChange={e => setNovoItem({...novoItem, idCategoria: e.target.value})}>
+                      <option value="">Selecione a Categoria</option>
+                      {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                    </select>
+                    
+                    <input type="text" placeholder="Nome do Produto" className={`p-3 rounded-xl border outline-none text-sm md:col-span-2 transition focus:border-purple-500 ${temaNoturno ? 'bg-gray-900 border-gray-600 text-white' : 'bg-white border-gray-200'}`} value={novoItem.nome} onChange={e => setNovoItem({...novoItem, nome: e.target.value})} />
+                    <input type="number" placeholder="Preço de Venda (R$)" className={`p-3 rounded-xl border outline-none text-sm transition focus:border-purple-500 ${temaNoturno ? 'bg-gray-900 border-gray-600 text-white' : 'bg-white border-gray-200'}`} value={novoItem.preco} onChange={e => setNovoItem({...novoItem, preco: e.target.value})} />
+                    <input type="number" placeholder="Custo Bruto (Opcional)" className={`p-3 rounded-xl border outline-none text-sm transition focus:border-purple-500 ${temaNoturno ? 'bg-gray-900 border-gray-600 text-white' : 'bg-white border-gray-200'}`} value={novoItem.custo} onChange={e => setNovoItem({...novoItem, custo: e.target.value})} />
+                    
+                    <div className="md:col-span-4 flex gap-2">
+                      <button onClick={salvarProduto} className="flex-1 bg-purple-600 text-white font-bold p-3 rounded-xl hover:bg-purple-700 transition">{editandoItem ? 'Atualizar Produto' : 'Cadastrar Produto'}</button>
+                      {editandoItem && <button onClick={() => { setEditandoItem(null); setNovoItem({ nome: '', preco: '', custo: '', idCategoria: novoItem.idCategoria }); }} className={`px-6 font-bold rounded-xl transition ${temaNoturno ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-300 text-gray-700'}`}>Cancelar</button>}
+                    </div>
                   </div>
-                </div>
-                <div className="overflow-y-auto flex-1 pr-2">
+
                   {categorias.map(cat => (
                     <div key={cat.id} className="mb-6">
-                      <h3 className="text-sm font-black text-purple-400 uppercase tracking-widest mb-3 border-b border-gray-100 pb-2">{cat.nome}</h3>
-                      <table className="w-full text-left border-collapse">
-                        <thead><tr className="text-gray-400 text-[10px] uppercase"><th className="p-2">Fav.</th><th className="p-2 w-1/2">Produto</th><th className="p-2 text-center">Custo</th><th className="p-2 text-center">Venda</th><th className="p-2 text-right">Ações</th></tr></thead>
-                        <tbody>
-                          {cat.itens.map(p => (
-                            <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50 transition text-sm">
-                              <td className="p-2 cursor-pointer text-lg" onClick={() => toggleFavorito(p)}>{p.favorito ? '⭐' : '☆'}</td>
-                              <td className="p-2 font-bold text-gray-700">{p.nome}</td>
-                              <td className="p-2 text-center text-red-400 font-medium">R$ {(p.custo || 0).toFixed(2)}</td>
-                              <td className="p-2 text-center text-green-600 font-bold">R$ {p.preco.toFixed(2)}</td>
-                              <td className="p-2 text-right flex justify-end gap-2"><button onClick={() => carregarParaEdicao(cat.id, p)} className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded-md">✏️</button><button onClick={() => excluirProduto(p.id)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded-md">🗑️</button></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {abaConfig === 'categorias' && (
-              <div className="flex-1 flex flex-col">
-                <div className="flex gap-3 mb-6 bg-purple-50 p-4 rounded-2xl">
-                  <input type="text" placeholder="Nome da Categoria (Ex: Salgados)" className="flex-1 p-3 rounded-xl border border-purple-200 outline-none" value={novaCategoria} onChange={e => setNovaCategoria(e.target.value)} />
-                  <button onClick={adicionarCategoria} className="bg-purple-600 text-white font-bold px-6 rounded-xl hover:bg-purple-700">+ Add Categoria</button>
-                </div>
-                <div className="flex-1 overflow-y-auto">
-                  {categorias.map(cat => (
-                    <div key={cat.id} className="flex justify-between items-center p-4 border-b border-gray-100 hover:bg-gray-50">
-                      <span className="font-bold text-gray-700">{cat.nome} <span className="text-xs text-gray-400 font-normal ml-2">({cat.itens.length} produtos)</span></span>
-                      <button onClick={() => excluirCategoria(cat.id)} className="text-red-500 font-bold text-sm bg-red-50 px-3 py-1 rounded-lg">Excluir</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {abaConfig === 'peso' && (
-              <div className="flex-1 flex flex-col">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6 bg-purple-50 p-4 rounded-2xl border border-purple-100">
-                  <input type="text" placeholder="Ex: Preço Normal" className="p-3 rounded-xl border border-purple-200 outline-none" value={novoPeso.nome} onChange={e => setNovoPeso({...novoPeso, nome: e.target.value})} />
-                  <input type="number" placeholder="Venda /kg (R$)" className="p-3 rounded-xl border border-purple-200 outline-none" value={novoPeso.preco} onChange={e => setNovoPeso({...novoPeso, preco: e.target.value})} />
-                  <input type="number" placeholder="Custo /kg (R$)" className="p-3 rounded-xl border border-purple-200 outline-none" value={novoPeso.custo} onChange={e => setNovoPeso({...novoPeso, custo: e.target.value})} />
-                  
-                  {/* Botões de Salvar/Cancelar atualizados para a Edição do Peso */}
-                  <div className="flex gap-2">
-                    <button onClick={salvarPeso} className="flex-1 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 shadow-md transition">
-                      {editandoPeso ? 'Salvar' : 'Adicionar'}
-                    </button>
-                    {editandoPeso && (
-                      <button onClick={() => { setEditandoPeso(null); setNovoPeso({ nome: '', preco: '', custo: '' }); }} className="bg-gray-300 text-gray-700 px-3 rounded-xl font-bold">✕</button>
-                    )}
-                  </div>
-
-                </div>
-                <div className="flex-1 overflow-y-auto">
-                  {configPeso.map(p => (
-                    <div key={p.id} className="flex justify-between items-center p-4 border-b border-gray-100 hover:bg-gray-50">
-                      <span className="font-bold text-gray-700">{p.nome}</span>
-                      <div className="flex items-center gap-4 text-sm">
-                        <span className="text-red-400 font-medium">Custo: R$ {(p.custo_kg || 0).toFixed(2)}/kg</span>
-                        <span className="font-black text-green-600">Venda: R$ {parseFloat(p.preco_kg).toFixed(2)}/kg</span>
-                        
-                        {/* Botões de Ação Atualizados */}
-                        <div className="flex gap-2 ml-2">
-                          <button onClick={() => carregarParaEdicaoPeso(p)} className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded-md">✏️</button>
-                          <button onClick={() => excluirPeso(p.id)} className="text-red-500 font-bold bg-red-50 p-1.5 rounded-md">🗑️</button>
-                        </div>
-
+                      <h3 className={`text-sm font-black uppercase mb-3 px-2 ${temaNoturno ? 'text-gray-300' : 'text-gray-800'}`}>{cat.nome}</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {cat.produtos?.map(p => (
+                           <div key={p.id} className={`p-3 rounded-2xl border flex flex-col justify-between shadow-sm transition ${temaNoturno ? 'bg-gray-800 border-gray-700 hover:border-gray-600' : 'bg-white border-gray-100 hover:border-purple-200'}`}>
+                             <div className="flex justify-between items-start mb-2">
+                               <span className={`font-bold text-sm truncate pr-2 ${temaNoturno ? 'text-gray-200' : 'text-gray-700'}`}>{p.nome}</span>
+                               <button onClick={() => toggleFavorito(p.id, p.favorito)} className={`text-lg transition-transform hover:scale-110 ${p.favorito ? '' : 'grayscale opacity-30 hover:grayscale-0 hover:opacity-100'}`}>⭐</button>
+                             </div>
+                             <div className="flex justify-between items-end mt-2">
+                               <div className="flex flex-col">
+                                 <span className="text-green-500 font-black tracking-tight leading-none mb-1">R$ {p.preco.toFixed(2)}</span>
+                                 <span className={`text-[10px] font-bold ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Custo: R$ {(p.custo||0).toFixed(2)}</span>
+                               </div>
+                               <div className="flex gap-1">
+                                 <button onClick={() => carregarEdicaoProduto(p)} className={`p-1.5 rounded-lg transition ${temaNoturno ? 'bg-gray-700 hover:bg-gray-600 text-blue-400' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>✏️</button>
+                                 <button onClick={() => excluirProduto(p.id)} className={`p-1.5 rounded-lg transition ${temaNoturno ? 'bg-red-900/20 hover:bg-red-900/40 text-red-400' : 'bg-red-50 text-red-500 hover:bg-red-100'}`}>🗑️</button>
+                               </div>
+                             </div>
+                           </div>
+                        ))}
+                        {(!cat.produtos || cat.produtos.length === 0) && <p className={`text-xs italic px-2 col-span-full ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Vazio</p>}
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </>
-        )}
+              )}
+
+              {/* ABA PESO */}
+              {abaConfig === 'peso' && (
+                <div>
+                   <div className={`p-5 rounded-2xl mb-6 border grid grid-cols-1 md:grid-cols-3 gap-4 shadow-sm ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-purple-50 border-purple-100'}`}>
+                    <input type="text" placeholder="Nome (Ex: Açaí Tradicional)" className={`p-3 rounded-xl border outline-none text-sm transition focus:border-purple-500 ${temaNoturno ? 'bg-gray-900 border-gray-600 text-white' : 'bg-white border-gray-200'}`} value={novoPeso.nome} onChange={e => setNovoPeso({...novoPeso, nome: e.target.value})} />
+                    <input type="number" placeholder="Preço do KG (Ex: 49.90)" className={`p-3 rounded-xl border outline-none text-sm transition focus:border-purple-500 ${temaNoturno ? 'bg-gray-900 border-gray-600 text-white' : 'bg-white border-gray-200'}`} value={novoPeso.preco} onChange={e => setNovoPeso({...novoPeso, preco: e.target.value})} />
+                    <input type="number" placeholder="Custo do KG (Opcional)" className={`p-3 rounded-xl border outline-none text-sm transition focus:border-purple-500 ${temaNoturno ? 'bg-gray-900 border-gray-600 text-white' : 'bg-white border-gray-200'}`} value={novoPeso.custo} onChange={e => setNovoPeso({...novoPeso, custo: e.target.value})} />
+                    <div className="md:col-span-3 flex gap-2">
+                       <button onClick={salvarPeso} className="flex-1 bg-purple-600 text-white font-bold p-3 rounded-xl hover:bg-purple-700 transition shadow-sm">{editandoPeso ? 'Atualizar KG' : 'Cadastrar KG'}</button>
+                       {editandoPeso && <button onClick={() => { setEditandoPeso(null); setNovoPeso({ nome: '', preco: '', custo: '' }); }} className={`px-6 font-bold rounded-xl transition ${temaNoturno ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-300 text-gray-700'}`}>Cancelar</button>}
+                    </div>
+                  </div>
+
+                  <table className="w-full text-left border-collapse mt-4">
+                    <thead><tr className={`text-xs uppercase border-b ${temaNoturno ? 'text-gray-500 border-gray-800' : 'text-gray-400'}`}><th className="pb-2">Nome na Balança</th><th className="pb-2 text-right">Preço KG</th><th className="pb-2 text-right">Custo KG</th><th className="pb-2 text-right">Ações</th></tr></thead>
+                    <tbody>
+                      {configPeso.map(p => (
+                        <tr key={p.id} className={`border-b transition text-sm ${temaNoturno ? 'border-gray-800 hover:bg-gray-800/50 text-gray-200' : 'border-gray-50 hover:bg-gray-50 text-gray-700'}`}>
+                          <td className="py-3 font-bold">{p.nome}</td>
+                          <td className="py-3 text-right text-green-500 font-black">R$ {parseFloat(p.preco_kg).toFixed(2)}</td>
+                          <td className={`py-3 text-right ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>R$ {parseFloat(p.custo_kg || 0).toFixed(2)}</td>
+                          <td className="py-3 flex justify-end gap-2">
+                            <button onClick={() => carregarEdicaoPeso(p)} className={`p-1.5 rounded-md transition ${temaNoturno ? 'bg-blue-900/20 hover:bg-blue-900/40 text-blue-400' : 'text-blue-500 hover:text-blue-700 bg-blue-50'}`}>✏️</button>
+                            <button onClick={() => excluirPeso(p.id)} className={`p-1.5 rounded-md transition ${temaNoturno ? 'bg-red-900/20 hover:bg-red-900/40 text-red-400' : 'text-red-500 hover:text-red-700 bg-red-50'}`}>🗑️</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {configPeso.length === 0 && <p className={`text-center text-sm mt-8 ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Nenhum preço de balança configurado.</p>}
+                </div>
+              )}
+
+              {/* ABA CATEGORIAS */}
+              {abaConfig === 'categorias' && (
+                <div className="max-w-xl mx-auto">
+                  <div className="flex gap-2 mb-6">
+                    <input type="text" placeholder="Nova Categoria (Ex: Bebidas)" className={`flex-1 p-3 rounded-xl border outline-none text-sm transition focus:border-purple-500 ${temaNoturno ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200'}`} value={novaCategoria} onChange={e => setNovaCategoria(e.target.value)} onKeyDown={e => e.key === 'Enter' && salvarCategoria()} />
+                    <button onClick={salvarCategoria} className="bg-purple-600 text-white font-bold px-6 rounded-xl hover:bg-purple-700 transition shadow-sm">Adicionar</button>
+                  </div>
+                  <ul className="space-y-2">
+                    {categorias.map(cat => (
+                      <li key={cat.id} className={`flex justify-between items-center p-4 rounded-xl border transition ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-100 text-gray-700'}`}>
+                        <span className="font-bold">{cat.nome}</span>
+                        <div className="flex items-center gap-4">
+                          <span className={`text-[10px] uppercase font-bold ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>{cat.produtos?.length || 0} itens</span>
+                          <button onClick={() => excluirCategoria(cat.id)} className={`p-1.5 rounded-md transition ${temaNoturno ? 'bg-red-900/20 text-red-400 hover:bg-red-900/40' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}>🗑️</button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

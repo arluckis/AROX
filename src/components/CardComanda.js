@@ -6,13 +6,13 @@ export default function CardComanda({ comanda, onClick, temaNoturno }) {
   return (
     <button 
       onClick={onClick} 
-      className={`w-32 h-44 rounded-3xl p-4 flex flex-col hover:shadow-xl transition-all duration-300 cursor-pointer text-left relative overflow-hidden active:scale-95 border ${
+      className={`w-32 h-44 rounded-3xl p-4 flex flex-col hover:shadow-xl transition-all duration-300 cursor-pointer text-left relative active:scale-95 border ${
         temaNoturno 
           ? 'bg-gray-800 border-gray-700 hover:border-purple-500 shadow-black/20' 
           : 'bg-white border-gray-100 hover:border-purple-300 shadow-sm'
       }`}
     >
-      <div className="flex justify-between items-start mb-3 w-full">
+      <div className="flex justify-between items-start mb-3 w-full overflow-hidden">
         <h3 className={`font-black text-sm leading-tight truncate pr-1 ${temaNoturno ? 'text-gray-100' : 'text-gray-800'}`}>
           {comanda.nome}
         </h3>
@@ -26,9 +26,9 @@ export default function CardComanda({ comanda, onClick, temaNoturno }) {
       </div>
 
       {comanda.tags && comanda.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-2 max-h-[36px] overflow-hidden">
-          {comanda.tags.slice(0, 3).map(tag => (
-            <span key={tag} className={`text-[9px] px-2 py-0.5 rounded-md font-bold truncate max-w-full border ${
+        <div className="flex gap-1 mb-2 w-full overflow-x-auto scrollbar-hide pb-1">
+          {comanda.tags.map(tag => (
+            <span key={tag} className={`text-[9px] px-2 py-0.5 rounded-md font-bold whitespace-nowrap border shrink-0 ${
               temaNoturno ? 'bg-gray-900 text-gray-400 border-gray-700' : 'bg-gray-50 text-gray-500 border-gray-200'
             }`}>
               {tag}

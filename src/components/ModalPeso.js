@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 
-export default function ModalPeso({ opcoesPeso, onAdicionar, onCancelar }) {
+export default function ModalPeso({ opcoesPeso, onAdicionar, onCancelar, temaNoturno }) {
   const [pesoGramas, setPesoGramas] = useState('');
   const [opcaoSelecionada, setOpcaoSelecionada] = useState('');
 
@@ -22,7 +22,6 @@ export default function ModalPeso({ opcoesPeso, onAdicionar, onCancelar }) {
     const valorFinal = config.preco * multiplicador;
     const custoFinal = (config.custo || 0) * multiplicador;
 
-    // A MÁGICA AQUI: Organizando o nome para "Açaí no Peso - Nome (Gramas)"
     onAdicionar({
       nome: `Açaí no Peso - ${config.nome} (${peso}g)`,
       preco: valorFinal,
@@ -31,15 +30,15 @@ export default function ModalPeso({ opcoesPeso, onAdicionar, onCancelar }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95">
-        <h2 className="text-xl font-black text-purple-800 mb-6 flex items-center gap-2">⚖️ Açaí no Peso</h2>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+      <div className={`rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 border ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
+        <h2 className={`text-xl font-black mb-6 flex items-center gap-2 ${temaNoturno ? 'text-purple-400' : 'text-purple-800'}`}>⚖️ Açaí no Peso</h2>
         
-        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Tabela de Preço</label>
+        <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Tabela de Preço</label>
         <select 
           value={opcaoSelecionada} 
           onChange={e => setOpcaoSelecionada(e.target.value)}
-          className="w-full p-3 border border-purple-200 rounded-xl outline-none focus:border-purple-500 bg-purple-50 text-purple-900 font-bold mb-4"
+          className={`w-full p-3 border rounded-xl outline-none font-bold mb-4 transition ${temaNoturno ? 'bg-gray-800 border-gray-700 text-gray-200 focus:border-purple-500' : 'bg-purple-50 border-purple-200 text-purple-900 focus:border-purple-500'}`}
         >
           {opcoesPeso && opcoesPeso.length > 0 ? (
             opcoesPeso.map(op => (
@@ -50,23 +49,23 @@ export default function ModalPeso({ opcoesPeso, onAdicionar, onCancelar }) {
           )}
         </select>
 
-        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Peso Lido na Balança</label>
+        <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Peso Lido na Balança</label>
         <div className="relative mb-8">
           <input 
             type="number" 
             autoFocus
             placeholder="Ex: 450" 
-            className="w-full p-4 border-2 border-purple-200 rounded-xl outline-none focus:border-purple-500 text-2xl font-black text-center" 
+            className={`w-full p-4 border-2 rounded-xl outline-none focus:border-purple-500 text-2xl font-black text-center transition ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-purple-200 text-gray-900'}`} 
             value={pesoGramas} 
             onChange={e => setPesoGramas(e.target.value)} 
             onKeyDown={e => e.key === 'Enter' && handleAdicionar()}
           />
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">gramas</span>
+          <span className={`absolute right-4 top-1/2 -translate-y-1/2 font-bold ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>gramas</span>
         </div>
 
         <div className="flex gap-2">
-          <button onClick={onCancelar} className="flex-1 bg-gray-100 text-gray-600 font-bold p-3 rounded-xl hover:bg-gray-200 transition">Cancelar</button>
-          <button onClick={handleAdicionar} className="flex-[2] bg-purple-600 text-white font-bold p-3 rounded-xl hover:bg-purple-700 transition shadow-lg">Lançar Peso</button>
+          <button onClick={onCancelar} className={`flex-1 font-bold p-3 rounded-xl transition ${temaNoturno ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Cancelar</button>
+          <button onClick={handleAdicionar} className={`flex-[2] text-white font-bold p-3 rounded-xl transition shadow-lg ${temaNoturno ? 'bg-purple-600 hover:bg-purple-500' : 'bg-purple-600 hover:bg-purple-700'}`}>Lançar Peso</button>
         </div>
       </div>
     </div>
