@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase'; // Adicionado
 
 export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaNoturno }) {
   const [desconto, setDesconto] = useState('');
@@ -7,6 +8,32 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
   const [valorRecebido, setValorRecebido] = useState('');
   const [modoDivisao, setModoDivisao] = useState(false);
   const [itensSelecionados, setItensSelecionados] = useState([]);
+
+  // --- LÓGICA DO MOTOBOY (Adicionado) ---
+  const [precisaBairro, setPrecisaBairro] = useState(false);
+  const [bairros, setBairros] = useState([]);
+  const [bairroSelecionado, setBairroSelecionado] = useState('');
+
+  useEffect(() => {
+    const verificarMotoboy = async () => {
+      const { data: empData } = await supabase.from('empresas').select('motoboy_ativo').eq('id', comanda.empresa_id).single();
+      if (empData?.motoboy_ativo && (comanda.tipo === 'Delivery' || comanda.tipo === 'iFood')) {
+        setPrecisaBairro(true);
+        const { data: bairrosData } = await supabase.from('bairros_entrega').select('*').eq('empresa_id', comanda.empresa_id).order('nome');
+        if (bairrosData) setBairros(bairrosData);
+      }
+    };
+    verificarMotoboy();
+  }, [comanda.empresa_id, comanda.tipo]);
+
+  const handleConfirmar = async () => {
+    // Se for delivery e tiver bairro, salva o bairro na comanda antes de fechar
+    if (precisaBairro && bairroSelecionado) {
+      await supabase.from('comandas').update({ bairro_id: bairroSelecionado }).eq('id', comanda.id);
+    }
+    onConfirmar(valorFinal, formaPagamento, itensSelecionados, modoDivisao);
+  };
+  // --------------------------------------
 
   const itensPendentes = comanda.produtos.filter(p => !p.pago);
   const totalPendente = itensPendentes.reduce((acc, p) => acc + p.preco, 0);
@@ -84,6 +111,24 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
             ))}
           </div>
 
+          {/* --- NOVO BLOCO MOTOBOY (Mesmo estilo dos seus inputs) --- */}
+          {precisaBairro && (
+            <div className={`flex flex-col gap-2 p-3 rounded-xl mb-4 border ${temaNoturno ? 'bg-blue-900/10 border-blue-800/50' : 'bg-blue-50 border-blue-200'}`}>
+              <label className={`text-xs font-bold uppercase tracking-wider ${temaNoturno ? 'text-blue-400' : 'text-blue-700'}`}>🚚 Bairro da Entrega:</label>
+              <select 
+                value={bairroSelecionado} 
+                onChange={(e) => setBairroSelecionado(e.target.value)}
+                className={`w-full p-2 rounded-lg outline-none text-sm transition border ${temaNoturno ? 'bg-gray-900 border-gray-600 text-white focus:border-blue-500' : 'bg-white border-gray-300 focus:border-blue-500'}`}
+              >
+                <option value="">-- Selecione o Bairro --</option>
+                {bairros.map(b => (
+                  <option key={b.id} value={b.id}>{b.nome} (Taxa: R$ {parseFloat(b.taxa).toFixed(2)})</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {/* -------------------------------------------------------- */}
+
           <div className={`flex items-center justify-between p-3 rounded-xl mb-4 border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-100'}`}>
             <span className={`text-sm font-bold ${temaNoturno ? 'text-gray-300' : 'text-gray-600'}`}>Desconto (R$):</span>
             <input type="number" placeholder="0.00" className={`w-24 text-right p-2 rounded-lg outline-none text-sm transition border ${descontoInvalido ? 'border-red-500 text-red-500 bg-red-50 dark:bg-red-900/20' : (temaNoturno ? 'bg-gray-900 border-gray-600 text-white focus:border-green-500' : 'bg-white border-gray-300 focus:border-green-500')}`} value={desconto} onChange={(e) => setDesconto(e.target.value)} />
@@ -114,8 +159,9 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
         <div className="flex gap-3">
           <button onClick={onCancelar} className={`flex-1 p-3 rounded-xl border-2 font-bold transition ${temaNoturno ? 'border-gray-700 text-gray-400 hover:bg-gray-800' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>Voltar</button>
           <button 
-            onClick={() => onConfirmar(valorFinal, formaPagamento, itensSelecionados, modoDivisao)}
-            disabled={!formaPagamento || descontoInvalido || dinheiroInsuficiente || (formaPagamento === 'Dinheiro' && recebido === 0) || nadaSelecionado}
+            // Botão atualizado para chamar a função handleConfirmar e travar se o bairro não for selecionado
+            onClick={handleConfirmar}
+            disabled={!formaPagamento || descontoInvalido || dinheiroInsuficiente || (formaPagamento === 'Dinheiro' && recebido === 0) || nadaSelecionado || (precisaBairro && !bairroSelecionado)}
             className={`flex-1 p-3 rounded-xl font-bold transition ${temaNoturno ? 'bg-green-600 text-white hover:bg-green-500 disabled:bg-gray-800 disabled:text-gray-500' : 'bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-500'}`}
           >
             Finalizar

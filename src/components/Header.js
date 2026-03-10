@@ -7,7 +7,7 @@ export default function Header({
   caixaAtual, abaAtiva, setAbaAtiva, logoEmpresa, setTemaNoturno,
   mostrarMenuPerfil, setMostrarMenuPerfil, nomeEmpresa, sessao,
   setMostrarConfigEmpresa, setMostrarAdminUsuarios, setMostrarAdminProdutos,
-  setMostrarConfigTags, setMostrarModalCaixa, fazerLogout, fetchData
+  setMostrarConfigTags, setMostrarModalCaixa, setMostrarAdminDelivery, fazerLogout, fetchData
 }) {
   const [editandoNome, setEditandoNome] = useState(false);
   const [tempNome, setTempNome] = useState('');
@@ -67,7 +67,10 @@ export default function Header({
                   <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Faturamento
                 </button>
               )}
-
+{/* BOTÃO DE CAIXA NO HEADER */}
+<button onClick={() => setAbaAtiva('caixa')} className={`px-4 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2 ${abaAtiva === 'caixa' ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-purple-900 text-white shadow-sm') : (temaNoturno ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-purple-700')}`}>
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> <span className="hidden sm:inline">Fechamento</span>
+</button>
               {/* BOTÃO PÚBLICO-ALVO RESTAURADO ABAIXO */}
               {(sessao.role === 'dono' || sessao.perm_estudo) && (
                 <button onClick={() => setAbaAtiva('analises')} className={`px-4 py-2 rounded-lg font-bold transition whitespace-nowrap flex items-center gap-2 ${abaAtiva === 'analises' ? (temaNoturno ? 'bg-gray-700 text-white shadow-sm' : 'bg-white text-purple-800 shadow-sm') : (temaNoturno ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-purple-600')}`}>
@@ -133,6 +136,11 @@ export default function Header({
               {sessao.role === 'dono' && (
                 <button onClick={() => { setMostrarConfigTags(true); setMostrarMenuPerfil(false); }} className={`w-full text-left p-3 text-sm font-bold flex items-center gap-3 rounded-xl transition ${temaNoturno ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}`}>Tags</button>
               )}
+              {sessao.role === 'dono' && (
+  <button onClick={() => { setMostrarAdminDelivery(true); setMostrarMenuPerfil(false); }} className={`w-full text-left p-3 text-sm font-bold flex items-center gap-3 rounded-xl transition ${temaNoturno ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}`}>
+Delivery 
+  </button>
+)}
               <div className="h-px my-1 bg-gray-500/10"></div>
               <button onClick={fazerLogout} className="w-full text-left p-3 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl">Sair do Sistema</button>
             </div>

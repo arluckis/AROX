@@ -11,6 +11,7 @@ import TabFechadas from '@/components/TabFechadas';
 import TabFaturamento from '@/components/TabFaturamento';
 import TabAnalises from '@/components/TabAnalises';
 import PainelComanda from '@/components/PainelComanda';
+import TabFechamentoCaixa from '@/components/TabFechamentoCaixa';
 
 // Modais
 import ModalConfigEmpresa from '@/components/ModalConfigEmpresa';
@@ -19,6 +20,7 @@ import ModalPeso from '@/components/ModalPeso';
 import ModalPagamento from '@/components/ModalPagamento';
 import AdminProdutos from '@/components/AdminProdutos';
 import AdminUsuarios from '@/components/AdminUsuarios';
+import AdminDelivery from '@/components/AdminDelivery'; 
 
 export default function Home() {
   const getHoje = () => {
@@ -41,6 +43,7 @@ export default function Home() {
   const [logoEmpresa, setLogoEmpresa] = useState('https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
   const [logoEmpresaEdicao, setLogoEmpresaEdicao] = useState('');
 
+  const [ignorarAvisoAntigas, setIgnorarAvisoAntigas] = useState(false);
   const [caixaAtual, setCaixaAtual] = useState({ data_abertura: getHoje(), status: 'aberto' });
   const [comandas, setComandas] = useState([]);
   const [menuCategorias, setMenuCategorias] = useState([]);
@@ -52,11 +55,31 @@ export default function Home() {
   const [mostrarAdminProdutos, setMostrarAdminProdutos] = useState(false);
   const [mostrarAdminUsuarios, setMostrarAdminUsuarios] = useState(false);
   const [mostrarConfigTags, setMostrarConfigTags] = useState(false);
+  const [mostrarAdminDelivery, setMostrarAdminDelivery] = useState(false);
   const [mostrarModalPeso, setMostrarModalPeso] = useState(false);
   const [mostrarModalPagamento, setMostrarModalPagamento] = useState(false);
   
   const [idSelecionado, setIdSelecionado] = useState(null);
   const [abaAtiva, setAbaAtiva] = useState('comandas');
+  const [avisoFechamento, setAvisoFechamento] = useState(false);
+
+  useEffect(() => {
+    const verificarHorario = () => {
+       const agora = new Date();
+       const horas = agora.getHours();
+       const minutos = agora.getMinutes();
+       // Das 22h50 até 03h59 o sistema exibirá o aviso para o usuário lembrar
+       if ((horas === 22 && minutos >= 50) || horas >= 23 || horas < 4) {
+          setAvisoFechamento(true);
+       } else {
+          setAvisoFechamento(false);
+       }
+    };
+    
+    verificarHorario();
+    const intervalo = setInterval(verificarHorario, 60000); // Verifica a cada minuto
+    return () => clearInterval(intervalo);
+  }, []);
   const [abaDetalheMobile, setAbaDetalheMobile] = useState('menu');
   const [filtroCategoriaCardapio, setFiltroCategoriaCardapio] = useState('Todas');
   const [modoExclusao, setModoExclusao] = useState(false);
@@ -76,7 +99,8 @@ export default function Home() {
     if (sessionData) {
       try {
         const parsed = JSON.parse(sessionData);
-        if (parsed.data === getHoje() && parsed.empresa_id) { setSessao(parsed); } 
+        // Removemos a validação do "getHoje()" para a sessão durar mais de 24h
+        if (parsed.empresa_id) { setSessao(parsed); } 
         else { localStorage.removeItem('bessa_session'); }
       } catch(e) { localStorage.removeItem('bessa_session'); }
     }
@@ -129,6 +153,18 @@ export default function Home() {
       const { data: catData } = await supabase.from('categorias').select('*, itens:produtos(*)').eq('empresa_id', sessao.empresa_id);
       if (catData) setMenuCategorias(catData);
 
+      // LÓGICA DO CAIXA: Busca se existe um caixa aberto. Se não, cria um.
+      let { data: caixaData } = await supabase.from('caixas').select('*').eq('empresa_id', sessao.empresa_id).eq('status', 'aberto').single();
+      
+      if (!caixaData) {
+        const { data: novoCaixa } = await supabase.from('caixas').insert([{ 
+          empresa_id: sessao.empresa_id, 
+          data_abertura: getHoje(), 
+          status: 'aberto' 
+        }]).select().single();
+        caixaData = novoCaixa;
+      }
+      setCaixaAtual(caixaData);
       const { data: comData } = await supabase.from('comandas').select('*, produtos:comanda_produtos(*), pagamentos(*)').eq('empresa_id', sessao.empresa_id).order('id', { ascending: true });
       if (comData) setComandas(comData);
 
@@ -283,6 +319,7 @@ export default function Home() {
   const comandasFiltradas = comandas.filter(c => isComandaInFiltro(c.data));
   const comandasAbertas = comandas.filter(c => c.status === 'aberta');
   const comandasFechadasHoje = comandas.filter(c => c.status === 'fechada' && c.data === getHoje());
+  const comandasAntigasAbertas = comandas.filter(c => c.status === 'aberta' && caixaAtual?.data_abertura && c.data && c.data.substring(0,10) !== caixaAtual.data_abertura.substring(0,10));
 
   const pagamentosFiltrados = comandasFiltradas.flatMap(c => c.pagamentos);
   const faturamentoTotal = pagamentosFiltrados.reduce((acc, p) => acc + p.valor, 0);
@@ -333,24 +370,68 @@ export default function Home() {
         temaNoturno={temaNoturno} caixaAtual={caixaAtual} abaAtiva={abaAtiva} setAbaAtiva={setAbaAtiva}
         logoEmpresa={logoEmpresa} setTemaNoturno={setTemaNoturno} mostrarMenuPerfil={mostrarMenuPerfil}
         setMostrarMenuPerfil={setMostrarMenuPerfil} nomeEmpresa={nomeEmpresa} sessao={sessao}
+        setMostrarAdminDelivery={setMostrarAdminDelivery}
+        
         setMostrarConfigEmpresa={setMostrarConfigEmpresa} setMostrarAdminUsuarios={setMostrarAdminUsuarios}
         setMostrarAdminProdutos={setMostrarAdminProdutos} setMostrarConfigTags={setMostrarConfigTags} fazerLogout={fazerLogout}
         fetchData={fetchData}
       />
-
-      {!comandaAtiva && alertaTags && abaAtiva === 'comandas' && (
-        <div className={`mb-6 p-4 rounded-3xl flex items-center justify-between border shadow-sm animate-in slide-in-from-top-4 ${temaNoturno ? 'bg-yellow-900/20 border-yellow-700/50 text-yellow-400' : 'bg-yellow-50 border-yellow-200 text-yellow-800'}`}>
-          <div className="flex items-center gap-4">
-            <span className="text-3xl drop-shadow-sm">💡</span>
+      {/* ===== ÁREA DE AVISOS INTELIGENTES (Alinhados e Elegantes) ===== */}
+      <div className="max-w-7xl mx-auto w-full flex flex-col gap-3 mb-6 px-4 xl:px-0">
+        
+        {/* 1. Aviso de Fechamento (22h50+) */}
+        {avisoFechamento && !comandaAtiva && (
+          <div className={`p-4 rounded-3xl flex items-center gap-4 border shadow-sm transition-colors duration-300 ${temaNoturno ? 'bg-red-900/10 border-red-800/30 text-red-400' : 'bg-red-50 border-red-100 text-red-800'}`}>
+            <div className={`p-2.5 rounded-full shrink-0 ${temaNoturno ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-600'}`}>
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
             <div>
-              <p className="font-black text-s">Alimente a sua Inteligência de Negócio!</p>
-              <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-yellow-400/80' : 'text-yellow-700/80'}`}>
-                As suas últimas comandas estão sem tags. Para classificar os seus clientes, <b>clique nas tags pre-configuradas do cardápio.</b>
+              <p className="font-black text-sm uppercase tracking-widest">Lembrete de Fechamento</p>
+              <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-red-400/70' : 'text-red-700/80'}`}>
+                Já passou das 22h50. Recomendamos realizar o fechamento do caixa ao final do expediente para evitar a mistura de turnos.
               </p>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* 2. Aviso de Comandas do Dia Anterior */}
+        {comandasAntigasAbertas.length > 0 && !ignorarAvisoAntigas && !comandaAtiva && abaAtiva === 'comandas' && (
+          <div className={`p-4 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border shadow-sm transition-colors duration-300 ${temaNoturno ? 'bg-orange-900/10 border-orange-800/30 text-orange-400' : 'bg-orange-50 border-orange-100 text-orange-800'}`}>
+            <div className="flex items-center gap-4">
+              <div className={`p-2.5 rounded-full shrink-0 ${temaNoturno ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-600'}`}>
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              </div>
+              <div>
+                <p className="font-black text-sm uppercase tracking-widest">Comandas Pendentes</p>
+                <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-orange-400/70' : 'text-orange-700/80'}`}>
+                  Você tem <b>{comandasAntigasAbertas.length} comanda(s)</b> de turnos passados abertas. Deseja encerrá-las ou mantê-las ativas?
+                </p>
+              </div>
+            </div>
+            <button onClick={() => setIgnorarAvisoAntigas(true)} className={`shrink-0 px-5 py-2.5 text-xs font-bold rounded-xl transition ${temaNoturno ? 'bg-orange-900/40 hover:bg-orange-900/60 text-orange-300' : 'bg-orange-200/50 hover:bg-orange-200 text-orange-800'}`}>
+              Manter Abertas
+            </button>
+          </div>
+        )}
+
+        {/* 3. Aviso de Tags (Sem Emojis, Mesmo estilo visual) */}
+        {!comandaAtiva && alertaTags && abaAtiva === 'comandas' && (
+          <div className={`p-4 rounded-3xl flex items-center justify-between border shadow-sm transition-colors duration-300 ${temaNoturno ? 'bg-yellow-900/10 border-yellow-800/30 text-yellow-500' : 'bg-yellow-50 border-yellow-200 text-yellow-800'}`}>
+            <div className="flex items-center gap-4">
+              <div className={`p-2.5 rounded-full shrink-0 ${temaNoturno ? 'bg-yellow-900/30 text-yellow-500' : 'bg-yellow-100 text-yellow-600'}`}>
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+              </div>
+              <div>
+                <p className="font-black text-sm uppercase tracking-widest">Inteligência de Negócio</p>
+                <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-yellow-500/70' : 'text-yellow-800/80'}`}>
+                  As suas últimas comandas estão sem tags. <b>Clique nas tags pré-configuradas</b> para classificar o perfil dos seus clientes.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      {/* ============================================================== */}
 
       <Sidebar 
         menuMobileAberto={menuMobileAberto} setMenuMobileAberto={setMenuMobileAberto} temaNoturno={temaNoturno}
@@ -375,6 +456,7 @@ export default function Home() {
             setModoExclusao={setModoExclusao} selecionadasExclusao={selecionadasExclusao} 
             toggleSelecaoExclusao={toggleSelecaoExclusao} confirmarExclusaoEmMassa={confirmarExclusaoEmMassa} 
             adicionarComanda={adicionarComanda} setIdSelecionado={setIdSelecionado} 
+            caixaAtual={caixaAtual} 
           />
         ) : abaAtiva === 'fechadas' ? (
           <TabFechadas 
@@ -394,11 +476,16 @@ export default function Home() {
             getHoje={getHoje} getMesAtual={getMesAtual} getAnoAtual={getAnoAtual} 
             dadosTipos={dadosTipos} dadosTags={dadosTags} 
           />
+        ) : abaAtiva === 'caixa' ? (
+          <TabFechamentoCaixa 
+            temaNoturno={temaNoturno} sessao={sessao} caixaAtual={caixaAtual} comandas={comandas} fetchData={fetchData} 
+          />
         ) : null}
       </div>
 
       {mostrarAdminUsuarios && sessao && <AdminUsuarios empresaId={sessao.empresa_id} usuarioAtualId={sessao.id} temaNoturno={temaNoturno} onFechar={() => setMostrarAdminUsuarios(false)} />}
       {mostrarAdminProdutos && sessao && <AdminProdutos empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => { setMostrarAdminProdutos(false); fetchData(); }} />}
+      {mostrarAdminDelivery && sessao && <AdminDelivery empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => setMostrarAdminDelivery(false)} />}
       {mostrarModalPeso && <ModalPeso opcoesPeso={configPeso} temaNoturno={temaNoturno} onAdicionar={adicionarProdutoNaComanda} onCancelar={() => setMostrarModalPeso(false)} />}
       {mostrarModalPagamento && <ModalPagamento comanda={comandaAtiva} temaNoturno={temaNoturno} onConfirmar={processarPagamento} onCancelar={() => setMostrarModalPagamento(false)} />}
       
