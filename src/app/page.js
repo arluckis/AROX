@@ -166,17 +166,25 @@ export default function Home() {
   const salvarConfigEmpresa = async () => {
     if (nomeEmpresaEdicao.trim() === '') return alert("O nome não pode estar vazio.");
     
-    const updatePayload = { nome: nomeEmpresaEdicao };
-    if (logoEmpresaEdicao) {
-      // Atualiza logo_url caso exista essa coluna
-      updatePayload.logo_url = logoEmpresaEdicao;
+    // Atualiza o nome e o link da logo na coluna logo_url que acabou de criar!
+    const { error } = await supabase
+      .from('empresas')
+      .update({ 
+        nome: nomeEmpresaEdicao, 
+        logo_url: logoEmpresaEdicao 
+      })
+      .eq('id', sessao.empresa_id);
+      
+    if (error) {
+      alert("❌ Erro ao salvar no banco de dados: " + error.message);
+      return; // Se der erro, pára aqui e não fecha a janela
     }
     
-    await supabase.from('empresas').update(updatePayload).eq('id', sessao.empresa_id);
-    
+    // Se deu sucesso, atualiza a tela e fecha o modal
     setNomeEmpresa(nomeEmpresaEdicao);
     setLogoEmpresa(logoEmpresaEdicao || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
     setMostrarConfigEmpresa(false);
+    
   };
 
   const adicionarComanda = async (tipo) => {
