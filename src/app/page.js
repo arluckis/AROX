@@ -335,6 +335,7 @@ export default function Home() {
         setMostrarMenuPerfil={setMostrarMenuPerfil} nomeEmpresa={nomeEmpresa} sessao={sessao}
         setMostrarConfigEmpresa={setMostrarConfigEmpresa} setMostrarAdminUsuarios={setMostrarAdminUsuarios}
         setMostrarAdminProdutos={setMostrarAdminProdutos} setMostrarConfigTags={setMostrarConfigTags} fazerLogout={fazerLogout}
+        fetchData={fetchData}
       />
 
       {!comandaAtiva && alertaTags && abaAtiva === 'comandas' && (
