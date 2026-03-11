@@ -15,6 +15,10 @@ export default function AdminProdutos({ empresaId, onFechar, temaNoturno }) {
   const [novoPeso, setNovoPeso] = useState({ nome: '', preco: '', custo: '' });
   const [editandoPeso, setEditandoPeso] = useState(null);
 
+  // Estados para Importação em Massa
+  const [textoImportacao, setTextoImportacao] = useState('');
+  const [importando, setImportando] = useState(false);
+
   const fetchDados = async () => {
     setLoading(true);
     const { data: catData } = await supabase.from('categorias').select('*, produtos(*)').eq('empresa_id', empresaId); 
@@ -107,6 +111,91 @@ export default function AdminProdutos({ empresaId, onFechar, temaNoturno }) {
     }
   };
 
+  // --- LÓGICA DE IMPORTAÇÃO EM MASSA ---
+  const processarImportacaoMassa = async () => {
+    if (!textoImportacao.trim()) return alert("Cole o texto com o cardápio para importar.");
+    setImportando(true);
+
+    const linhas = textoImportacao.split('\n');
+    let categoriaAtual = '';
+    const mapaCategorias = {}; 
+
+    // 1. Interpretar o texto digitado
+    for (let linha of linhas) {
+      linha = linha.trim();
+      if (!linha) continue;
+
+      if (linha.startsWith('#')) {
+        categoriaAtual = linha.replace('#', '').trim();
+        if (!mapaCategorias[categoriaAtual]) mapaCategorias[categoriaAtual] = [];
+      } else {
+        if (!categoriaAtual) {
+          categoriaAtual = 'Geral';
+          if (!mapaCategorias[categoriaAtual]) mapaCategorias[categoriaAtual] = [];
+        }
+        
+        const partes = linha.split('|').map(p => p.trim());
+        const nome = partes[0];
+        const preco = parseFloat((partes[1] || '0').replace(',', '.'));
+        const custo = parseFloat((partes[2] || '0').replace(',', '.'));
+
+        if (nome && !isNaN(preco)) {
+          mapaCategorias[categoriaAtual].push({ nome, preco, custo });
+        }
+      }
+    }
+
+    try {
+      // 2. Mapear Categorias Existentes
+      const categoriasExistentes = [...categorias];
+      const mapCatIds = {}; 
+      categoriasExistentes.forEach(c => mapCatIds[c.nome.toLowerCase()] = c.id);
+
+      let totalAdicionados = 0;
+
+      // 3. Processar Criação de Categorias e Produtos
+      for (const catNome of Object.keys(mapaCategorias)) {
+        let catId = mapCatIds[catNome.toLowerCase()];
+        
+        // Se a categoria não existe, cria ela agora
+        if (!catId) {
+           const { data: novaCat, error } = await supabase.from('categorias').insert([{ nome: catNome, empresa_id: empresaId }]).select().single();
+           if (novaCat) {
+             catId = novaCat.id;
+             mapCatIds[catNome.toLowerCase()] = catId;
+           }
+        }
+
+        // Prepara os produtos dessa categoria para inserir tudo de uma vez
+        if (catId) {
+          const produtosParaInserir = mapaCategorias[catNome].map(p => ({
+            nome: p.nome,
+            preco: p.preco,
+            custo: p.custo,
+            categoria_id: catId,
+            empresa_id: empresaId
+          }));
+
+          if (produtosParaInserir.length > 0) {
+            const { error } = await supabase.from('produtos').insert(produtosParaInserir);
+            if (!error) totalAdicionados += produtosParaInserir.length;
+          }
+        }
+      }
+
+      alert(`Importação concluída! ${totalAdicionados} produtos adicionados com sucesso.`);
+      setTextoImportacao('');
+      setAbaConfig('produtos');
+      fetchDados();
+
+    } catch (e) {
+      console.error(e);
+      alert("Ocorreu um erro durante a importação. Verifique o formato do texto.");
+    } finally {
+      setImportando(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[55]">
       <div className={`rounded-3xl p-6 w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] border ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
@@ -117,9 +206,10 @@ export default function AdminProdutos({ empresaId, onFechar, temaNoturno }) {
         </div>
 
         <div className={`flex gap-2 p-1 rounded-xl mb-6 overflow-x-auto border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200'}`}>
-          <button onClick={() => setAbaConfig('produtos')} className={`px-6 py-2 rounded-lg font-bold text-sm transition whitespace-nowrap ${abaConfig === 'produtos' ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-purple-700 shadow-sm') : (temaNoturno ? 'text-gray-400' : 'text-gray-500')}`}>Cardápio Padrão</button>
-          <button onClick={() => setAbaConfig('peso')} className={`px-6 py-2 rounded-lg font-bold text-sm transition whitespace-nowrap flex items-center gap-2 ${abaConfig === 'peso' ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-purple-700 shadow-sm') : (temaNoturno ? 'text-gray-400' : 'text-gray-500')}`}>⚖️ Venda no Peso</button>
-          <button onClick={() => setAbaConfig('categorias')} className={`px-6 py-2 rounded-lg font-bold text-sm transition whitespace-nowrap ${abaConfig === 'categorias' ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-purple-700 shadow-sm') : (temaNoturno ? 'text-gray-400' : 'text-gray-500')}`}>Categorias</button>
+          <button onClick={() => setAbaConfig('produtos')} className={`px-4 py-2 rounded-lg font-bold text-sm transition whitespace-nowrap ${abaConfig === 'produtos' ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-purple-700 shadow-sm') : (temaNoturno ? 'text-gray-400' : 'text-gray-500')}`}>Cardápio Padrão</button>
+          <button onClick={() => setAbaConfig('peso')} className={`px-4 py-2 rounded-lg font-bold text-sm transition whitespace-nowrap flex items-center gap-2 ${abaConfig === 'peso' ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-purple-700 shadow-sm') : (temaNoturno ? 'text-gray-400' : 'text-gray-500')}`}>⚖️ Venda no Peso</button>
+          <button onClick={() => setAbaConfig('categorias')} className={`px-4 py-2 rounded-lg font-bold text-sm transition whitespace-nowrap ${abaConfig === 'categorias' ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-purple-700 shadow-sm') : (temaNoturno ? 'text-gray-400' : 'text-gray-500')}`}>Categorias</button>
+          <button onClick={() => setAbaConfig('importacao')} className={`px-4 py-2 rounded-lg font-bold text-sm transition whitespace-nowrap flex items-center gap-2 ${abaConfig === 'importacao' ? (temaNoturno ? 'bg-green-600 text-white shadow-sm' : 'bg-green-500 text-white shadow-sm') : (temaNoturno ? 'text-green-500' : 'text-green-600')}`}>⚡ Importação em Massa</button>
         </div>
 
         <div className="flex-1 overflow-y-auto pr-2 scrollbar-hide">
@@ -226,6 +316,48 @@ export default function AdminProdutos({ empresaId, onFechar, temaNoturno }) {
                   </ul>
                 </div>
               )}
+
+              {/* ABA IMPORTAÇÃO EM MASSA */}
+              {abaConfig === 'importacao' && (
+                <div className="flex flex-col gap-4">
+                  <div className={`p-4 rounded-2xl border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-blue-50 border-blue-100'}`}>
+                    <h3 className={`font-black mb-2 flex items-center gap-2 ${temaNoturno ? 'text-blue-400' : 'text-blue-700'}`}>
+                      Instruções de Importação
+                    </h3>
+                    <p className={`text-sm mb-3 ${temaNoturno ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Copie e cole o cardápio abaixo. Para criar categorias, inicie a linha com o símbolo <b>#</b>. Para os produtos, separe o nome, o preço e o custo (opcional) usando uma barra vertical (<b>|</b>).
+                    </p>
+                    <div className={`p-3 rounded-lg text-xs font-mono whitespace-pre-wrap ${temaNoturno ? 'bg-gray-900 text-gray-300' : 'bg-white text-gray-700'}`}>
+{`# Bebidas
+Coca-Cola Lata | 6.50 | 3.00
+Suco de Laranja | 8.00
+
+# Lanches
+X-Tudo | 25.00 | 12.00
+Cachorro Quente | 15.00`}
+                    </div>
+                    <p className={`text-xs mt-3 italic ${temaNoturno ? 'text-gray-500' : 'text-gray-500'}`}>
+                      Dica: Você pode pedir para uma Inteligência Artificial formatar o PDF do seu cliente neste formato!
+                    </p>
+                  </div>
+
+                  <textarea 
+                    className={`w-full h-64 p-4 rounded-xl border outline-none font-mono text-sm resize-y transition focus:border-green-500 ${temaNoturno ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-800'}`}
+                    placeholder="Cole seu cardápio aqui..."
+                    value={textoImportacao}
+                    onChange={(e) => setTextoImportacao(e.target.value)}
+                  ></textarea>
+
+                  <button 
+                    onClick={processarImportacaoMassa}
+                    disabled={importando}
+                    className={`w-full py-4 font-black text-lg rounded-xl transition shadow-lg ${importando ? 'bg-gray-500 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                  >
+                    {importando ? 'A processar itens...' : 'Processar e Salvar Cardápio'}
+                  </button>
+                </div>
+              )}
+
             </>
           )}
         </div>
