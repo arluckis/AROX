@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 
 // Componentes Modularizados
@@ -23,26 +23,30 @@ import AdminUsuarios from '@/components/AdminUsuarios';
 import AdminDelivery from '@/components/AdminDelivery'; 
 
 export default function Home() {
-  // ... dentro do componente export default function Home() { ...
+  // 1. Funções auxiliares base
+  const getHoje = () => {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  };
 
-const getHoje = () => {
-  const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-  return new Date(Date.now() - tzoffset).toISOString().substring(0, 10);
-};
-
-// Adiciona isto logo abaixo da função getHoje:
-useEffect(() => {
-  console.log("Data gerada pelo getHoje:", getHoje());
-}, []); 
-
-// ... restante do código
-  
   const getMesAtual = () => getHoje().substring(0, 7);
   const getAnoAtual = () => getHoje().substring(0, 4);
 
+  // 2. Sorteio da frase (Garante que roda apenas uma vez por renderização inicial)
+  const fraseCarregamento = useMemo(() => {
+    const frases = [
+      "Carregando",
+      "Organizando as comandas",
+      "Quase tudo pronto",
+      "Adicionando feitiço para trazer clientes",
+      "Falta só mais isso aqui"
+    ];
+    return frases[Math.floor(Math.random() * frases.length)];
+  }, []);
+
+  // 3. Estados (useState)
   const [sessao, setSessao] = useState(null); 
   const [credenciais, setCredenciais] = useState({ email: '', senha: '' });
-  const [nomeEmpresa, setNomeEmpresa] = useState('Carregando...'); 
+  const [nomeEmpresa, setNomeEmpresa] = useState('A Carregar...'); 
   const [temaNoturno, setTemaNoturno] = useState(false);
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
 
@@ -68,9 +72,17 @@ useEffect(() => {
   const [mostrarModalPagamento, setMostrarModalPagamento] = useState(false);
   
   const [idSelecionado, setIdSelecionado] = useState(null);
-  // Modifique o estado da abaAtiva e adicione estes dois useEffects:
   const [abaAtiva, setAbaAtiva] = useState('comandas');
+  const [avisoFechamento, setAvisoFechamento] = useState(false);
 
+  const [abaDetalheMobile, setAbaDetalheMobile] = useState('menu');
+  const [filtroCategoriaCardapio, setFiltroCategoriaCardapio] = useState('Todas');
+  const [modoExclusao, setModoExclusao] = useState(false);
+  const [selecionadasExclusao, setSelecionadasExclusao] = useState([]);
+
+  const [filtroTempo, setFiltroTempo] = useState({ tipo: 'dia', valor: getHoje(), inicio: '', fim: '' });
+
+  // 4. Efeitos (useEffect)
   useEffect(() => {
     const abaSalva = localStorage.getItem('bessa_aba_ativa');
     if (abaSalva) setAbaAtiva(abaSalva);
@@ -79,14 +91,12 @@ useEffect(() => {
   useEffect(() => {
     localStorage.setItem('bessa_aba_ativa', abaAtiva);
   }, [abaAtiva]);
-  const [avisoFechamento, setAvisoFechamento] = useState(false);
 
   useEffect(() => {
     const verificarHorario = () => {
        const agora = new Date();
        const horas = agora.getHours();
        const minutos = agora.getMinutes();
-       // Das 22h50 até 03h59 o sistema exibirá o aviso para o usuário lembrar
        if ((horas === 22 && minutos >= 50) || horas >= 23 || horas < 4) {
           setAvisoFechamento(true);
        } else {
@@ -95,29 +105,21 @@ useEffect(() => {
     };
     
     verificarHorario();
-    const intervalo = setInterval(verificarHorario, 60000); // Verifica a cada minuto
+    const intervalo = setInterval(verificarHorario, 60000); 
     return () => clearInterval(intervalo);
   }, []);
-  const [abaDetalheMobile, setAbaDetalheMobile] = useState('menu');
-  const [filtroCategoriaCardapio, setFiltroCategoriaCardapio] = useState('Todas');
-  const [modoExclusao, setModoExclusao] = useState(false);
-  const [selecionadasExclusao, setSelecionadasExclusao] = useState([]);
-
-  const [filtroTempo, setFiltroTempo] = useState({ tipo: 'dia', valor: getHoje(), inicio: '', fim: '' });
-  const comandaAtiva = comandas.find(c => c.id === idSelecionado);
-
-  const ultimasComandas = comandas.slice(-3);
-  const alertaTags = ultimasComandas.length === 3 && ultimasComandas.every(c => c.tags && c.tags.length === 0);
 
   useEffect(() => {
     const temaSalvo = localStorage.getItem('bessa_tema_noturno');
     if (temaSalvo !== null) { setTemaNoturno(JSON.parse(temaSalvo)); }
 
+    const logoSalva = localStorage.getItem('bessa_logo_empresa');
+    if (logoSalva) setLogoEmpresa(logoSalva);
+    
     const sessionData = localStorage.getItem('bessa_session');
     if (sessionData) {
       try {
         const parsed = JSON.parse(sessionData);
-        // Removemos a validação do "getHoje()" para a sessão durar mais de 24h
         if (parsed.empresa_id) { setSessao(parsed); } 
         else { localStorage.removeItem('bessa_session'); }
       } catch(e) { localStorage.removeItem('bessa_session'); }
@@ -136,6 +138,7 @@ useEffect(() => {
     metaThemeColor.setAttribute('content', temaNoturno ? '#1f2937' : '#ffffff');
   }, [temaNoturno]);
 
+  // 5. Funções principais e Buscas
   const fazerLogout = () => {
     localStorage.removeItem('bessa_session');
     setSessao(null); setCredenciais({ email: '', senha: '' }); setMostrarMenuPerfil(false); setMenuMobileAberto(false); setAbaAtiva('comandas');
@@ -146,7 +149,6 @@ useEffect(() => {
     setIsLoading(true);
     
     try {
-      // Trazemos tudo (*) para evitar erros se a coluna se chamar "logo" ou "logo_url"
       const { data: empData, error: empError } = await supabase
         .from('empresas')
         .select('*')
@@ -160,24 +162,23 @@ useEffect(() => {
         setNomeEmpresa(empData.nome || "A Minha Loja");
         setNomeEmpresaEdicao(empData.nome || "");
         
-        // Tenta achar a logo, não importa se a coluna se chama 'logo' ou 'logo_url'
         const urlLogo = empData.logo || empData.logo_url;
         if (urlLogo) {
           setLogoEmpresa(urlLogo);
           setLogoEmpresaEdicao(urlLogo);
+          localStorage.setItem('bessa_logo_empresa', urlLogo); 
         }
       }
 
       const { data: catData } = await supabase.from('categorias').select('*, itens:produtos(*)').eq('empresa_id', sessao.empresa_id);
       if (catData) setMenuCategorias(catData);
 
-      // LÓGICA DO CAIXA: Busca se existe um caixa aberto pegando o MAIS RECENTE para evitar travar em caixas duplicados antigos.
       const { data: caixasAbertos } = await supabase.from('caixas')
         .select('*')
         .eq('empresa_id', sessao.empresa_id)
         .eq('status', 'aberto')
-        .order('id', { ascending: false }) // Traz o último ID criado primeiro
-        .limit(1); // Garante que pega apenas 1
+        .order('id', { ascending: false }) 
+        .limit(1); 
       
       let caixaData = caixasAbertos && caixasAbertos.length > 0 ? caixasAbertos[0] : null;
       
@@ -227,7 +228,6 @@ useEffect(() => {
   const salvarConfigEmpresa = async () => {
     if (nomeEmpresaEdicao.trim() === '') return alert("O nome não pode estar vazio.");
     
-    // Atualiza o nome e o link da logo na coluna logo_url que acabou de criar!
     const { error } = await supabase
       .from('empresas')
       .update({ 
@@ -238,14 +238,12 @@ useEffect(() => {
       
     if (error) {
       alert("❌ Erro ao salvar no banco de dados: " + error.message);
-      return; // Se der erro, pára aqui e não fecha a janela
+      return; 
     }
     
-    // Se deu sucesso, atualiza a tela e fecha o modal
     setNomeEmpresa(nomeEmpresaEdicao);
     setLogoEmpresa(logoEmpresaEdicao || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
     setMostrarConfigEmpresa(false);
-    
   };
 
   const adicionarComanda = async (tipo) => {
@@ -291,7 +289,7 @@ useEffect(() => {
     setIdSelecionado(null); 
   };
 
-  const processarPagamento = async (valorFinal, formaPagamento, itensSelecionados, modoDivisao) => {
+  const processarPagamento = async (valorFinal, formaPagamento, itensSelecionados, modoDivisao, bairroId = null, taxaEntrega = 0) => {
     if (!sessao?.empresa_id) return;
     let novosProdutos = [...comandaAtiva.produtos];
     let idsParaPagar = [];
@@ -303,7 +301,20 @@ useEffect(() => {
     if (!errPg) {
       if (idsParaPagar.length > 0) await supabase.from('comanda_produtos').update({ pago: true }).in('id', idsParaPagar);
       if (todosPagos) await supabase.from('comandas').update({ status: 'fechada' }).eq('id', idSelecionado);
-      setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: novosProdutos, pagamentos: [...c.pagamentos, pgData], status: todosPagos ? 'fechada' : 'aberta' } : c));
+      
+      setComandas(comandas.map(c => {
+        if (c.id === idSelecionado) {
+           return {
+              ...c,
+              produtos: novosProdutos,
+              pagamentos: [...c.pagamentos, pgData],
+              status: todosPagos ? 'fechada' : 'aberta',
+              bairro_id: bairroId || c.bairro_id,
+              taxa_entrega: taxaEntrega > 0 ? taxaEntrega : c.taxa_entrega
+           };
+        }
+        return c;
+      }));
       setMostrarModalPagamento(false);
     }
   };
@@ -341,6 +352,11 @@ useEffect(() => {
     return false;
   };
 
+  // 6. Preparação de Variáveis e Cálculos para a Renderização
+  const comandaAtiva = comandas.find(c => c.id === idSelecionado);
+  const ultimasComandas = comandas.slice(-3);
+  const alertaTags = ultimasComandas.length === 3 && ultimasComandas.every(c => c.tags && c.tags.length === 0);
+
   const comandasFiltradas = comandas.filter(c => isComandaInFiltro(c.data));
   const comandasAbertas = comandas.filter(c => c.status === 'aberta');
   const comandasFechadasHoje = comandas.filter(c => c.status === 'fechada' && c.data === getHoje());
@@ -348,7 +364,6 @@ useEffect(() => {
 
   const pagamentosFiltrados = comandasFiltradas.flatMap(c => c.pagamentos);
   
-  // SOMA TUDO QUE ENTROU - TAXAS DE ENTREGA (Para não inflar o faturamento da loja)
   const totalRecebido = pagamentosFiltrados.reduce((acc, p) => acc + p.valor, 0);
   const taxasDeEntrega = comandasFiltradas.filter(c => c.status === 'fechada').reduce((acc, c) => acc + parseFloat(c.taxa_entrega || 0), 0);
   
@@ -376,6 +391,7 @@ useEffect(() => {
   const rankingProdutos = Object.keys(contagemProdutos).map(nome => ({ nome, valor: contagemProdutos[nome].faturamento, volume: contagemProdutos[nome].volume, isPeso: contagemProdutos[nome].isPeso })).sort((a, b) => b.valor - a.valor).slice(0, 7);
   const contagemTipos = { Balcão: 0, Delivery: 0, iFood: 0 };
   const contagemTags = {};
+  
   comandasFiltradas.forEach(c => {
     if (c.pagamentos.some(p => p.forma === 'iFood')) contagemTipos['iFood'] += 1; else contagemTipos[c.tipo] = (contagemTipos[c.tipo] || 0) + 1;
     c.tags.forEach(t => { contagemTags[t] = (contagemTags[t] || 0) + 1; });
@@ -384,14 +400,35 @@ useEffect(() => {
   const dadosTipos = Object.keys(contagemTipos).map(k => ({ nome: k, qtd: contagemTipos[k] })).filter(d => d.qtd > 0);
   const dadosTags = Object.keys(contagemTags).map(k => ({ nome: k, qtd: contagemTags[k] })).sort((a, b) => b.qtd - a.qtd);
 
+  // 7. Retornos de Interface (Condicionais)
   if (!sessao) {
     return <Login getHoje={getHoje} setSessao={setSessao} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />;
   }
 
   if (isLoading && comandas.length === 0) {
-    return <div className={`min-h-screen flex items-center justify-center font-bold text-xl animate-pulse ${temaNoturno ? 'bg-gray-900 text-purple-400' : 'bg-gray-50 text-purple-600'}`}>A Sincronizar Sistema...</div>;
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center gap-8 ${temaNoturno ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        <div className="relative">
+          <div className={`absolute inset-0 rounded-full blur-2xl opacity-20 animate-pulse ${temaNoturno ? 'bg-purple-500' : 'bg-purple-600'}`}></div>
+          <div className={`relative w-32 h-32 rounded-full border-4 overflow-hidden shadow-2xl animate-in zoom-in duration-500 ${temaNoturno ? 'border-gray-800 bg-gray-800' : 'border-white bg-white'}`}>
+            <img src={logoEmpresa} alt="A carregar" className="w-full h-full object-cover" />
+          </div>
+        </div>
+        <div className="flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-700">
+    <p className={`font-black text-sm uppercase tracking-[0.2em] mb-3 text-center ${temaNoturno ? 'text-gray-500' : 'text-purple-400'}`}>
+      {fraseCarregamento}
+    </p>
+          <div className="flex gap-1.5 items-center justify-center h-4">
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+          </div>
+        </div>
+      </div>
+    );
   }
 
+  // 8. Renderização Principal da Aplicação
   return (
     <main className={`min-h-screen p-2 xl:p-6 flex flex-col transition-colors duration-500 ${temaNoturno ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
       
@@ -406,10 +443,9 @@ useEffect(() => {
         setMostrarAdminProdutos={setMostrarAdminProdutos} setMostrarConfigTags={setMostrarConfigTags} fazerLogout={fazerLogout}
         fetchData={fetchData}
       />
-      {/* ===== ÁREA DE AVISOS INTELIGENTES (Alinhados e Elegantes) ===== */}
+
       <div className="max-w-7xl mx-auto w-full flex flex-col gap-3 mb-6 px-4 xl:px-0">
         
-        {/* 1. Aviso de Fechamento (22h50+) */}
         {avisoFechamento && !comandaAtiva && (
           <div className={`p-4 rounded-3xl flex items-center gap-4 border shadow-sm transition-colors duration-300 ${temaNoturno ? 'bg-red-900/10 border-red-800/30 text-red-400' : 'bg-red-50 border-red-100 text-red-800'}`}>
             <div className={`p-2.5 rounded-full shrink-0 ${temaNoturno ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-600'}`}>
@@ -424,7 +460,6 @@ useEffect(() => {
           </div>
         )}
 
-        {/* 2. Aviso de Comandas do Dia Anterior */}
         {comandasAntigasAbertas.length > 0 && !ignorarAvisoAntigas && !comandaAtiva && abaAtiva === 'comandas' && (
           <div className={`p-4 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border shadow-sm transition-colors duration-300 ${temaNoturno ? 'bg-orange-900/10 border-orange-800/30 text-orange-400' : 'bg-orange-50 border-orange-100 text-orange-800'}`}>
             <div className="flex items-center gap-4">
@@ -434,7 +469,7 @@ useEffect(() => {
               <div>
                 <p className="font-black text-sm uppercase tracking-widest">Comandas Pendentes</p>
                 <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-orange-400/70' : 'text-orange-700/80'}`}>
-                  Você tem <b>{comandasAntigasAbertas.length} comanda(s)</b> de turnos passados abertas. Deseja encerrá-las ou mantê-las ativas?
+                  Tem <b>{comandasAntigasAbertas.length} comanda(s)</b> de turnos passados abertas. Deseja encerrá-las ou mantê-las ativas?
                 </p>
               </div>
             </div>
@@ -444,7 +479,6 @@ useEffect(() => {
           </div>
         )}
 
-        {/* 3. Aviso de Tags (Sem Emojis, Mesmo estilo visual) */}
         {!comandaAtiva && alertaTags && abaAtiva === 'comandas' && (
           <div className={`p-4 rounded-3xl flex items-center justify-between border shadow-sm transition-colors duration-300 ${temaNoturno ? 'bg-yellow-900/10 border-yellow-800/30 text-yellow-500' : 'bg-yellow-50 border-yellow-200 text-yellow-800'}`}>
             <div className="flex items-center gap-4">
@@ -461,7 +495,6 @@ useEffect(() => {
           </div>
         )}
       </div>
-      {/* ============================================================== */}
 
       <Sidebar 
         menuMobileAberto={menuMobileAberto} setMenuMobileAberto={setMenuMobileAberto} temaNoturno={temaNoturno}
