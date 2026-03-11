@@ -23,11 +23,19 @@ import AdminUsuarios from '@/components/AdminUsuarios';
 import AdminDelivery from '@/components/AdminDelivery'; 
 
 export default function Home() {
-  const getHoje = () => {
-    const dataBr = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
-    const d = new Date(dataBr);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
+  // ... dentro do componente export default function Home() { ...
+
+const getHoje = () => {
+  const tzoffset = (new Date()).getTimezoneOffset() * 60000;
+  return new Date(Date.now() - tzoffset).toISOString().substring(0, 10);
+};
+
+// Adiciona isto logo abaixo da função getHoje:
+useEffect(() => {
+  console.log("Data gerada pelo getHoje:", getHoje());
+}, []); 
+
+// ... restante do código
   
   const getMesAtual = () => getHoje().substring(0, 7);
   const getAnoAtual = () => getHoje().substring(0, 4);
@@ -60,7 +68,17 @@ export default function Home() {
   const [mostrarModalPagamento, setMostrarModalPagamento] = useState(false);
   
   const [idSelecionado, setIdSelecionado] = useState(null);
+  // Modifique o estado da abaAtiva e adicione estes dois useEffects:
   const [abaAtiva, setAbaAtiva] = useState('comandas');
+
+  useEffect(() => {
+    const abaSalva = localStorage.getItem('bessa_aba_ativa');
+    if (abaSalva) setAbaAtiva(abaSalva);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('bessa_aba_ativa', abaAtiva);
+  }, [abaAtiva]);
   const [avisoFechamento, setAvisoFechamento] = useState(false);
 
   useEffect(() => {
@@ -153,8 +171,15 @@ export default function Home() {
       const { data: catData } = await supabase.from('categorias').select('*, itens:produtos(*)').eq('empresa_id', sessao.empresa_id);
       if (catData) setMenuCategorias(catData);
 
-      // LÓGICA DO CAIXA: Busca se existe um caixa aberto. Se não, cria um.
-      let { data: caixaData } = await supabase.from('caixas').select('*').eq('empresa_id', sessao.empresa_id).eq('status', 'aberto').single();
+      // LÓGICA DO CAIXA: Busca se existe um caixa aberto pegando o MAIS RECENTE para evitar travar em caixas duplicados antigos.
+      const { data: caixasAbertos } = await supabase.from('caixas')
+        .select('*')
+        .eq('empresa_id', sessao.empresa_id)
+        .eq('status', 'aberto')
+        .order('id', { ascending: false }) // Traz o último ID criado primeiro
+        .limit(1); // Garante que pega apenas 1
+      
+      let caixaData = caixasAbertos && caixasAbertos.length > 0 ? caixasAbertos[0] : null;
       
       if (!caixaData) {
         const { data: novoCaixa } = await supabase.from('caixas').insert([{ 
@@ -322,7 +347,12 @@ export default function Home() {
   const comandasAntigasAbertas = comandas.filter(c => c.status === 'aberta' && caixaAtual?.data_abertura && c.data && c.data.substring(0,10) !== caixaAtual.data_abertura.substring(0,10));
 
   const pagamentosFiltrados = comandasFiltradas.flatMap(c => c.pagamentos);
-  const faturamentoTotal = pagamentosFiltrados.reduce((acc, p) => acc + p.valor, 0);
+  
+  // SOMA TUDO QUE ENTROU - TAXAS DE ENTREGA (Para não inflar o faturamento da loja)
+  const totalRecebido = pagamentosFiltrados.reduce((acc, p) => acc + p.valor, 0);
+  const taxasDeEntrega = comandasFiltradas.filter(c => c.status === 'fechada').reduce((acc, c) => acc + parseFloat(c.taxa_entrega || 0), 0);
+  
+  const faturamentoTotal = totalRecebido - taxasDeEntrega;
   const custoTotalFiltrado = comandasFiltradas.reduce((acc, c) => acc + c.produtos.filter(p => p.pago).reduce((sum, p) => sum + (p.custo || 0), 0), 0);
   const lucroEstimado = faturamentoTotal - custoTotalFiltrado;
 

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase'; // Adicionado
+import { supabase } from '@/lib/supabase';
 
 export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaNoturno }) {
   const [desconto, setDesconto] = useState('');
@@ -9,7 +9,7 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
   const [modoDivisao, setModoDivisao] = useState(false);
   const [itensSelecionados, setItensSelecionados] = useState([]);
 
-  // --- LÓGICA DO MOTOBOY (Adicionado) ---
+  // --- LÓGICA DO MOTOBOY ---
   const [precisaBairro, setPrecisaBairro] = useState(false);
   const [bairros, setBairros] = useState([]);
   const [bairroSelecionado, setBairroSelecionado] = useState('');
@@ -26,22 +26,30 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
     verificarMotoboy();
   }, [comanda.empresa_id, comanda.tipo]);
 
+  // CÁLCULO DA TAXA DE ENTREGA PARA EMBUTIR NO VALOR FINAL
+  const bairroObj = bairros.find(b => String(b.id) === String(bairroSelecionado));
+  const taxaEntrega = bairroObj ? parseFloat(bairroObj.taxa) : 0;
+
   const handleConfirmar = async () => {
-    // Se for delivery e tiver bairro, salva o bairro na comanda antes de fechar
+    // Se for delivery, salva a taxa na comanda para podermos abater do faturamento
     if (precisaBairro && bairroSelecionado) {
-      await supabase.from('comandas').update({ bairro_id: bairroSelecionado }).eq('id', comanda.id);
+      await supabase.from('comandas').update({ 
+        bairro_id: bairroSelecionado,
+        taxa_entrega: taxaEntrega 
+      }).eq('id', comanda.id);
     }
     onConfirmar(valorFinal, formaPagamento, itensSelecionados, modoDivisao);
   };
-  // --------------------------------------
 
   const itensPendentes = comanda.produtos.filter(p => !p.pago);
   const totalPendente = itensPendentes.reduce((acc, p) => acc + p.preco, 0);
   
-  const subtotal = modoDivisao 
+  // Adiciona a taxa de entrega ao subtotal a ser cobrado do cliente
+  const subtotalItens = modoDivisao 
     ? itensSelecionados.reduce((acc, index) => acc + comanda.produtos[index].preco, 0)
     : totalPendente;
 
+  const subtotal = subtotalItens + taxaEntrega;
   const valorDesconto = parseFloat(desconto) || 0;
   const valorFinal = subtotal - valorDesconto;
   
@@ -111,7 +119,6 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
             ))}
           </div>
 
-          {/* --- NOVO BLOCO MOTOBOY (Mesmo estilo dos seus inputs) --- */}
           {precisaBairro && (
             <div className={`flex flex-col gap-2 p-3 rounded-xl mb-4 border ${temaNoturno ? 'bg-blue-900/10 border-blue-800/50' : 'bg-blue-50 border-blue-200'}`}>
               <label className={`text-xs font-bold uppercase tracking-wider ${temaNoturno ? 'text-blue-400' : 'text-blue-700'}`}>🚚 Bairro da Entrega:</label>
@@ -127,7 +134,14 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
               </select>
             </div>
           )}
-          {/* -------------------------------------------------------- */}
+
+          {/* MOSTRA A TAXA DE ENTREGA ADICIONADA VISUALMENTE SE HOUVER */}
+          {taxaEntrega > 0 && (
+            <div className={`flex items-center justify-between p-3 rounded-xl mb-4 border ${temaNoturno ? 'bg-blue-900/20 border-blue-800/50' : 'bg-blue-50 border-blue-100'}`}>
+              <span className={`text-sm font-bold ${temaNoturno ? 'text-blue-400' : 'text-blue-700'}`}>Taxa de Entrega:</span>
+              <span className={`text-sm font-bold ${temaNoturno ? 'text-blue-400' : 'text-blue-700'}`}>+ R$ {taxaEntrega.toFixed(2)}</span>
+            </div>
+          )}
 
           <div className={`flex items-center justify-between p-3 rounded-xl mb-4 border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-100'}`}>
             <span className={`text-sm font-bold ${temaNoturno ? 'text-gray-300' : 'text-gray-600'}`}>Desconto (R$):</span>
@@ -159,7 +173,6 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
         <div className="flex gap-3">
           <button onClick={onCancelar} className={`flex-1 p-3 rounded-xl border-2 font-bold transition ${temaNoturno ? 'border-gray-700 text-gray-400 hover:bg-gray-800' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>Voltar</button>
           <button 
-            // Botão atualizado para chamar a função handleConfirmar e travar se o bairro não for selecionado
             onClick={handleConfirmar}
             disabled={!formaPagamento || descontoInvalido || dinheiroInsuficiente || (formaPagamento === 'Dinheiro' && recebido === 0) || nadaSelecionado || (precisaBairro && !bairroSelecionado)}
             className={`flex-1 p-3 rounded-xl font-bold transition ${temaNoturno ? 'bg-green-600 text-white hover:bg-green-500 disabled:bg-gray-800 disabled:text-gray-500' : 'bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-500'}`}
