@@ -82,16 +82,6 @@ export default function Home() {
 
   const [filtroTempo, setFiltroTempo] = useState({ tipo: 'dia', valor: getHoje(), inicio: '', fim: '' });
 
-  // 4. Efeitos (useEffect)
-  useEffect(() => {
-    const abaSalva = localStorage.getItem('bessa_aba_ativa');
-    if (abaSalva) setAbaAtiva(abaSalva);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('bessa_aba_ativa', abaAtiva);
-  }, [abaAtiva]);
-
   useEffect(() => {
     const verificarHorario = () => {
        const agora = new Date();
@@ -141,7 +131,13 @@ export default function Home() {
   // 5. Funções principais e Buscas
   const fazerLogout = () => {
     localStorage.removeItem('bessa_session');
-    setSessao(null); setCredenciais({ email: '', senha: '' }); setMostrarMenuPerfil(false); setMenuMobileAberto(false); setAbaAtiva('comandas');
+    localStorage.removeItem('bessa_logo_empresa'); // Limpa a logo do usuário antigo
+    setSessao(null); 
+    setCredenciais({ email: '', senha: '' }); 
+    setMostrarMenuPerfil(false); 
+    setMenuMobileAberto(false); 
+    setAbaAtiva('comandas');
+    setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png'); // Reseta a imagem visualmente
   };
 
   const fetchData = async () => {

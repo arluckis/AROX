@@ -41,11 +41,6 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
     }
   }, [sessao?.empresa_id, caixaAtual?.id, abaInterna]);
 
-  useEffect(() => {
-    if (fetchData) fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const carregarDadosCaixa = async () => {
     const { data: movData } = await supabase.from('caixa_movimentacoes').select('*').eq('caixa_id', caixaAtual.id);
     if (movData) setMovimentacoes(movData);
