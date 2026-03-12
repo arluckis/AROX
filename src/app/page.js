@@ -165,21 +165,24 @@ export default function Home() {
     setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
   };
 
-  const fetchData = async () => {
+  // Modificado para aceitar isBackground e não piscar a tela
+  const fetchData = async (isBackground = false) => {
     if (!sessao?.empresa_id) return;
-    setIsLoading(true);
+    if (!isBackground) setIsLoading(true);
     
     try {
       const { data: empData, error: empError } = await supabase.from('empresas').select('*').eq('id', sessao.empresa_id).single();
       if (empError) {
         console.warn("Aviso ao buscar empresa:", empError.message);
-        setNomeEmpresa("A Minha Loja"); 
+        if(!isBackground) setNomeEmpresa("A Minha Loja"); 
       } else if (empData) {
-        setNomeEmpresa(empData.nome || "A Minha Loja");
-        setNomeEmpresaEdicao(empData.nome || "");
+        if(!isBackground) setNomeEmpresa(empData.nome || "A Minha Loja");
+        if(!isBackground) setNomeEmpresaEdicao(empData.nome || "");
         const urlLogo = empData.logo || empData.logo_url;
         if (urlLogo) {
-          setLogoEmpresa(urlLogo); setLogoEmpresaEdicao(urlLogo); localStorage.setItem('bessa_logo_empresa', urlLogo); 
+          if(!isBackground) setLogoEmpresa(urlLogo); 
+          if(!isBackground) setLogoEmpresaEdicao(urlLogo); 
+          localStorage.setItem('bessa_logo_empresa', urlLogo); 
         }
       }
 
@@ -205,29 +208,34 @@ export default function Home() {
       if (tagsData && tagsData.length > 0) {
         setTagsGlobais(tagsData); 
       } else {
-        const TAGS_INICIAIS = ['Individual', 'Casal', 'Família', 'Estudantes', 'Academia', 'Com Crianças', 'Consumo Local', 'Para Viagem', 'Fidelidade'];
-        const tagsSemente = TAGS_INICIAIS.map(t => ({ nome: t, empresa_id: sessao.empresa_id }));
-        const { data: tagsInseridas } = await supabase.from('tags').insert(tagsSemente).select();
-        if (tagsInseridas) setTagsGlobais(tagsInseridas);
+        if (!isBackground) {
+           const TAGS_INICIAIS = ['Individual', 'Casal', 'Família', 'Estudantes', 'Academia', 'Com Crianças', 'Consumo Local', 'Para Viagem', 'Fidelidade'];
+           const tagsSemente = TAGS_INICIAIS.map(t => ({ nome: t, empresa_id: sessao.empresa_id }));
+           const { data: tagsInseridas } = await supabase.from('tags').insert(tagsSemente).select();
+           if (tagsInseridas) setTagsGlobais(tagsInseridas);
+        }
       }
     } catch (err) {
       console.error("Erro inesperado no fetch:", err);
     } finally {
-      setIsLoading(false);
+      if (!isBackground) setIsLoading(false);
     }
   };
 
+  // --- O "FALSO REALTIME" (Polling sem Supabase Realtime) ---
   useEffect(() => {
     if (!sessao?.empresa_id) return;
-    fetchData(); 
-    const canalAtualizacoes = supabase.channel('schema-db-changes')
-      .on('postgres', { event: '*', schema: 'public', table: 'comandas' }, () => { fetchData(); })
-      .on('postgres', { event: '*', schema: 'public', table: 'comanda_produtos' }, () => { fetchData(); })
-      .on('postgres', { event: '*', schema: 'public', table: 'pagamentos' }, () => { fetchData(); })
-      .on('postgres', { event: '*', schema: 'public', table: 'tags' }, () => { fetchData(); }) 
-      .subscribe();
-    return () => { supabase.removeChannel(canalAtualizacoes); };
+    
+    fetchData(); // Carregamento inicial
+
+    // Busca atualizações no banco a cada 10 segundos invisivelmente
+    const intervaloPolling = setInterval(() => {
+       fetchData(true); 
+    }, 10000); 
+
+    return () => clearInterval(intervaloPolling);
   }, [sessao]);
+  // ------------------------------------
 
   const abrirCaixaManual = async (dadosCaixa) => {
     if (!sessao?.empresa_id) return;
@@ -397,7 +405,6 @@ export default function Home() {
   const comandasFechadasHoje = comandas.filter(c => c.status === 'fechada' && c.data === getHoje());
   const comandasAntigasAbertas = comandas.filter(c => c.status === 'aberta' && caixaAtual?.data_abertura && c.data && c.data.substring(0,10) !== caixaAtual.data_abertura.substring(0,10));
 
-  // Protegido com || []
   const faturamentoTotal = comandasFiltradas.reduce((acc, c) => acc + (c.produtos || []).reduce((sum, p) => sum + (p.preco || 0), 0), 0);
   const custoTotalFiltrado = comandasFiltradas.reduce((acc, c) => acc + (c.produtos || []).reduce((sum, p) => sum + (p.custo || 0), 0), 0);
   const lucroEstimado = faturamentoTotal - custoTotalFiltrado;
