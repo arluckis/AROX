@@ -79,6 +79,15 @@ export default function Home() {
 
   const [filtroTempo, setFiltroTempo] = useState({ tipo: 'dia', valor: getHoje(), inicio: '', fim: '' });
 
+  // === SISTEMA DE MODAL GLOBAL (Substitui os alerts nativos) ===
+  const [modalGlobal, setModalGlobal] = useState({ visivel: false, tipo: 'alerta', titulo: '', mensagem: '', valorInput: '', acaoConfirmar: null });
+
+  const mostrarAlerta = (titulo, mensagem) => setModalGlobal({ visivel: true, tipo: 'alerta', titulo, mensagem, valorInput: '', acaoConfirmar: null });
+  const mostrarConfirmacao = (titulo, mensagem, acaoConfirmar) => setModalGlobal({ visivel: true, tipo: 'confirmacao', titulo, mensagem, valorInput: '', acaoConfirmar });
+  const mostrarPrompt = (titulo, mensagem, valorInicial, acaoConfirmar) => setModalGlobal({ visivel: true, tipo: 'prompt', titulo, mensagem, valorInput: valorInicial || '', acaoConfirmar });
+  const fecharModalGlobal = () => setModalGlobal({ visivel: false, tipo: 'alerta', titulo: '', mensagem: '', valorInput: '', acaoConfirmar: null });
+  // ==============================================================
+
   useEffect(() => {
     const verificarHorario = () => {
        const agora = new Date();
@@ -160,11 +169,11 @@ export default function Home() {
       const { data: caixasAbertos } = await supabase.from('caixas').select('*').eq('empresa_id', sessao.empresa_id).eq('status', 'aberto').order('id', { ascending: false }).limit(1); 
       let caixaData = caixasAbertos && caixasAbertos.length > 0 ? caixasAbertos[0] : null;
       
-      if (!caixaData) {
-        const { data: novoCaixa } = await supabase.from('caixas').insert([{ empresa_id: sessao.empresa_id, data_abertura: getHoje(), status: 'aberto' }]).select().single();
-        caixaData = novoCaixa;
+      if (caixaData) {
+        setCaixaAtual(caixaData);
+      } else {
+        setCaixaAtual({ status: 'fechado' });
       }
-      setCaixaAtual(caixaData);
       
       const { data: comData } = await supabase.from('comandas').select('*, produtos:comanda_produtos(*), pagamentos(*)').eq('empresa_id', sessao.empresa_id).order('id', { ascending: true });
       if (comData) setComandas(comData);
@@ -200,10 +209,36 @@ export default function Home() {
     return () => { supabase.removeChannel(canalAtualizacoes); };
   }, [sessao]);
 
+  const abrirCaixaManual = async (dadosCaixa) => {
+    if (!sessao?.empresa_id) return;
+    setIsLoading(true);
+    try {
+      const payload = {
+        empresa_id: sessao.empresa_id,
+        data_abertura: dadosCaixa.data_abertura,
+        saldo_inicial: dadosCaixa.saldo_inicial || 0,
+        status: 'aberto'
+      };
+      
+      const { data, error } = await supabase.from('caixas').insert([payload]).select().single();
+      if (error) throw error;
+      
+      if (data) {
+        setCaixaAtual(data);
+        mostrarAlerta("Sucesso", "Caixa aberto com sucesso!");
+        fetchData();
+      }
+    } catch (err) {
+      mostrarAlerta("Erro", "Erro ao abrir caixa: " + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const salvarConfigEmpresa = async () => {
-    if (nomeEmpresaEdicao.trim() === '') return alert("O nome não pode estar vazio.");
+    if (nomeEmpresaEdicao.trim() === '') return mostrarAlerta("Aviso", "O nome não pode estar vazio.");
     const { error } = await supabase.from('empresas').update({ nome: nomeEmpresaEdicao, logo_url: logoEmpresaEdicao }).eq('id', sessao.empresa_id);
-    if (error) return alert("❌ Erro ao salvar no banco de dados: " + error.message);
+    if (error) return mostrarAlerta("Erro", "Erro ao salvar no banco de dados: " + error.message);
     setNomeEmpresa(nomeEmpresaEdicao); setLogoEmpresa(logoEmpresaEdicao || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'); setMostrarConfigEmpresa(false);
   };
 
@@ -245,11 +280,10 @@ export default function Home() {
   };
 
   const editarProduto = async (idProduto, obsAtual) => {
-    const novaObs = prompt("Digite a observação:", obsAtual || "");
-    if (novaObs !== null) {
+    mostrarPrompt("Editar Observação", "Digite a observação para este item:", obsAtual, async (novaObs) => {
       await supabase.from('comanda_produtos').update({ observacao: novaObs }).eq('id', idProduto);
       setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: c.produtos.map(p => p.id === idProduto ? { ...p, observacao: novaObs } : p) } : c));
-    }
+    });
   };
 
   const encerrarMesa = async () => { 
@@ -293,27 +327,29 @@ export default function Home() {
   };
 
   const confirmarExclusaoEmMassa = async () => {
-    if (comandas.filter(c => selecionadasExclusao.includes(c.id)).some(c => c.pagamentos.length > 0)) return alert("Desmarque as comandas que já possuem pagamentos.");
-    if (confirm(`Excluir ${selecionadasExclusao.length} comandas do banco?`)) { 
+    if (comandas.filter(c => selecionadasExclusao.includes(c.id)).some(c => c.pagamentos.length > 0)) {
+      return mostrarAlerta("Atenção", "Desmarque as comandas que já possuem pagamentos.");
+    }
+    mostrarConfirmacao("Excluir Comandas", `Excluir ${selecionadasExclusao.length} comandas do banco?`, async () => {
       await supabase.from('comandas').delete().in('id', selecionadasExclusao);
       setComandas(comandas.filter(c => !selecionadasExclusao.includes(c.id))); setModoExclusao(false); setSelecionadasExclusao([]); 
-    }
+    });
   };
 
   const toggleSelecaoExclusao = (id) => setSelecionadasExclusao(selecionadasExclusao.includes(id) ? selecionadasExclusao.filter(item => item !== id) : [...selecionadasExclusao, id]);
   
   const reabrirComandaFechada = async (id) => {
-    if (confirm("Deseja reabrir esta comanda? Ela voltará para a aba Comandas em Aberto.")) {
+    mostrarConfirmacao("Reabrir Comanda", "Deseja reabrir esta comanda? Ela voltará para a aba Comandas em Aberto.", async () => {
       await supabase.from('comandas').update({ status: 'aberta', hora_fechamento: null }).eq('id', id);
       setComandas(comandas.map(c => c.id === id ? { ...c, status: 'aberta', hora_fechamento: null } : c));
-    }
+    });
   };
 
   const excluirComandaFechada = async (id) => {
-    if (confirm("ATENÇÃO: Deseja excluir esta comanda definitivamente? O faturamento dela será perdido.")) {
+    mostrarConfirmacao("Excluir Comanda", "ATENÇÃO: Deseja excluir esta comanda definitivamente? O faturamento dela será perdido.", async () => {
       await supabase.from('comandas').delete().eq('id', id);
       setComandas(comandas.filter(c => c.id !== id));
-    }
+    });
   };
 
   const isComandaInFiltro = (dataComanda) => {
@@ -472,7 +508,7 @@ export default function Home() {
             setModoExclusao={setModoExclusao} selecionadasExclusao={selecionadasExclusao} 
             toggleSelecaoExclusao={toggleSelecaoExclusao} confirmarExclusaoEmMassa={confirmarExclusaoEmMassa} 
             adicionarComanda={adicionarComanda} setIdSelecionado={setIdSelecionado} 
-            caixaAtual={caixaAtual} 
+            caixaAtual={caixaAtual} abrirCaixaManual={abrirCaixaManual} mostrarAlerta={mostrarAlerta}
           />
         ) : abaAtiva === 'fechadas' ? (
           <TabFechadas 
@@ -496,6 +532,7 @@ export default function Home() {
         ) : abaAtiva === 'caixa' ? (
           <TabFechamentoCaixa 
             temaNoturno={temaNoturno} sessao={sessao} caixaAtual={caixaAtual} comandas={comandas} fetchData={fetchData} 
+            mostrarAlerta={mostrarAlerta} mostrarConfirmacao={mostrarConfirmacao}
           />
         ) : null}
       </div>
@@ -507,6 +544,63 @@ export default function Home() {
       {mostrarModalPagamento && <ModalPagamento comanda={comandaAtiva} temaNoturno={temaNoturno} onConfirmar={processarPagamento} onCancelar={() => setMostrarModalPagamento(false)} />}
       {mostrarConfigEmpresa && <ModalConfigEmpresa temaNoturno={temaNoturno} nomeEmpresaEdicao={nomeEmpresaEdicao} setNomeEmpresaEdicao={setNomeEmpresaEdicao} logoEmpresaEdicao={logoEmpresaEdicao} setLogoEmpresaEdicao={setLogoEmpresaEdicao} salvarConfigEmpresa={salvarConfigEmpresa} setMostrarConfigEmpresa={setMostrarConfigEmpresa} />}
       {mostrarConfigTags && <ModalConfigTags temaNoturno={temaNoturno} tagsGlobais={tagsGlobais} setTagsGlobais={setTagsGlobais} sessao={sessao} setMostrarConfigTags={setMostrarConfigTags} />}
+
+      {/* MODAL GLOBAL (Substitui alerts, prompts e confirms em toda a aplicação) */}
+      {modalGlobal.visivel && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in">
+          <div className={`rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col border text-center ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
+            
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${temaNoturno ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-600'}`}>
+               {modalGlobal.tipo === 'alerta' ? (
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+               ) : modalGlobal.tipo === 'confirmacao' ? (
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+               ) : (
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+               )}
+            </div>
+
+            <h2 className={`text-xl font-black mb-2 ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>{modalGlobal.titulo}</h2>
+            <p className={`text-sm mb-6 ${temaNoturno ? 'text-gray-400' : 'text-gray-600'}`}>{modalGlobal.mensagem}</p>
+            
+            {modalGlobal.tipo === 'prompt' && (
+              <input 
+                type="text" 
+                autoFocus
+                className={`w-full p-3 rounded-xl border mb-6 outline-none font-bold text-center ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white focus:border-purple-500' : 'bg-gray-50 border-gray-300 focus:border-purple-500'}`} 
+                value={modalGlobal.valorInput} 
+                onChange={e => setModalGlobal({...modalGlobal, valorInput: e.target.value})} 
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    if (modalGlobal.acaoConfirmar) modalGlobal.acaoConfirmar(modalGlobal.valorInput);
+                    fecharModalGlobal();
+                  }
+                }}
+              />
+            )}
+
+            <div className="flex gap-3">
+              {(modalGlobal.tipo === 'confirmacao' || modalGlobal.tipo === 'prompt') && (
+                <button onClick={fecharModalGlobal} className={`flex-1 p-3 rounded-xl font-bold transition ${temaNoturno ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Cancelar</button>
+              )}
+              
+              <button 
+                onClick={() => {
+                  if (modalGlobal.acaoConfirmar) {
+                    if (modalGlobal.tipo === 'prompt') modalGlobal.acaoConfirmar(modalGlobal.valorInput);
+                    else modalGlobal.acaoConfirmar();
+                  }
+                  fecharModalGlobal();
+                }} 
+                className={`flex-1 p-3 rounded-xl font-bold text-white transition shadow-lg ${modalGlobal.titulo.toLowerCase().includes('excluir') || modalGlobal.titulo.toLowerCase().includes('atenção') ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+              >
+                {modalGlobal.tipo === 'alerta' ? 'OK' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }

@@ -1,9 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip } from 'recharts';
-import GraficoFaturamento from '@/components/GraficoFaturamento';
 
-// Nova paleta de cores muito mais rica e vibrante
 const CORES_VIBRANTES = [
   '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
   '#ec4899', '#0ea5e9', '#f97316', '#14b8a6', '#84cc16', 
@@ -13,16 +11,14 @@ const CORES_VIBRANTES = [
 export default function TabFaturamento({
   temaNoturno, filtroTempo, setFiltroTempo, getHoje, getMesAtual, getAnoAtual,
   faturamentoTotal, lucroEstimado, dadosPizza, rankingProdutos, comandasFiltradas,
-  comandas // Necessário para calcular o histórico do Termômetro
+  comandas
 }) {
 
-  // --- LÓGICA DE PERSONALIZAÇÃO (WIDGETS) ---
   const [mostrarMenuPersonalizar, setMostrarMenuPersonalizar] = useState(false);
   const [widgets, setWidgets] = useState({
     bruto: true, lucro: true, ticket: true,
-    termometro: true, pagamentos: true, produtos: true,
-    evolucao: true
-  });
+    termometro: true, pagamentos: true, produtos: true
+  }); // Removida a flag 'evolucao'
 
   useEffect(() => {
     const widgetsSalvos = localStorage.getItem('bessa_widgets_faturamento');
@@ -35,26 +31,31 @@ export default function TabFaturamento({
     localStorage.setItem('bessa_widgets_faturamento', JSON.stringify(novosWidgets));
   };
 
-  // --- CÁLCULO DE MÉTRICAS BÁSICAS ---
   const totalComandasFechadas = comandasFiltradas.filter(c => c.status === 'fechada').length;
   const ticketMedio = totalComandasFechadas > 0 ? (faturamentoTotal / totalComandasFechadas) : 0;
 
-  // Transforma os nomes dos produtos para MAIÚSCULO
   const rankingMaiusculo = rankingProdutos.map(p => ({
     ...p,
     nome: p.nome.toUpperCase()
   }));
 
-  // --- CÁLCULO DO TERMÔMETRO DE PERFORMANCE ---
+  // --- TRAVA DE 7 DIAS REAIS ---
+  // Calcula o número de dias distintos de uso do sistema com base nas comandas
+  const diasDeUso = useMemo(() => {
+    if (!comandas || comandas.length === 0) return 0;
+    const datasUnicas = new Set(comandas.map(c => c.data).filter(Boolean));
+    return datasUnicas.size;
+  }, [comandas]);
+
+  const faltamDiasParaAnalise = 7 - diasDeUso;
+
   const { mediaHistorica, percentualDiferenca, statusTermometro, corTermometro } = useMemo(() => {
     if (!comandas || comandas.length === 0) return { mediaHistorica: 0, percentualDiferenca: 0, statusTermometro: 'Sem Histórico', corTermometro: 'text-gray-500' };
 
-    // 1. Descobrir qual dia da semana estamos analisando
     const dataRef = filtroTempo.tipo === 'dia' ? filtroTempo.valor : getHoje();
-    const dataObj = new Date(dataRef + 'T12:00:00'); // T12 para evitar bug de fuso horário
+    const dataObj = new Date(dataRef + 'T12:00:00'); 
     const diaSemana = dataObj.getDay(); 
 
-    // 2. Agrupar o faturamento de todos os dias passados
     const faturamentoPorDia = {};
     comandas.filter(c => c.status === 'fechada').forEach(c => {
       const dataCaixa = c.data; 
@@ -64,7 +65,6 @@ export default function TabFaturamento({
       faturamentoPorDia[dataCaixa] += totalPago;
     });
 
-    // 3. Filtrar apenas os dias que caem no MESMO dia da semana e são do PASSADO
     let soma = 0;
     let qtdDias = 0;
     Object.keys(faturamentoPorDia).forEach(data => {
@@ -79,7 +79,6 @@ export default function TabFaturamento({
 
     const media = qtdDias > 0 ? (soma / qtdDias) : 0;
     
-    // 4. Calcular o percentual de crescimento/queda
     let percentual = 0;
     if (media > 0) {
       percentual = ((faturamentoTotal - media) / media) * 100;
@@ -87,7 +86,6 @@ export default function TabFaturamento({
       percentual = 100; 
     }
 
-    // 5. Definir o Status (Termômetro)
     let status = 'Dentro da Média ⚖️';
     let cor = temaNoturno ? 'text-gray-300' : 'text-gray-600';
 
@@ -105,19 +103,14 @@ export default function TabFaturamento({
     return { mediaHistorica: media, percentualDiferenca: percentual, statusTermometro: status, corTermometro: cor };
   }, [comandas, filtroTempo.tipo, filtroTempo.valor, getHoje, faturamentoTotal, temaNoturno]);
 
-
-  // Classes dinâmicas de Grid
   const numCardsResumo = [widgets.bruto, widgets.lucro, widgets.ticket].filter(Boolean).length;
   const numCardsMeio = [widgets.termometro, widgets.pagamentos, widgets.produtos].filter(Boolean).length;
-  
   const gridClassMeio = numCardsMeio === 3 ? 'lg:grid-cols-3' : numCardsMeio === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-1';
 
   return (
     <div className="max-w-7xl mx-auto w-full animate-in slide-in-from-bottom-4 duration-500 px-2 lg:px-0">
       
-      {/* BARRA SUPERIOR: FILTROS E PERSONALIZAÇÃO */}
       <div className={`p-4 rounded-3xl shadow-sm border mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
-        
         <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
           <div className={`flex p-1 rounded-xl w-full sm:w-auto border ${temaNoturno ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-100'}`}>
             {['dia', 'mes', 'ano', 'periodo'].map(t => <button key={t} onClick={() => setFiltroTempo({...filtroTempo, tipo: t, valor: t==='dia'?getHoje():t==='mes'?getMesAtual():getAnoAtual()})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-bold uppercase transition ${filtroTempo.tipo === t ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-purple-900 text-white shadow-sm') : (temaNoturno ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-purple-700')}`}>{t}</button>)}
@@ -139,19 +132,17 @@ export default function TabFaturamento({
         </button>
       </div>
 
-      {/* PAINEL DE PERSONALIZAÇÃO */}
       {mostrarMenuPersonalizar && (
         <div className={`p-5 rounded-3xl shadow-sm border mb-6 animate-in slide-in-from-top-2 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
           <h3 className={`text-sm font-black uppercase mb-4 ${temaNoturno ? 'text-white' : 'text-gray-800'}`}>Selecione o que deseja visualizar</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {[
               { id: 'bruto', label: 'Faturamento Bruto' },
               { id: 'lucro', label: 'Lucro Bruto Estimado' },
               { id: 'ticket', label: 'Ticket Médio' },
               { id: 'termometro', label: 'Termômetro de Performance' },
               { id: 'pagamentos', label: 'Divisão por Pagamentos' },
-              { id: 'produtos', label: 'Produtos Mais Rentáveis' },
-              { id: 'evolucao', label: 'Gráfico: Evolução Compacta' }
+              { id: 'produtos', label: 'Produtos Mais Rentáveis' }
             ].map(item => (
               <label key={item.id} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${temaNoturno ? 'bg-gray-900 border-gray-700 hover:bg-gray-800' : 'bg-gray-50 border-gray-200 hover:bg-purple-50'}`}>
                 <span className={`text-xs font-bold ${temaNoturno ? 'text-gray-300' : 'text-gray-700'}`}>{item.label}</span>
@@ -162,7 +153,6 @@ export default function TabFaturamento({
         </div>
       )}
       
-      {/* 1. LINHA DE RESUMO GERAL */}
       {numCardsResumo > 0 && (
         <div className={`grid grid-cols-1 md:grid-cols-${numCardsResumo} gap-6 mb-6`}>
           {widgets.bruto && (
@@ -192,32 +182,40 @@ export default function TabFaturamento({
         </div>
       )}
       
-      {/* 2. LINHA DO MEIO (3 COLUNAS LADO A LADO) */}
       {numCardsMeio > 0 && (
         <div className={`grid grid-cols-1 ${gridClassMeio} gap-6 mb-6`}>
           
-          {/* TERMÔMETRO */}
           {widgets.termometro && (
             <div className={`p-6 rounded-3xl shadow-sm border flex flex-col justify-center items-center text-center h-[350px] ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
               <h3 className={`text-sm font-bold uppercase mb-2 ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>Performance do Dia</h3>
               
-              <div className="my-auto flex flex-col items-center justify-center">
-                <p className={`text-2xl font-black mb-1 ${corTermometro}`}>{statusTermometro}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${percentualDiferenca >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {percentualDiferenca > 0 ? '+' : ''}{percentualDiferenca.toFixed(1)}%
-                  </span>
+              {faltamDiasParaAnalise > 0 ? (
+                <div className="my-auto flex flex-col items-center justify-center text-center px-4">
+                  <span className="text-5xl mb-4">🧪</span>
+                  <p className={`text-sm font-black ${temaNoturno ? 'text-gray-300' : 'text-gray-700'}`}>Mapeando o DNA do negócio...</p>
+                  <p className={`text-xs mt-2 font-medium leading-relaxed ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>
+                    A inteligência do termômetro será desbloqueada em <span className="text-purple-500 font-black">{faltamDiasParaAnalise} dia{faltamDiasParaAnalise > 1 ? 's' : ''}</span> operacionais. Continue vendendo!
+                  </p>
                 </div>
-              </div>
-
-              <div className={`w-full pt-4 mt-auto border-t ${temaNoturno ? 'border-gray-700' : 'border-gray-100'}`}>
-                <p className={`text-[10px] uppercase font-bold ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Média Histórica (Mesmo Dia)</p>
-                <p className={`text-lg font-black ${temaNoturno ? 'text-gray-300' : 'text-gray-700'}`}>R$ {mediaHistorica.toFixed(2)}</p>
-              </div>
+              ) : (
+                <>
+                  <div className="my-auto flex flex-col items-center justify-center">
+                    <p className={`text-2xl font-black mb-1 ${corTermometro}`}>{statusTermometro}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${percentualDiferenca >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {percentualDiferenca > 0 ? '+' : ''}{percentualDiferenca.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className={`w-full pt-4 mt-auto border-t ${temaNoturno ? 'border-gray-700' : 'border-gray-100'}`}>
+                    <p className={`text-[10px] uppercase font-bold ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Média Histórica (Mesmo Dia)</p>
+                    <p className={`text-lg font-black ${temaNoturno ? 'text-gray-300' : 'text-gray-700'}`}>R$ {mediaHistorica.toFixed(2)}</p>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
-          {/* PAGAMENTOS PIE CHART */}
           {widgets.pagamentos && (
             <div className={`p-6 rounded-3xl shadow-sm border flex flex-col h-[350px] ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
               <h3 className={`text-sm font-bold uppercase mb-2 text-center ${temaNoturno ? 'text-white' : 'text-purple-900'}`}>Divisão de Pagamentos</h3>
@@ -239,7 +237,6 @@ export default function TabFaturamento({
             </div>
           )}
 
-          {/* PRODUTOS RENTÁVEIS BAR CHART */}
           {widgets.produtos && (
             <div className={`p-6 rounded-3xl shadow-sm border flex flex-col h-[350px] ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
               <h3 className={`text-sm font-bold uppercase mb-2 text-center ${temaNoturno ? 'text-white' : 'text-purple-900'}`}>Produtos Mais Rentáveis</h3>
@@ -284,24 +281,12 @@ export default function TabFaturamento({
         </div>
       )}
 
-      {/* 3. GRÁFICO DE EVOLUÇÃO (AGORA COMPACTO: OCUPA MEIA TELA EM DESKTOPS) */}
-      {widgets.evolucao && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="h-[350px]">
-            <GraficoFaturamento comandas={comandasFiltradas} temaNoturno={temaNoturno} />
-          </div>
-          {/* A segunda coluna fica vazia propositalmente para manter o gráfico compacto à esquerda */}
-        </div>
-      )}
-
-      {/* MENSAGEM SE TUDO ESTIVER OCULTO */}
       {Object.values(widgets).every(v => !v) && (
         <div className={`p-10 text-center rounded-3xl border border-dashed ${temaNoturno ? 'border-gray-700 text-gray-500' : 'border-gray-300 text-gray-400'}`}>
           <p className="font-bold">Todos os gráficos foram ocultados.</p>
           <p className="text-sm mt-2">Clique em "Personalizar Painel" para exibir os dados.</p>
         </div>
       )}
-
     </div>
   );
 }

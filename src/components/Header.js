@@ -7,7 +7,7 @@ export default function Header({
   caixaAtual, abaAtiva, setAbaAtiva, logoEmpresa, setTemaNoturno,
   mostrarMenuPerfil, setMostrarMenuPerfil, nomeEmpresa, sessao,
   setMostrarConfigEmpresa, setMostrarAdminUsuarios, setMostrarAdminProdutos,
-  setMostrarConfigTags, setMostrarModalCaixa, setMostrarAdminDelivery, fazerLogout, fetchData
+  setMostrarConfigTags, setMostrarAdminDelivery, fazerLogout, fetchData
 }) {
   const [editandoNome, setEditandoNome] = useState(false);
   const [tempNome, setTempNome] = useState('');
@@ -27,7 +27,6 @@ export default function Header({
     setEditandoNome(false);
   };
 
-  // Nova função para alternar o tipo da comanda
   const alternarTipoComanda = async () => {
     if (!comandaAtiva) return;
     const novoTipo = comandaAtiva.tipo === 'Balcão' ? 'Delivery' : 'Balcão';
@@ -35,10 +34,19 @@ export default function Header({
     if (!error && fetchData) await fetchData();
   };
 
+  const isCaixaAberto = caixaAtual?.status === 'aberto';
+
+  // Função para redirecionar direto pro menu de Abrir Caixa no topo da tela
+  const irParaAberturaDeCaixa = () => {
+    setAbaAtiva('comandas');
+    setIdSelecionado(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // Rola para o topo suavemente
+  };
+
   return (
     <header className={`flex items-center justify-between p-3 xl:p-4 rounded-3xl shadow-sm border mb-6 sticky top-0 z-40 transition-colors duration-500 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
       
-      {/* --- ESQUERDA: Botão Voltar ou Caixa Aberto --- */}
+      {/* --- ESQUERDA: Botão Voltar ou Status do Caixa --- */}
       <div className="flex flex-1 justify-start items-center gap-3">
         {comandaAtiva ? (
           <button onClick={() => { setIdSelecionado(null); setEditandoNome(false); }} className={`flex items-center gap-2 font-bold px-4 py-2 rounded-xl transition ${temaNoturno ? 'bg-gray-700 text-purple-300 hover:bg-gray-600' : 'bg-purple-50 text-purple-700 hover:bg-purple-100'}`}>
@@ -49,9 +57,11 @@ export default function Header({
             <button onClick={() => setMenuMobileAberto(true)} className={`xl:hidden p-2 rounded-xl border transition ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white hover:bg-gray-600' : 'bg-gray-50 border-gray-200 text-gray-800 hover:bg-gray-100'}`}>
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
             </button>
-            <div onClick={() => setMostrarModalCaixa?.(true)} className={`hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl border cursor-pointer hover:scale-105 transition ${temaNoturno ? 'bg-green-900/20 border-green-800/50' : 'bg-green-50 border-green-100'}`}>
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
-              <span className={`text-[10px] font-black uppercase tracking-widest whitespace-nowrap ${temaNoturno ? 'text-green-400' : 'text-green-700'}`}>Caixa Aberto: {formatarDataCaixa(caixaAtual?.data_abertura)}</span>
+            <div onClick={irParaAberturaDeCaixa} className={`hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl border cursor-pointer hover:scale-105 transition ${isCaixaAberto ? (temaNoturno ? 'bg-green-900/20 border-green-800/50' : 'bg-green-50 border-green-100') : (temaNoturno ? 'bg-red-900/20 border-red-800/50' : 'bg-red-50 border-red-100')}`}>
+              <span className={`w-2 h-2 rounded-full ${isCaixaAberto ? 'bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]'}`}></span>
+              <span className={`text-[10px] font-black uppercase tracking-widest whitespace-nowrap ${isCaixaAberto ? (temaNoturno ? 'text-green-400' : 'text-green-700') : (temaNoturno ? 'text-red-400' : 'text-red-700')}`}>
+                {isCaixaAberto ? `Caixa Aberto: ${formatarDataCaixa(caixaAtual?.data_abertura)}` : 'CAIXA FECHADO'}
+              </span>
             </div>
           </>
         )}
@@ -89,9 +99,11 @@ export default function Header({
               )}
             </div>
 
-            <div onClick={() => setMostrarModalCaixa?.(true)} className={`xl:hidden flex items-center gap-2 px-3 py-1.5 rounded-xl border cursor-pointer ${temaNoturno ? 'bg-green-900/20 border-green-800/50' : 'bg-green-50 border-green-100'}`}>
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              <span className={`text-[10px] font-black uppercase tracking-widest ${temaNoturno ? 'text-green-400' : 'text-green-700'}`}>{formatarDataCaixa(caixaAtual?.data_abertura)}</span>
+            <div onClick={irParaAberturaDeCaixa} className={`xl:hidden flex items-center gap-2 px-3 py-1.5 rounded-xl border cursor-pointer ${isCaixaAberto ? (temaNoturno ? 'bg-green-900/20 border-green-800/50' : 'bg-green-50 border-green-100') : (temaNoturno ? 'bg-red-900/20 border-red-800/50' : 'bg-red-50 border-red-100')}`}>
+              <span className={`w-2 h-2 rounded-full ${isCaixaAberto ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${isCaixaAberto ? (temaNoturno ? 'text-green-400' : 'text-green-700') : (temaNoturno ? 'text-red-400' : 'text-red-700')}`}>
+                {isCaixaAberto ? formatarDataCaixa(caixaAtual?.data_abertura) : 'FECHADO'}
+              </span>
             </div>
           </>
         ) : (
@@ -111,7 +123,6 @@ export default function Header({
               </h2>
             )}
 
-            {/* BOTÃO DE ALTERNAR TIPO */}
             <button 
               onClick={alternarTipoComanda}
               title={`Mudar para ${comandaAtiva.tipo === 'Balcão' ? 'Delivery' : 'Balcão'}`}
