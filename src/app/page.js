@@ -23,6 +23,28 @@ import AdminUsuarios from '@/components/AdminUsuarios';
 import AdminDelivery from '@/components/AdminDelivery'; 
 
 export default function Home() {
+
+  // --- SISTEMA DE FORÇAR LIMPEZA DE CACHE ---
+  useEffect(() => {
+    // TODA VEZ QUE VOCÊ SUBIR UMA ATUALIZAÇÃO PARA O CLIENTE, MUDE ESTE NÚMERO
+    // Ex: mude para '1.0.2', depois '1.0.3', etc.
+    const VERSAO_ATUAL = '1.0.1'; 
+    const versaoNoNavegador = localStorage.getItem('bessa_versao_sistema');
+
+    if (versaoNoNavegador !== VERSAO_ATUAL) {
+      console.log("Versão antiga detectada. Forçando atualização...");
+      
+      // Atualiza a versão no navegador do cliente
+      localStorage.setItem('bessa_versao_sistema', VERSAO_ATUAL);
+      
+      // Um truque para forçar o navegador a recarregar ignorando o cache
+      if (typeof window !== 'undefined') {
+        window.location.href = window.location.pathname + '?v=' + new Date().getTime();
+      }
+    }
+  }, []);
+  // ------------------------------------------
+  
   const getHoje = () => {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   };
