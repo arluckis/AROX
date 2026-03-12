@@ -18,7 +18,7 @@ export default function TabFaturamento({
   const [widgets, setWidgets] = useState({
     bruto: true, lucro: true, ticket: true,
     termometro: true, pagamentos: true, produtos: true
-  }); // Removida a flag 'evolucao'
+  }); 
 
   useEffect(() => {
     const widgetsSalvos = localStorage.getItem('bessa_widgets_faturamento');
@@ -31,23 +31,22 @@ export default function TabFaturamento({
     localStorage.setItem('bessa_widgets_faturamento', JSON.stringify(novosWidgets));
   };
 
-  const totalComandasFechadas = comandasFiltradas.filter(c => c.status === 'fechada').length;
-  const ticketMedio = totalComandasFechadas > 0 ? (faturamentoTotal / totalComandasFechadas) : 0;
+  const totalComandas = comandasFiltradas.length;
+  const ticketMedio = totalComandas > 0 ? (faturamentoTotal / totalComandas) : 0;
 
   const rankingMaiusculo = rankingProdutos.map(p => ({
     ...p,
     nome: p.nome.toUpperCase()
   }));
 
-  // --- TRAVA DE 7 DIAS REAIS ---
-  // Calcula o número de dias distintos de uso do sistema com base nas comandas
-  const diasDeUso = useMemo(() => {
-    if (!comandas || comandas.length === 0) return 0;
-    const datasUnicas = new Set(comandas.map(c => c.data).filter(Boolean));
-    return datasUnicas.size;
-  }, [comandas]);
-
-  const faltamDiasParaAnalise = 7 - diasDeUso;
+  // --- TRAVA DE 7 DIAS BASEADA NO CALENDÁRIO ---
+  const faltamDiasParaAnalise = useMemo(() => {
+    if (!comandas || comandas.length === 0) return 7;
+    const dataPrimeira = new Date(comandas[0].data + 'T12:00:00'); // Assume a primeira comanda como data 0
+    const dataHoje = new Date(getHoje() + 'T12:00:00');
+    const diffDays = Math.floor((dataHoje - dataPrimeira) / (1000 * 60 * 60 * 24));
+    return Math.max(0, 7 - diffDays);
+  }, [comandas, getHoje]);
 
   const { mediaHistorica, percentualDiferenca, statusTermometro, corTermometro } = useMemo(() => {
     if (!comandas || comandas.length === 0) return { mediaHistorica: 0, percentualDiferenca: 0, statusTermometro: 'Sem Histórico', corTermometro: 'text-gray-500' };
@@ -57,12 +56,13 @@ export default function TabFaturamento({
     const diaSemana = dataObj.getDay(); 
 
     const faturamentoPorDia = {};
-    comandas.filter(c => c.status === 'fechada').forEach(c => {
+    // Soma todos os produtos lançados sem exigir que a comanda esteja fechada
+    comandas.forEach(c => {
       const dataCaixa = c.data; 
       if (!dataCaixa) return;
       if (!faturamentoPorDia[dataCaixa]) faturamentoPorDia[dataCaixa] = 0;
-      const totalPago = c.pagamentos.reduce((acc, p) => acc + p.valor, 0);
-      faturamentoPorDia[dataCaixa] += totalPago;
+      const totalProdutos = c.produtos.reduce((acc, p) => acc + p.preco, 0);
+      faturamentoPorDia[dataCaixa] += totalProdutos;
     });
 
     let soma = 0;
@@ -113,7 +113,7 @@ export default function TabFaturamento({
       <div className={`p-4 rounded-3xl shadow-sm border mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
         <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
           <div className={`flex p-1 rounded-xl w-full sm:w-auto border ${temaNoturno ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-100'}`}>
-            {['dia', 'mes', 'ano', 'periodo'].map(t => <button key={t} onClick={() => setFiltroTempo({...filtroTempo, tipo: t, valor: t==='dia'?getHoje():t==='mes'?getMesAtual():getAnoAtual()})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-bold uppercase transition ${filtroTempo.tipo === t ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-purple-900 text-white shadow-sm') : (temaNoturno ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-purple-700')}`}>{t}</button>)}
+            {['dia', '7 dias', 'mes', 'ano', 'periodo'].map(t => <button key={t} onClick={() => setFiltroTempo({...filtroTempo, tipo: t, valor: t==='dia'||t==='7 dias'?getHoje():t==='mes'?getMesAtual():getAnoAtual()})} className={`flex-1 px-4 py-2 rounded-lg text-xs font-bold uppercase transition ${filtroTempo.tipo === t ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-purple-900 text-white shadow-sm') : (temaNoturno ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-purple-700')}`}>{t}</button>)}
           </div>
           
           <div className="flex gap-2 w-full sm:w-auto flex-1">
@@ -175,7 +175,7 @@ export default function TabFaturamento({
               <h3 className={`text-xs font-bold uppercase tracking-widest mb-2 relative z-10 ${temaNoturno ? 'text-gray-400' : 'text-gray-400'}`}>Ticket Médio</h3>
               <div className="relative z-10 flex items-end gap-3">
                 <p className="text-4xl md:text-5xl font-black tracking-tight text-cyan-500">R$ {ticketMedio.toFixed(2)}</p>
-                <p className={`text-sm font-bold mb-1.5 ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>/ {totalComandasFechadas} cmds</p>
+                <p className={`text-sm font-bold mb-1.5 ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>/ {totalComandas} cmds</p>
               </div>
             </div>
           )}

@@ -355,6 +355,13 @@ export default function Home() {
   const isComandaInFiltro = (dataComanda) => {
     if (!dataComanda) return false;
     if (filtroTempo.tipo === 'dia') return dataComanda === filtroTempo.valor;
+    if (filtroTempo.tipo === '7 dias') {
+      const dataFim = getHoje();
+      const dtIn = new Date(dataFim + 'T12:00:00');
+      dtIn.setDate(dtIn.getDate() - 6);
+      const dataInicio = dtIn.toISOString().split('T')[0];
+      return dataComanda >= dataInicio && dataComanda <= dataFim;
+    }
     if (filtroTempo.tipo === 'mes') return dataComanda.startsWith(filtroTempo.valor);
     if (filtroTempo.tipo === 'ano') return dataComanda.startsWith(filtroTempo.valor);
     if (filtroTempo.tipo === 'periodo') return dataComanda >= filtroTempo.inicio && dataComanda <= filtroTempo.fim;
@@ -369,19 +376,20 @@ export default function Home() {
   const comandasFechadasHoje = comandas.filter(c => c.status === 'fechada' && c.data === getHoje());
   const comandasAntigasAbertas = comandas.filter(c => c.status === 'aberta' && caixaAtual?.data_abertura && c.data && c.data.substring(0,10) !== caixaAtual.data_abertura.substring(0,10));
 
-  const pagamentosFiltrados = comandasFiltradas.flatMap(c => c.pagamentos);
-  const totalRecebido = pagamentosFiltrados.reduce((acc, p) => acc + p.valor, 0);
-  const taxasDeEntrega = comandasFiltradas.filter(c => c.status === 'fechada').reduce((acc, c) => acc + parseFloat(c.taxa_entrega || 0), 0);
-  const faturamentoTotal = totalRecebido - taxasDeEntrega;
-  const custoTotalFiltrado = comandasFiltradas.reduce((acc, c) => acc + c.produtos.filter(p => p.pago).reduce((sum, p) => sum + (p.custo || 0), 0), 0);
+  // ATUALIZAÇÃO EM TEMPO REAL: Faturamento baseado em TUDO que foi adicionado (aberto ou fechado)
+  const faturamentoTotal = comandasFiltradas.reduce((acc, c) => acc + c.produtos.reduce((sum, p) => sum + (p.preco || 0), 0), 0);
+  const custoTotalFiltrado = comandasFiltradas.reduce((acc, c) => acc + c.produtos.reduce((sum, p) => sum + (p.custo || 0), 0), 0);
   const lucroEstimado = faturamentoTotal - custoTotalFiltrado;
 
+  // Apenas para o gráfico de pizza (pagamentos reais)
+  const pagamentosFiltrados = comandasFiltradas.flatMap(c => c.pagamentos);
   const pagamentosAgrupados = pagamentosFiltrados.reduce((acc, p) => { acc[p.forma] = (acc[p.forma] || 0) + p.valor; return acc; }, {});
   const dadosPizza = Object.keys(pagamentosAgrupados).map(key => ({ name: key, value: pagamentosAgrupados[key] })).filter(d => d.value > 0);
 
   const contagemProdutos = {};
   comandasFiltradas.forEach(c => {
-    c.produtos.filter(p => p.pago).forEach(p => {
+    // REMOVIDO o ".filter(p => p.pago)" para contar os produtos no momento do pedido
+    c.produtos.forEach(p => {
       const isPeso = p.nome.toLowerCase().includes('peso') || p.nome.toLowerCase().includes('balança');
       let nomeChave = isPeso ? p.nome.replace(/\s*\(\d+(?:\.\d+)?\s*g\)/i, '').trim() : p.nome;
       if (!contagemProdutos[nomeChave]) { contagemProdutos[nomeChave] = { faturamento: 0, volume: 0, isPeso: isPeso }; }
