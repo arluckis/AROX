@@ -8,21 +8,27 @@ export default function TabComandas({
   adicionarComanda, setIdSelecionado, caixaAtual, abrirCaixaManual, mostrarAlerta
 }) {
 
-  const [dataAbertura, setDataAbertura] = useState('');
   const [saldoInicial, setSaldoInicial] = useState('');
-  const [turno, setTurno] = useState('Integral');
+  const [dataHoje, setDataHoje] = useState('');
+  const [cienteAntigas, setCienteAntigas] = useState(false);
 
   useEffect(() => {
     const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); 
-    setDataAbertura(hoje);
+    setDataHoje(hoje);
   }, []);
 
+  // Identifica se há comandas perdidas de dias anteriores
+  const comandasAntigas = comandasAbertas.filter(c => c.data && c.data < dataHoje);
+
   const handleAbrirCaixa = () => {
-    if (!dataAbertura) return mostrarAlerta("Aviso", "Por favor, selecione uma data para abrir o caixa.");
+    if (comandasAntigas.length > 0 && !cienteAntigas) {
+      return mostrarAlerta("Atenção", "Você precisa confirmar que está ciente e deseja manter as comandas antigas abertas.");
+    }
+    
+    // O Turno e a Data não precisam mais ser passados manualmente
     abrirCaixaManual({
-      data_abertura: dataAbertura,
-      saldo_inicial: parseFloat(saldoInicial || 0),
-      turno: turno
+      data_abertura: dataHoje,
+      saldo_inicial: parseFloat(saldoInicial || 0)
     });
   };
 
@@ -59,32 +65,36 @@ export default function TabComandas({
             <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 ${temaNoturno ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-600'}`}>
                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
             </div>
-            <h3 className={`text-lg font-black ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>Caixa Fechado</h3>
-            <p className={`text-sm mt-1 ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>Preencha os dados abaixo para iniciar um novo turno de vendas.</p>
+            <h3 className={`text-lg font-black ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>Abertura de Caixa</h3>
+            <p className={`text-sm mt-1 font-bold ${temaNoturno ? 'text-purple-400' : 'text-purple-600'}`}>
+              Iniciando operações para hoje: {dataHoje ? dataHoje.split('-').reverse().join('/') : '...'}
+            </p>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-bold uppercase text-gray-500 mb-1 block">Data de Abertura *</label>
-              <input type="date" value={dataAbertura} onChange={(e) => setDataAbertura(e.target.value)} className={`w-full p-3 rounded-xl border outline-none font-bold ${temaNoturno ? 'bg-gray-900 border-gray-700 text-white focus:border-purple-500' : 'bg-gray-50 border-gray-300 focus:border-purple-500'}`} />
+              <label className="text-xs font-bold uppercase text-gray-500 mb-1 block">Suprimento Inicial em Espécie (R$)</label>
+              <input type="number" placeholder="0.00" value={saldoInicial} onChange={(e) => setSaldoInicial(e.target.value)} className={`w-full p-3 rounded-xl border outline-none font-black text-center text-lg ${temaNoturno ? 'bg-gray-900 border-gray-700 text-white focus:border-purple-500' : 'bg-gray-50 border-gray-300 focus:border-purple-500'}`} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-bold uppercase text-gray-500 mb-1 block">Suprimento Inicial (R$)</label>
-                <input type="number" placeholder="0.00" value={saldoInicial} onChange={(e) => setSaldoInicial(e.target.value)} className={`w-full p-3 rounded-xl border outline-none font-bold ${temaNoturno ? 'bg-gray-900 border-gray-700 text-white focus:border-purple-500' : 'bg-gray-50 border-gray-300 focus:border-purple-500'}`} />
+
+            {comandasAntigas.length > 0 && (
+              <div className={`p-4 rounded-xl border flex flex-col gap-3 ${temaNoturno ? 'bg-orange-900/20 border-orange-800/50' : 'bg-orange-50 border-orange-200'}`}>
+                <div className="flex items-start gap-3">
+                  <span className="text-xl mt-0.5">⚠️</span>
+                  <div>
+                    <p className={`text-sm font-black uppercase ${temaNoturno ? 'text-orange-400' : 'text-orange-800'}`}>Há {comandasAntigas.length} comanda(s) pendente(s)!</p>
+                    <p className={`text-xs mt-1 font-medium ${temaNoturno ? 'text-orange-400/80' : 'text-orange-700/80'}`}>Elas foram abertas em dias anteriores. Ao abrir o caixa agora, elas continuarão ativas para serem recebidas hoje.</p>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer mt-2 pt-3 border-t border-orange-500/20">
+                  <input type="checkbox" checked={cienteAntigas} onChange={(e) => setCienteAntigas(e.target.checked)} className="w-5 h-5 rounded border-2 border-orange-400 text-orange-600 focus:ring-orange-500 cursor-pointer" />
+                  <span className={`text-xs font-bold uppercase tracking-widest ${temaNoturno ? 'text-orange-300' : 'text-orange-800'}`}>Estou ciente e quero mantê-las</span>
+                </label>
               </div>
-              <div>
-                <label className="text-xs font-bold uppercase text-gray-500 mb-1 block">Turno</label>
-                <select value={turno} onChange={(e) => setTurno(e.target.value)} className={`w-full p-3 rounded-xl border outline-none font-bold ${temaNoturno ? 'bg-gray-900 border-gray-700 text-white focus:border-purple-500' : 'bg-gray-50 border-gray-300 focus:border-purple-500'}`}>
-                  <option value="Manhã">Manhã</option>
-                  <option value="Tarde">Tarde</option>
-                  <option value="Noite">Noite</option>
-                  <option value="Integral">Integral</option>
-                </select>
-              </div>
-            </div>
-            <button onClick={handleAbrirCaixa} className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl transition shadow-lg mt-2">
-              Abrir Caixa
+            )}
+
+            <button onClick={handleAbrirCaixa} className={`w-full py-4 font-black text-lg rounded-xl transition shadow-lg mt-2 ${comandasAntigas.length > 0 && !cienteAntigas ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}>
+              Confirmar e Abrir Caixa
             </button>
           </div>
         </div>
