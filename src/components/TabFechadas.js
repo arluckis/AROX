@@ -6,38 +6,68 @@ export default function TabFechadas({
   reabrirComandaFechada,
   excluirComandaFechada
 }) {
+  // Ordena deixando as comandas fechadas MAIS RECENTES no topo
+  const comandasOrdenadas = [...comandasFechadasHoje].sort((a, b) => {
+    const timeA = a.hora_fechamento ? new Date(a.hora_fechamento).getTime() : 0;
+    const timeB = b.hora_fechamento ? new Date(b.hora_fechamento).getTime() : 0;
+    return timeB - timeA; 
+  });
+
   return (
     <div className="max-w-6xl mx-auto w-full animate-in fade-in duration-300">
-      <h2 className={`text-2xl font-black mb-6 flex items-center gap-2 ${temaNoturno ? 'text-white' : 'text-gray-800'}`}>Comandas Encerradas <span className={`text-sm font-normal px-2 py-0.5 rounded-md ${temaNoturno ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-400'}`}>Hoje ({comandasFechadasHoje.length})</span></h2>
-      {comandasFechadasHoje.length === 0 ? (
+      <h2 className={`text-2xl font-black mb-6 flex items-center gap-2 ${temaNoturno ? 'text-white' : 'text-gray-800'}`}>
+        Comandas Encerradas 
+        <span className={`text-sm font-normal px-2 py-0.5 rounded-md ${temaNoturno ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-400'}`}>Hoje ({comandasOrdenadas.length})</span>
+      </h2>
+      
+      {comandasOrdenadas.length === 0 ? (
         <div className={`p-12 rounded-3xl text-center shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
           <p className={`font-bold text-lg mb-2 ${temaNoturno ? 'text-gray-300' : 'text-gray-600'}`}>Ainda não há comandas encerradas hoje.</p>
           <p className={`text-sm ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Quando você cobrar e encerrar uma mesa, o recibo aparecerá aqui.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {comandasFechadasHoje.map(c => {
+          {comandasOrdenadas.map(c => {
             const valorTotalComanda = c.pagamentos.reduce((acc, p) => acc + p.valor, 0);
             return (
               <div key={c.id} className={`p-5 rounded-3xl shadow-sm border flex flex-col ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
-                <div className={`flex justify-between items-start border-b pb-3 mb-3 ${temaNoturno ? 'border-gray-700' : 'border-gray-100'}`}>
+                <div className={`flex justify-between items-start border-b pb-4 mb-3 ${temaNoturno ? 'border-gray-700' : 'border-gray-100'}`}>
                   <div>
                     <h3 className={`font-black text-lg leading-tight flex items-center gap-2 ${temaNoturno ? 'text-white' : 'text-gray-800'}`}>
                       {c.nome} {c.tags.length > 0 && <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase border ${temaNoturno ? 'bg-purple-900/30 text-purple-300 border-purple-800' : 'bg-purple-50 text-purple-700 border-purple-100'}`}>{c.tags[0]}</span>}
                     </h3>
                     <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md mt-1 inline-block border ${c.tipo === 'Delivery' ? (temaNoturno ? 'bg-orange-900/20 text-orange-400 border-orange-800' : 'bg-orange-50 text-orange-600 border-orange-100') : (temaNoturno ? 'bg-purple-900/20 text-purple-400 border-purple-800' : 'bg-purple-50 text-purple-600 border-purple-100')}`}>{c.tipo}</span>
+                    
+                    {/* Exibição explícita e elegante de Abertura e Fechamento */}
+                    <div className="flex flex-col gap-1.5 mt-3">
+                      {c.hora_abertura && (
+                        <span className={`text-[11px] font-medium flex items-center gap-1 ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                          Aberto às {new Date(c.hora_abertura).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                      {c.hora_fechamento && (
+                        <span className={`text-[11px] font-black flex items-center gap-1 ${temaNoturno ? 'text-purple-400' : 'text-purple-700'}`}>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                          Fechado às {new Date(c.hora_fechamento).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <span className="font-black text-xl tracking-tight text-green-500">R$ {valorTotalComanda.toFixed(2)}</span>
                 </div>
+                
                 <div className="flex-1 mb-4">
                   <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Resumo dos Itens</p>
                   <p className={`text-sm line-clamp-2 leading-relaxed ${temaNoturno ? 'text-gray-300' : 'text-gray-600'}`}>{c.produtos.map(p => p.nome).join(', ')}</p>
                   <p className={`text-xs mt-1 font-medium italic ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>({c.produtos.length} produtos)</p>
                 </div>
+                
                 <div className={`p-3 rounded-xl flex items-center justify-between border mb-3 ${temaNoturno ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-100'}`}>
                   <span className={`text-xs font-bold uppercase ${temaNoturno ? 'text-gray-500' : 'text-gray-500'}`}>Pagamento</span>
                   <div className="flex flex-wrap gap-1 justify-end">{c.pagamentos.map((p, i) => <span key={i} className={`text-[10px] font-bold px-2 py-1 rounded border shadow-sm ${temaNoturno ? 'bg-gray-800 border-gray-600 text-gray-300' : 'bg-white border-gray-200 text-gray-600'}`}>{p.forma}</span>)}</div>
                 </div>
+                
                 <div className={`flex gap-2 pt-3 border-t ${temaNoturno ? 'border-gray-700' : 'border-gray-100'}`}>
                   <button onClick={() => reabrirComandaFechada(c.id)} className={`flex-1 font-bold p-2 rounded-xl text-xs transition text-center ${temaNoturno ? 'bg-blue-900/20 text-blue-400 hover:bg-blue-900/40' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>🔄 Reabrir</button>
                   <button onClick={() => excluirComandaFechada(c.id)} className={`flex-1 font-bold p-2 rounded-xl text-xs transition text-center ${temaNoturno ? 'bg-red-900/20 text-red-400 hover:bg-red-900/40' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>🗑️ Excluir</button>

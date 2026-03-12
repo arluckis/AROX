@@ -23,7 +23,6 @@ import AdminUsuarios from '@/components/AdminUsuarios';
 import AdminDelivery from '@/components/AdminDelivery'; 
 
 export default function Home() {
-  // 1. Funções auxiliares base
   const getHoje = () => {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   };
@@ -31,7 +30,6 @@ export default function Home() {
   const getMesAtual = () => getHoje().substring(0, 7);
   const getAnoAtual = () => getHoje().substring(0, 4);
 
-  // 2. Sorteio da frase (Garante que roda apenas uma vez por renderização inicial)
   const fraseCarregamento = useMemo(() => {
     const frases = [
       "Carregando",
@@ -43,7 +41,6 @@ export default function Home() {
     return frases[Math.floor(Math.random() * frases.length)];
   }, []);
 
-  // 3. Estados (useState)
   const [sessao, setSessao] = useState(null); 
   const [credenciais, setCredenciais] = useState({ email: '', senha: '' });
   const [nomeEmpresa, setNomeEmpresa] = useState('A Carregar...'); 
@@ -128,16 +125,15 @@ export default function Home() {
     metaThemeColor.setAttribute('content', temaNoturno ? '#1f2937' : '#ffffff');
   }, [temaNoturno]);
 
-  // 5. Funções principais e Buscas
   const fazerLogout = () => {
     localStorage.removeItem('bessa_session');
-    localStorage.removeItem('bessa_logo_empresa'); // Limpa a logo do usuário antigo
+    localStorage.removeItem('bessa_logo_empresa');
     setSessao(null); 
     setCredenciais({ email: '', senha: '' }); 
     setMostrarMenuPerfil(false); 
     setMenuMobileAberto(false); 
     setAbaAtiva('comandas');
-    setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png'); // Reseta a imagem visualmente
+    setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
   };
 
   const fetchData = async () => {
@@ -145,48 +141,31 @@ export default function Home() {
     setIsLoading(true);
     
     try {
-      const { data: empData, error: empError } = await supabase
-        .from('empresas')
-        .select('*')
-        .eq('id', sessao.empresa_id)
-        .single();
-        
+      const { data: empData, error: empError } = await supabase.from('empresas').select('*').eq('id', sessao.empresa_id).single();
       if (empError) {
         console.warn("Aviso ao buscar empresa:", empError.message);
         setNomeEmpresa("A Minha Loja"); 
       } else if (empData) {
         setNomeEmpresa(empData.nome || "A Minha Loja");
         setNomeEmpresaEdicao(empData.nome || "");
-        
         const urlLogo = empData.logo || empData.logo_url;
         if (urlLogo) {
-          setLogoEmpresa(urlLogo);
-          setLogoEmpresaEdicao(urlLogo);
-          localStorage.setItem('bessa_logo_empresa', urlLogo); 
+          setLogoEmpresa(urlLogo); setLogoEmpresaEdicao(urlLogo); localStorage.setItem('bessa_logo_empresa', urlLogo); 
         }
       }
 
       const { data: catData } = await supabase.from('categorias').select('*, itens:produtos(*)').eq('empresa_id', sessao.empresa_id);
       if (catData) setMenuCategorias(catData);
 
-      const { data: caixasAbertos } = await supabase.from('caixas')
-        .select('*')
-        .eq('empresa_id', sessao.empresa_id)
-        .eq('status', 'aberto')
-        .order('id', { ascending: false }) 
-        .limit(1); 
-      
+      const { data: caixasAbertos } = await supabase.from('caixas').select('*').eq('empresa_id', sessao.empresa_id).eq('status', 'aberto').order('id', { ascending: false }).limit(1); 
       let caixaData = caixasAbertos && caixasAbertos.length > 0 ? caixasAbertos[0] : null;
       
       if (!caixaData) {
-        const { data: novoCaixa } = await supabase.from('caixas').insert([{ 
-          empresa_id: sessao.empresa_id, 
-          data_abertura: getHoje(), 
-          status: 'aberto' 
-        }]).select().single();
+        const { data: novoCaixa } = await supabase.from('caixas').insert([{ empresa_id: sessao.empresa_id, data_abertura: getHoje(), status: 'aberto' }]).select().single();
         caixaData = novoCaixa;
       }
       setCaixaAtual(caixaData);
+      
       const { data: comData } = await supabase.from('comandas').select('*, produtos:comanda_produtos(*), pagamentos(*)').eq('empresa_id', sessao.empresa_id).order('id', { ascending: true });
       if (comData) setComandas(comData);
 
@@ -223,29 +202,23 @@ export default function Home() {
 
   const salvarConfigEmpresa = async () => {
     if (nomeEmpresaEdicao.trim() === '') return alert("O nome não pode estar vazio.");
-    
-    const { error } = await supabase
-      .from('empresas')
-      .update({ 
-        nome: nomeEmpresaEdicao, 
-        logo_url: logoEmpresaEdicao 
-      })
-      .eq('id', sessao.empresa_id);
-      
-    if (error) {
-      alert("❌ Erro ao salvar no banco de dados: " + error.message);
-      return; 
-    }
-    
-    setNomeEmpresa(nomeEmpresaEdicao);
-    setLogoEmpresa(logoEmpresaEdicao || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
-    setMostrarConfigEmpresa(false);
+    const { error } = await supabase.from('empresas').update({ nome: nomeEmpresaEdicao, logo_url: logoEmpresaEdicao }).eq('id', sessao.empresa_id);
+    if (error) return alert("❌ Erro ao salvar no banco de dados: " + error.message);
+    setNomeEmpresa(nomeEmpresaEdicao); setLogoEmpresa(logoEmpresaEdicao || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'); setMostrarConfigEmpresa(false);
   };
 
   const adicionarComanda = async (tipo) => {
     if (modoExclusao || !sessao?.empresa_id) return;
     const qtdHoje = comandas.filter(c => c.data === getHoje()).length;
-    const novaComanda = { nome: `Comanda ${qtdHoje + 1}`, tipo, data: getHoje(), status: 'aberta', tags: [], empresa_id: sessao.empresa_id };
+    const novaComanda = { 
+      nome: `Comanda ${qtdHoje + 1}`, 
+      tipo, 
+      data: getHoje(), 
+      hora_abertura: new Date().toISOString(), 
+      status: 'aberta', 
+      tags: [], 
+      empresa_id: sessao.empresa_id 
+    };
     const { data, error } = await supabase.from('comandas').insert([novaComanda]).select().single();
     if (data && !error) setComandas([...comandas, { ...data, produtos: [], pagamentos: [] }]);
   };
@@ -271,12 +244,6 @@ export default function Home() {
     setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: c.produtos.filter(p => p.id !== idProduto) } : c));
   };
 
-  const alternarTipoComanda = async (id, tipoAtual) => {
-    const novoTipo = tipoAtual === 'Balcão' ? 'Delivery' : 'Balcão';
-    await supabase.from('comandas').update({ tipo: novoTipo }).eq('id', id);
-    setComandas(comandas.map(c => c.id === id ? { ...c, tipo: novoTipo } : c));
-  };
-
   const editarProduto = async (idProduto, obsAtual) => {
     const novaObs = prompt("Digite a observação:", obsAtual || "");
     if (novaObs !== null) {
@@ -286,8 +253,9 @@ export default function Home() {
   };
 
   const encerrarMesa = async () => { 
-    await supabase.from('comandas').update({ status: 'fechada' }).eq('id', idSelecionado);
-    setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, status: 'fechada' } : c)); 
+    const horaFechamento = new Date().toISOString();
+    await supabase.from('comandas').update({ status: 'fechada', hora_fechamento: horaFechamento }).eq('id', idSelecionado);
+    setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, status: 'fechada', hora_fechamento: horaFechamento } : c)); 
     setIdSelecionado(null); 
   };
 
@@ -299,10 +267,12 @@ export default function Home() {
     else { novosProdutos = novosProdutos.map(p => ({ ...p, pago: true })); idsParaPagar = novosProdutos.map(p => p.id); }
     const todosPagos = novosProdutos.every(p => p.pago);
     const payloadPagamento = { comanda_id: idSelecionado, valor: valorFinal, forma: formaPagamento, data: getHoje(), empresa_id: sessao.empresa_id };
+    
     const { data: pgData, error: errPg } = await supabase.from('pagamentos').insert([payloadPagamento]).select().single();
     if (!errPg) {
       if (idsParaPagar.length > 0) await supabase.from('comanda_produtos').update({ pago: true }).in('id', idsParaPagar);
-      if (todosPagos) await supabase.from('comandas').update({ status: 'fechada' }).eq('id', idSelecionado);
+      const horaFechamento = new Date().toISOString();
+      if (todosPagos) await supabase.from('comandas').update({ status: 'fechada', hora_fechamento: horaFechamento }).eq('id', idSelecionado);
       
       setComandas(comandas.map(c => {
         if (c.id === idSelecionado) {
@@ -311,6 +281,7 @@ export default function Home() {
               produtos: novosProdutos,
               pagamentos: [...c.pagamentos, pgData],
               status: todosPagos ? 'fechada' : 'aberta',
+              hora_fechamento: todosPagos ? horaFechamento : c.hora_fechamento,
               bairro_id: bairroId || c.bairro_id,
               taxa_entrega: taxaEntrega > 0 ? taxaEntrega : c.taxa_entrega
            };
@@ -333,8 +304,8 @@ export default function Home() {
   
   const reabrirComandaFechada = async (id) => {
     if (confirm("Deseja reabrir esta comanda? Ela voltará para a aba Comandas em Aberto.")) {
-      await supabase.from('comandas').update({ status: 'aberta' }).eq('id', id);
-      setComandas(comandas.map(c => c.id === id ? { ...c, status: 'aberta' } : c));
+      await supabase.from('comandas').update({ status: 'aberta', hora_fechamento: null }).eq('id', id);
+      setComandas(comandas.map(c => c.id === id ? { ...c, status: 'aberta', hora_fechamento: null } : c));
     }
   };
 
@@ -354,9 +325,7 @@ export default function Home() {
     return false;
   };
 
-  // 6. Preparação de Variáveis e Cálculos para a Renderização
   const comandaAtiva = comandas.find(c => c.id === idSelecionado);
-  // Só alerta se houver 3 ou mais comandas abertas e absolutamente NENHUMA tiver tag
   const alertaTags = comandas.filter(c => c.status === 'aberta').length >= 3 && comandas.filter(c => c.status === 'aberta').every(c => !c.tags || c.tags.length === 0);
 
   const comandasFiltradas = comandas.filter(c => isComandaInFiltro(c.data));
@@ -365,10 +334,8 @@ export default function Home() {
   const comandasAntigasAbertas = comandas.filter(c => c.status === 'aberta' && caixaAtual?.data_abertura && c.data && c.data.substring(0,10) !== caixaAtual.data_abertura.substring(0,10));
 
   const pagamentosFiltrados = comandasFiltradas.flatMap(c => c.pagamentos);
-  
   const totalRecebido = pagamentosFiltrados.reduce((acc, p) => acc + p.valor, 0);
   const taxasDeEntrega = comandasFiltradas.filter(c => c.status === 'fechada').reduce((acc, c) => acc + parseFloat(c.taxa_entrega || 0), 0);
-  
   const faturamentoTotal = totalRecebido - taxasDeEntrega;
   const custoTotalFiltrado = comandasFiltradas.reduce((acc, c) => acc + c.produtos.filter(p => p.pago).reduce((sum, p) => sum + (p.custo || 0), 0), 0);
   const lucroEstimado = faturamentoTotal - custoTotalFiltrado;
@@ -402,10 +369,7 @@ export default function Home() {
   const dadosTipos = Object.keys(contagemTipos).map(k => ({ nome: k, qtd: contagemTipos[k] })).filter(d => d.qtd > 0);
   const dadosTags = Object.keys(contagemTags).map(k => ({ nome: k, qtd: contagemTags[k] })).sort((a, b) => b.qtd - a.qtd);
 
-  // 7. Retornos de Interface (Condicionais)
-  if (!sessao) {
-    return <Login getHoje={getHoje} setSessao={setSessao} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />;
-  }
+  if (!sessao) { return <Login getHoje={getHoje} setSessao={setSessao} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />; }
 
   if (isLoading && comandas.length === 0) {
     return (
@@ -417,9 +381,7 @@ export default function Home() {
           </div>
         </div>
         <div className="flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-700">
-    <p className={`font-black text-sm uppercase tracking-[0.2em] mb-3 text-center ${temaNoturno ? 'text-gray-500' : 'text-purple-400'}`}>
-      {fraseCarregamento}
-    </p>
+          <p className={`font-black text-sm uppercase tracking-[0.2em] mb-3 text-center ${temaNoturno ? 'text-gray-500' : 'text-purple-400'}`}>{fraseCarregamento}</p>
           <div className="flex gap-1.5 items-center justify-center h-4">
             <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '0ms' }}></span>
             <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '150ms' }}></span>
@@ -430,7 +392,6 @@ export default function Home() {
     );
   }
 
-  // 8. Renderização Principal da Aplicação
   return (
     <main className={`min-h-screen p-2 xl:p-6 flex flex-col transition-colors duration-500 ${temaNoturno ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
       
@@ -440,14 +401,12 @@ export default function Home() {
         logoEmpresa={logoEmpresa} setTemaNoturno={setTemaNoturno} mostrarMenuPerfil={mostrarMenuPerfil}
         setMostrarMenuPerfil={setMostrarMenuPerfil} nomeEmpresa={nomeEmpresa} sessao={sessao}
         setMostrarAdminDelivery={setMostrarAdminDelivery}
-        
         setMostrarConfigEmpresa={setMostrarConfigEmpresa} setMostrarAdminUsuarios={setMostrarAdminUsuarios}
         setMostrarAdminProdutos={setMostrarAdminProdutos} setMostrarConfigTags={setMostrarConfigTags} fazerLogout={fazerLogout}
         fetchData={fetchData}
       />
 
       <div className="max-w-7xl mx-auto w-full flex flex-col gap-3 mb-6 px-4 xl:px-0">
-        
         {avisoFechamento && !comandaAtiva && (
           <div className={`p-4 rounded-3xl flex items-center gap-4 border shadow-sm transition-colors duration-300 ${temaNoturno ? 'bg-red-900/10 border-red-800/30 text-red-400' : 'bg-red-50 border-red-100 text-red-800'}`}>
             <div className={`p-2.5 rounded-full shrink-0 ${temaNoturno ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-600'}`}>
@@ -455,9 +414,7 @@ export default function Home() {
             </div>
             <div>
               <p className="font-black text-sm uppercase tracking-widest">Lembrete de Fechamento</p>
-              <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-red-400/70' : 'text-red-700/80'}`}>
-                Já passou das 22h50. Recomendamos realizar o fechamento do caixa ao final do expediente para evitar a mistura de turnos.
-              </p>
+              <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-red-400/70' : 'text-red-700/80'}`}>Já passou das 22h50. Recomendamos realizar o fechamento do caixa ao final do expediente para evitar a mistura de turnos.</p>
             </div>
           </div>
         )}
@@ -470,14 +427,10 @@ export default function Home() {
               </div>
               <div>
                 <p className="font-black text-sm uppercase tracking-widest">Comandas Pendentes</p>
-                <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-orange-400/70' : 'text-orange-700/80'}`}>
-                  Tem <b>{comandasAntigasAbertas.length} comanda(s)</b> de turnos passados abertas. Deseja encerrá-las ou mantê-las ativas?
-                </p>
+                <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-orange-400/70' : 'text-orange-700/80'}`}>Tem <b>{comandasAntigasAbertas.length} comanda(s)</b> de turnos passados abertas. Deseja encerrá-las ou mantê-las ativas?</p>
               </div>
             </div>
-            <button onClick={() => setIgnorarAvisoAntigas(true)} className={`shrink-0 px-5 py-2.5 text-xs font-bold rounded-xl transition ${temaNoturno ? 'bg-orange-900/40 hover:bg-orange-900/60 text-orange-300' : 'bg-orange-200/50 hover:bg-orange-200 text-orange-800'}`}>
-              Manter Abertas
-            </button>
+            <button onClick={() => setIgnorarAvisoAntigas(true)} className={`shrink-0 px-5 py-2.5 text-xs font-bold rounded-xl transition ${temaNoturno ? 'bg-orange-900/40 hover:bg-orange-900/60 text-orange-300' : 'bg-orange-200/50 hover:bg-orange-200 text-orange-800'}`}>Manter Abertas</button>
           </div>
         )}
 
@@ -489,9 +442,7 @@ export default function Home() {
               </div>
               <div>
                 <p className="font-black text-sm uppercase tracking-widest">Inteligência de Negócio</p>
-                <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-yellow-500/70' : 'text-yellow-800/80'}`}>
-                  As suas últimas comandas estão sem tags. <b>Clique nas tags pré-configuradas</b> para classificar o perfil dos seus clientes.
-                </p>
+                <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-yellow-500/70' : 'text-yellow-800/80'}`}>As suas últimas comandas estão sem tags. <b>Clique nas tags pré-configuradas</b> para classificar o perfil dos seus clientes.</p>
               </div>
             </div>
           </div>
@@ -514,7 +465,6 @@ export default function Home() {
             adicionarProdutoNaComanda={adicionarProdutoNaComanda} setMostrarModalPeso={setMostrarModalPeso} 
             tagsGlobais={tagsGlobais} toggleTag={toggleTag} editarProduto={editarProduto} 
             excluirProduto={excluirProduto} setMostrarModalPagamento={setMostrarModalPagamento} encerrarMesa={encerrarMesa} 
-            alternarTipoComanda={alternarTipoComanda}
           />
         ) : abaAtiva === 'comandas' ? (
           <TabComandas 
@@ -555,21 +505,8 @@ export default function Home() {
       {mostrarAdminDelivery && sessao && <AdminDelivery empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => setMostrarAdminDelivery(false)} />}
       {mostrarModalPeso && <ModalPeso opcoesPeso={configPeso} temaNoturno={temaNoturno} onAdicionar={adicionarProdutoNaComanda} onCancelar={() => setMostrarModalPeso(false)} />}
       {mostrarModalPagamento && <ModalPagamento comanda={comandaAtiva} temaNoturno={temaNoturno} onConfirmar={processarPagamento} onCancelar={() => setMostrarModalPagamento(false)} />}
-      
-      {mostrarConfigEmpresa && (
-        <ModalConfigEmpresa
-          temaNoturno={temaNoturno} nomeEmpresaEdicao={nomeEmpresaEdicao} setNomeEmpresaEdicao={setNomeEmpresaEdicao}
-          logoEmpresaEdicao={logoEmpresaEdicao} setLogoEmpresaEdicao={setLogoEmpresaEdicao}
-          salvarConfigEmpresa={salvarConfigEmpresa} setMostrarConfigEmpresa={setMostrarConfigEmpresa}
-        />
-      )}
-
-      {mostrarConfigTags && (
-        <ModalConfigTags
-          temaNoturno={temaNoturno} tagsGlobais={tagsGlobais} setTagsGlobais={setTagsGlobais}
-          sessao={sessao} setMostrarConfigTags={setMostrarConfigTags}
-        />
-      )}
+      {mostrarConfigEmpresa && <ModalConfigEmpresa temaNoturno={temaNoturno} nomeEmpresaEdicao={nomeEmpresaEdicao} setNomeEmpresaEdicao={setNomeEmpresaEdicao} logoEmpresaEdicao={logoEmpresaEdicao} setLogoEmpresaEdicao={setLogoEmpresaEdicao} salvarConfigEmpresa={salvarConfigEmpresa} setMostrarConfigEmpresa={setMostrarConfigEmpresa} />}
+      {mostrarConfigTags && <ModalConfigTags temaNoturno={temaNoturno} tagsGlobais={tagsGlobais} setTagsGlobais={setTagsGlobais} sessao={sessao} setMostrarConfigTags={setMostrarConfigTags} />}
     </main>
   );
 }

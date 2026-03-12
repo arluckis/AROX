@@ -201,7 +201,7 @@ export default function AdminProdutos({ empresaId, onFechar, temaNoturno }) {
       <div className={`rounded-3xl p-6 w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] border ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
         
         <div className={`flex justify-between items-center mb-6 border-b pb-4 ${temaNoturno ? 'border-gray-800' : 'border-gray-100'}`}>
-          <h2 className={`text-xl md:text-2xl font-black ${temaNoturno ? 'text-white' : 'text-purple-800'}`}>📦 Gerenciar Cardápio</h2>
+          <h2 className={`text-xl md:text-2xl font-black ${temaNoturno ? 'text-white' : 'text-purple-800'}`}>Gerenciar Cardápio</h2>
           <button onClick={onFechar} className={`p-3 rounded-full font-bold transition ${temaNoturno ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-gray-100 hover:bg-gray-200'}`}>✕</button>
         </div>
 

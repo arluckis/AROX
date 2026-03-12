@@ -13,7 +13,7 @@ export default function ModalConfigEmpresa({
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[70] backdrop-blur-sm">
       <div className={`rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
         <div className={`flex justify-between items-center mb-6 border-b pb-4 ${temaNoturno ? 'border-gray-700' : 'border-gray-100'}`}>
-          <h2 className={`text-xl font-black flex items-center gap-2 ${temaNoturno ? 'text-white' : 'text-purple-900'}`}>⚙️ Configurações</h2>
+          <h2 className={`text-xl font-black flex items-center gap-2 ${temaNoturno ? 'text-white' : 'text-purple-900'}`}>Configurar Loja</h2>
           <button onClick={() => setMostrarConfigEmpresa(false)} className={`p-2 rounded-full font-bold transition ${temaNoturno ? 'bg-gray-700 text-gray-400 hover:text-white hover:bg-gray-600' : 'bg-gray-100 text-gray-400 hover:text-gray-600 hover:bg-gray-200'}`}>✕</button>
         </div>
         <div className="flex flex-col gap-4 mb-6">
