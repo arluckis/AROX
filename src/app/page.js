@@ -79,14 +79,12 @@ export default function Home() {
 
   const [filtroTempo, setFiltroTempo] = useState({ tipo: 'dia', valor: getHoje(), inicio: '', fim: '' });
 
-  // === SISTEMA DE MODAL GLOBAL (Substitui os alerts nativos) ===
   const [modalGlobal, setModalGlobal] = useState({ visivel: false, tipo: 'alerta', titulo: '', mensagem: '', valorInput: '', acaoConfirmar: null });
 
   const mostrarAlerta = (titulo, mensagem) => setModalGlobal({ visivel: true, tipo: 'alerta', titulo, mensagem, valorInput: '', acaoConfirmar: null });
   const mostrarConfirmacao = (titulo, mensagem, acaoConfirmar) => setModalGlobal({ visivel: true, tipo: 'confirmacao', titulo, mensagem, valorInput: '', acaoConfirmar });
   const mostrarPrompt = (titulo, mensagem, valorInicial, acaoConfirmar) => setModalGlobal({ visivel: true, tipo: 'prompt', titulo, mensagem, valorInput: valorInicial || '', acaoConfirmar });
   const fecharModalGlobal = () => setModalGlobal({ visivel: false, tipo: 'alerta', titulo: '', mensagem: '', valorInput: '', acaoConfirmar: null });
-  // ==============================================================
 
   useEffect(() => {
     const verificarHorario = () => {
@@ -263,26 +261,27 @@ export default function Home() {
     const payload = { comanda_id: idSelecionado, nome: produto.nome, preco: produto.preco, custo: produto.custo || 0, pago: false, observacao: '', empresa_id: sessao.empresa_id };
     const { data, error } = await supabase.from('comanda_produtos').insert([payload]).select().single();
     if (data && !error) {
-      setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: [...c.produtos, data] } : c));
+      setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: [...(c.produtos || []), data] } : c));
       setMostrarModalPeso(false); setAbaDetalheMobile('resumo');
     }
   };
 
   const toggleTag = async (tagNome) => {
-    const novasTags = comandaAtiva.tags.includes(tagNome) ? comandaAtiva.tags.filter(t => t !== tagNome) : [...comandaAtiva.tags, tagNome];
+    const tagsAtuais = comandaAtiva?.tags || [];
+    const novasTags = tagsAtuais.includes(tagNome) ? tagsAtuais.filter(t => t !== tagNome) : [...tagsAtuais, tagNome];
     await supabase.from('comandas').update({ tags: novasTags }).eq('id', idSelecionado);
     setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, tags: novasTags } : c));
   };
 
   const excluirProduto = async (idProduto) => {
     await supabase.from('comanda_produtos').delete().eq('id', idProduto);
-    setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: c.produtos.filter(p => p.id !== idProduto) } : c));
+    setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: (c.produtos || []).filter(p => p.id !== idProduto) } : c));
   };
 
   const editarProduto = async (idProduto, obsAtual) => {
     mostrarPrompt("Editar Observação", "Digite a observação para este item:", obsAtual, async (novaObs) => {
       await supabase.from('comanda_produtos').update({ observacao: novaObs }).eq('id', idProduto);
-      setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: c.produtos.map(p => p.id === idProduto ? { ...p, observacao: novaObs } : p) } : c));
+      setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: (c.produtos || []).map(p => p.id === idProduto ? { ...p, observacao: novaObs } : p) } : c));
     });
   };
 
@@ -295,11 +294,11 @@ export default function Home() {
 
   const processarPagamento = async (valorFinal, formaPagamento, itensSelecionados, modoDivisao, bairroId = null, taxaEntrega = 0) => {
     if (!sessao?.empresa_id) return;
-    let novosProdutos = [...comandaAtiva.produtos];
+    let novosProdutos = [...(comandaAtiva?.produtos || [])];
     let idsParaPagar = [];
     if (modoDivisao) { itensSelecionados.forEach(idx => { novosProdutos[idx].pago = true; idsParaPagar.push(novosProdutos[idx].id); }); } 
     else { novosProdutos = novosProdutos.map(p => ({ ...p, pago: true })); idsParaPagar = novosProdutos.map(p => p.id); }
-    const todosPagos = novosProdutos.every(p => p.pago);
+    const todosPagos = novosProdutos.length > 0 && novosProdutos.every(p => p.pago);
     const payloadPagamento = { comanda_id: idSelecionado, valor: valorFinal, forma: formaPagamento, data: getHoje(), empresa_id: sessao.empresa_id };
     
     const { data: pgData, error: errPg } = await supabase.from('pagamentos').insert([payloadPagamento]).select().single();
@@ -313,7 +312,7 @@ export default function Home() {
            return {
               ...c,
               produtos: novosProdutos,
-              pagamentos: [...c.pagamentos, pgData],
+              pagamentos: [...(c.pagamentos || []), pgData],
               status: todosPagos ? 'fechada' : 'aberta',
               hora_fechamento: todosPagos ? horaFechamento : c.hora_fechamento,
               bairro_id: bairroId || c.bairro_id,
@@ -327,7 +326,7 @@ export default function Home() {
   };
 
   const confirmarExclusaoEmMassa = async () => {
-    if (comandas.filter(c => selecionadasExclusao.includes(c.id)).some(c => c.pagamentos.length > 0)) {
+    if (comandas.filter(c => selecionadasExclusao.includes(c.id)).some(c => (c.pagamentos || []).length > 0)) {
       return mostrarAlerta("Atenção", "Desmarque as comandas que já possuem pagamentos.");
     }
     mostrarConfirmacao("Excluir Comandas", `Excluir ${selecionadasExclusao.length} comandas do banco?`, async () => {
@@ -369,31 +368,29 @@ export default function Home() {
   };
 
   const comandaAtiva = comandas.find(c => c.id === idSelecionado);
-  const alertaTags = comandas.filter(c => c.status === 'aberta').length >= 3 && comandas.filter(c => c.status === 'aberta').every(c => !c.tags || c.tags.length === 0);
+  const alertaTags = comandas.filter(c => c.status === 'aberta').length >= 3 && comandas.filter(c => c.status === 'aberta').every(c => !(c.tags || []).length);
 
   const comandasFiltradas = comandas.filter(c => isComandaInFiltro(c.data));
   const comandasAbertas = comandas.filter(c => c.status === 'aberta');
   const comandasFechadasHoje = comandas.filter(c => c.status === 'fechada' && c.data === getHoje());
   const comandasAntigasAbertas = comandas.filter(c => c.status === 'aberta' && caixaAtual?.data_abertura && c.data && c.data.substring(0,10) !== caixaAtual.data_abertura.substring(0,10));
 
-  // ATUALIZAÇÃO EM TEMPO REAL: Faturamento baseado em TUDO que foi adicionado (aberto ou fechado)
-  const faturamentoTotal = comandasFiltradas.reduce((acc, c) => acc + c.produtos.reduce((sum, p) => sum + (p.preco || 0), 0), 0);
-  const custoTotalFiltrado = comandasFiltradas.reduce((acc, c) => acc + c.produtos.reduce((sum, p) => sum + (p.custo || 0), 0), 0);
+  // Protegido com || []
+  const faturamentoTotal = comandasFiltradas.reduce((acc, c) => acc + (c.produtos || []).reduce((sum, p) => sum + (p.preco || 0), 0), 0);
+  const custoTotalFiltrado = comandasFiltradas.reduce((acc, c) => acc + (c.produtos || []).reduce((sum, p) => sum + (p.custo || 0), 0), 0);
   const lucroEstimado = faturamentoTotal - custoTotalFiltrado;
 
-  // Apenas para o gráfico de pizza (pagamentos reais)
-  const pagamentosFiltrados = comandasFiltradas.flatMap(c => c.pagamentos);
+  const pagamentosFiltrados = comandasFiltradas.flatMap(c => c.pagamentos || []);
   const pagamentosAgrupados = pagamentosFiltrados.reduce((acc, p) => { acc[p.forma] = (acc[p.forma] || 0) + p.valor; return acc; }, {});
   const dadosPizza = Object.keys(pagamentosAgrupados).map(key => ({ name: key, value: pagamentosAgrupados[key] })).filter(d => d.value > 0);
 
   const contagemProdutos = {};
   comandasFiltradas.forEach(c => {
-    // REMOVIDO o ".filter(p => p.pago)" para contar os produtos no momento do pedido
-    c.produtos.forEach(p => {
+    (c.produtos || []).forEach(p => {
       const isPeso = p.nome.toLowerCase().includes('peso') || p.nome.toLowerCase().includes('balança');
       let nomeChave = isPeso ? p.nome.replace(/\s*\(\d+(?:\.\d+)?\s*g\)/i, '').trim() : p.nome;
       if (!contagemProdutos[nomeChave]) { contagemProdutos[nomeChave] = { faturamento: 0, volume: 0, isPeso: isPeso }; }
-      contagemProdutos[nomeChave].faturamento += p.preco;
+      contagemProdutos[nomeChave].faturamento += (p.preco || 0);
       if (isPeso) {
         const matchGramas = p.nome.match(/(\d+(?:\.\d+)?)\s*g/i);
         contagemProdutos[nomeChave].volume += matchGramas ? parseFloat(matchGramas[1]) : 0;
@@ -406,8 +403,8 @@ export default function Home() {
   const contagemTags = {};
   
   comandasFiltradas.forEach(c => {
-    if (c.pagamentos.some(p => p.forma === 'iFood')) contagemTipos['iFood'] += 1; else contagemTipos[c.tipo] = (contagemTipos[c.tipo] || 0) + 1;
-    c.tags.forEach(t => { contagemTags[t] = (contagemTags[t] || 0) + 1; });
+    if ((c.pagamentos || []).some(p => p.forma === 'iFood')) contagemTipos['iFood'] += 1; else contagemTipos[c.tipo] = (contagemTipos[c.tipo] || 0) + 1;
+    (c.tags || []).forEach(t => { contagemTags[t] = (contagemTags[t] || 0) + 1; });
   });
 
   const dadosTipos = Object.keys(contagemTipos).map(k => ({ nome: k, qtd: contagemTipos[k] })).filter(d => d.qtd > 0);
@@ -553,7 +550,6 @@ export default function Home() {
       {mostrarConfigEmpresa && <ModalConfigEmpresa temaNoturno={temaNoturno} nomeEmpresaEdicao={nomeEmpresaEdicao} setNomeEmpresaEdicao={setNomeEmpresaEdicao} logoEmpresaEdicao={logoEmpresaEdicao} setLogoEmpresaEdicao={setLogoEmpresaEdicao} salvarConfigEmpresa={salvarConfigEmpresa} setMostrarConfigEmpresa={setMostrarConfigEmpresa} />}
       {mostrarConfigTags && <ModalConfigTags temaNoturno={temaNoturno} tagsGlobais={tagsGlobais} setTagsGlobais={setTagsGlobais} sessao={sessao} setMostrarConfigTags={setMostrarConfigTags} />}
 
-      {/* MODAL GLOBAL (Substitui alerts, prompts e confirms em toda a aplicação) */}
       {modalGlobal.visivel && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in">
           <div className={`rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col border text-center ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
