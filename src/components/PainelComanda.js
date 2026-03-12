@@ -15,8 +15,7 @@ export default function PainelComanda({
   editarProduto,
   excluirProduto,
   setMostrarModalPagamento,
-  encerrarMesa,
-  alternarTipoComanda // Nova função recebida
+  encerrarMesa
 }) {
   
   const renderCardapioComanda = () => {
@@ -60,16 +59,19 @@ export default function PainelComanda({
   if (!comandaAtiva) return null;
 
   return (
+    // Altura rigorosamente calculada e bloqueada para nunca rolar a página inteira
     <div className="flex flex-col w-full h-[calc(100vh-140px)] min-h-[450px] animate-in zoom-in-95 duration-300">
       
+      {/* Botões Mobile (Escondidos no Desktop) - Shrink 0 para não amassar */}
       <div className={`md:hidden flex p-1 rounded-xl mb-4 shrink-0 w-full border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-gray-200 border-gray-300'}`}>
         <button onClick={() => setAbaDetalheMobile('menu')} className={`flex-1 py-3 text-sm font-bold rounded-lg transition ${abaDetalheMobile === 'menu' ? (temaNoturno ? 'bg-gray-700 text-purple-400 shadow-sm' : 'bg-white text-purple-700 shadow-sm') : (temaNoturno ? 'text-gray-500' : 'text-gray-500')}`}>Cardápio</button>
         <button onClick={() => setAbaDetalheMobile('resumo')} className={`flex-1 py-3 text-sm font-bold rounded-lg transition flex items-center justify-center gap-2 ${abaDetalheMobile === 'resumo' ? (temaNoturno ? 'bg-purple-600 text-white shadow-sm' : 'bg-purple-600 text-white shadow-sm') : (temaNoturno ? 'text-gray-500' : 'text-gray-500')}`}>Resumo <span className="bg-white/20 text-white px-2 py-0.5 rounded-full text-[10px]">{comandaAtiva?.produtos.length || 0}</span></button>
       </div>
       
+      {/* O Grid com overflow-hidden obriga as colunas a respeitarem a altura máxima */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 flex-1 min-h-0 overflow-hidden">
         
-        {/* COLUNA 1: CARDÁPIO */}
+        {/* COLUNA 1: CARDÁPIO (Rola apenas internamente) */}
         <div className={`p-4 md:p-5 rounded-3xl shadow-sm border flex flex-col h-full min-h-0 ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'} ${abaDetalheMobile === 'menu' ? 'flex' : 'hidden md:flex'}`}>
           
           <div className="flex overflow-x-auto gap-2 mb-4 pb-2 shrink-0 scrollbar-hide">
@@ -91,42 +93,20 @@ export default function PainelComanda({
           </div>
         </div>
         
-        {/* COLUNA 2: RESUMO DA COMANDA */}
+        {/* COLUNA 2: RESUMO DA COMANDA E BOTÃO COBRAR */}
         <div className={`p-4 md:p-5 rounded-3xl shadow-2xl flex flex-col h-full min-h-0 border relative overflow-hidden ${temaNoturno ? 'bg-gray-900 border-gray-700' : 'bg-white border-purple-100'} ${abaDetalheMobile === 'resumo' ? 'flex' : 'hidden md:flex'}`}>
           <div className={`absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl pointer-events-none opacity-20 ${temaNoturno ? 'bg-purple-900/50' : 'bg-purple-200'}`}></div>
           
+          {/* Área de itens (Rola se houver muitos) */}
           <div className="flex-1 overflow-y-auto min-h-0 pr-2 pb-4 relative z-10 scrollbar-hide">
-            
-            {/* NOVO: BLOCO SUPERIOR (TIPO DE PEDIDO + TAGS) */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6 shrink-0">
-              
-              {/* Toggle de Tipo de Comanda */}
-              <div>
-                <p className={`text-[10px] uppercase tracking-widest font-bold mb-2 ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Tipo de Pedido:</p>
-                <button 
-                  onClick={() => alternarTipoComanda(comandaAtiva.id, comandaAtiva.tipo)}
-                  title="Clique para alternar entre Balcão e Delivery"
-                  className={`flex items-center justify-between gap-3 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition border active:scale-95 ${
-                    comandaAtiva?.tipo === 'Delivery' 
-                      ? (temaNoturno ? 'bg-orange-900/20 text-orange-400 border-orange-800/50 hover:bg-orange-900/40' : 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100')
-                      : (temaNoturno ? 'bg-purple-900/20 text-purple-400 border-purple-800/50 hover:bg-purple-900/40' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100')
-                  }`}
-                >
-                  <span>{comandaAtiva?.tipo === 'Delivery' ? '🛵 DELIVERY' : '🍽️ BALCÃO'}</span>
-                  <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
-                </button>
-              </div>
-
-              {/* Tags */}
-              <div className="flex-1">
-                <p className={`text-[10px] uppercase tracking-widest font-bold mb-2 ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Classificação do Cliente:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {tagsGlobais.map(tagObj => (
-                    <button key={tagObj.id} onClick={() => toggleTag(tagObj.nome)} className={`px-2 py-1.5 rounded-md text-[10px] font-bold transition border ${comandaAtiva?.tags.includes(tagObj.nome) ? (temaNoturno ? 'bg-purple-900/50 text-purple-300 border-purple-700' : 'bg-purple-600 text-white border-purple-700') : (temaNoturno ? 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100')}`}>
-                      {tagObj.nome}
-                    </button>
-                  ))}
-                </div>
+            <div className="mb-4 shrink-0">
+              <p className={`text-[10px] uppercase tracking-widest font-bold mb-2 ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Classificação do Cliente:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {tagsGlobais.map(tagObj => (
+                  <button key={tagObj.id} onClick={() => toggleTag(tagObj.nome)} className={`px-2 py-1 rounded-md text-[10px] font-bold transition border ${comandaAtiva?.tags.includes(tagObj.nome) ? (temaNoturno ? 'bg-purple-900/50 text-purple-300 border-purple-700' : 'bg-purple-600 text-white border-purple-700') : (temaNoturno ? 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100')}`}>
+                    {tagObj.nome}
+                  </button>
+                ))}
               </div>
             </div>
             
@@ -134,6 +114,7 @@ export default function PainelComanda({
               <span className={`text-xs font-bold ${temaNoturno ? 'text-gray-300' : 'text-purple-900'}`}>ITENS LANÇADOS</span>
             </div>
             
+            {/* Lista dos produtos da comanda em Maiúsculas */}
             {comandaAtiva?.produtos.map((p) => (
               <div key={p.id} className={`flex justify-between items-center border-b py-3 text-sm transition ${p.pago ? 'opacity-40 line-through' : 'opacity-100'} ${temaNoturno ? 'border-gray-800' : 'border-purple-800/40'}`}>
                 <div className="flex flex-col">
@@ -156,6 +137,7 @@ export default function PainelComanda({
             ))}
           </div>
           
+          {/* Rodapé fixo com o Botão Cobrar - Shrink 0 mantém ele no fundo */}
           <div className={`shrink-0 pt-4 border-t relative z-10 ${temaNoturno ? 'border-gray-800 bg-gray-900' : 'border-purple-100 bg-white'}`}>
             <div className="flex justify-between items-end mb-4 px-2">
               <span className={`text-xs font-bold uppercase ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>Restante a Pagar</span>

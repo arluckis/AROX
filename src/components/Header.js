@@ -27,6 +27,14 @@ export default function Header({
     setEditandoNome(false);
   };
 
+  // Nova função para alternar o tipo da comanda
+  const alternarTipoComanda = async () => {
+    if (!comandaAtiva) return;
+    const novoTipo = comandaAtiva.tipo === 'Balcão' ? 'Delivery' : 'Balcão';
+    const { error } = await supabase.from('comandas').update({ tipo: novoTipo }).eq('id', comandaAtiva.id);
+    if (!error && fetchData) await fetchData();
+  };
+
   return (
     <header className={`flex items-center justify-between p-3 xl:p-4 rounded-3xl shadow-sm border mb-6 sticky top-0 z-40 transition-colors duration-500 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
       
@@ -68,7 +76,6 @@ export default function Header({
                 </button>
               )}
 
-              {/* BOTÃO DO CAIXA CORRIGIDO AQUI */}
               <button onClick={() => setAbaAtiva('caixa')} className={`px-4 py-2 rounded-lg font-bold transition whitespace-nowrap flex items-center gap-2 ${abaAtiva === 'caixa' ? (temaNoturno ? 'bg-gray-700 text-white shadow-sm' : 'bg-white text-purple-800 shadow-sm') : (temaNoturno ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-purple-600')}`}>
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
@@ -88,21 +95,44 @@ export default function Header({
             </div>
           </>
         ) : (
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center gap-3">
             {editandoNome ? (
               <input 
                 autoFocus
-                className={`text-center font-black text-lg p-1 rounded-lg border-2 border-purple-500 outline-none w-full max-w-[200px] ${temaNoturno ? 'bg-gray-900 text-white' : 'bg-white text-purple-900'}`}
+                className={`text-center font-black text-lg p-1 rounded-lg border-2 border-purple-500 outline-none w-full max-w-[200px] uppercase ${temaNoturno ? 'bg-gray-900 text-white' : 'bg-white text-purple-900'}`}
                 value={tempNome}
                 onChange={e => setTempNome(e.target.value)}
                 onBlur={salvarNome}
                 onKeyDown={e => e.key === 'Enter' && salvarNome()}
               />
             ) : (
-              <h2 onClick={() => { setTempNome(comandaAtiva.nome); setEditandoNome(true); }} className={`text-lg font-black truncate text-center cursor-pointer hover:opacity-70 transition ${temaNoturno ? 'text-purple-300' : 'text-purple-900'}`}>
+              <h2 onClick={() => { setTempNome(comandaAtiva.nome); setEditandoNome(true); }} className={`text-lg font-black truncate text-center cursor-pointer hover:opacity-70 transition uppercase ${temaNoturno ? 'text-purple-300' : 'text-purple-900'}`}>
                 {comandaAtiva?.nome} ✏️
               </h2>
             )}
+
+            {/* BOTÃO DE ALTERNAR TIPO */}
+            <button 
+              onClick={alternarTipoComanda}
+              title={`Mudar para ${comandaAtiva.tipo === 'Balcão' ? 'Delivery' : 'Balcão'}`}
+              className={`flex items-center gap-1.5 px-2 py-1 xl:px-3 xl:py-1.5 rounded-lg text-xs font-bold transition border active:scale-95 ${
+                comandaAtiva.tipo === 'Delivery' 
+                  ? (temaNoturno ? 'bg-orange-900/30 text-orange-400 border-orange-800/50 hover:bg-orange-900/50' : 'bg-orange-50 text-orange-700 border-orange-100 hover:bg-orange-100') 
+                  : (temaNoturno ? 'bg-purple-900/30 text-purple-300 border-purple-800/50 hover:bg-purple-900/50' : 'bg-purple-50 text-purple-700 border-purple-100 hover:bg-purple-100')
+              }`}
+            >
+              {comandaAtiva.tipo === 'Delivery' ? (
+                <>
+                  <svg className="w-5 h-5 xl:w-4 xl:h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l3 5v6H8m12-11v11M8 7V5a2 2 0 00-2-2H3v14h1m4-12v12m0 0a2 2 0 11-4 0m4 0a2 2 0 10-4 0m16 0a2 2 0 11-4 0m4 0a2 2 0 10-4 0m-8-2h4"></path></svg>
+                  <span className="hidden xl:inline">Delivery</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 xl:w-4 xl:h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+                  <span className="hidden xl:inline">Balcão</span>
+                </>
+              )}
+            </button>
           </div>
         )}
       </div>
