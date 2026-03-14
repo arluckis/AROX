@@ -198,8 +198,18 @@ export default function Home() {
         setCaixaAtual({ status: 'fechado' });
       }
       
-      const { data: comData } = await supabase.from('comandas').select('*, produtos:comanda_produtos(*), pagamentos(*)').eq('empresa_id', sessao.empresa_id).order('id', { ascending: true });
-      if (comData) setComandas(comData);
+      // Busca as comandas mais recentes primeiro para não ser cortado pelo limite de 1000 do Supabase
+const { data: comData } = await supabase
+  .from('comandas')
+  .select('*, produtos:comanda_produtos(*), pagamentos(*)')
+  .eq('empresa_id', sessao.empresa_id)
+  .order('id', { ascending: false }) // Traz as mais novas primeiro
+  .limit(3000); // Aumenta o limite para não afetar os gráficos de faturamento do mês
+
+if (comData) {
+  // Reverte o array para manter a ordem cronológica que o restante do sistema espera
+  setComandas(comData.reverse());
+}
 
       const { data: pesoData } = await supabase.from('config_peso').select('*').eq('empresa_id', sessao.empresa_id);
       if (pesoData) setConfigPeso(pesoData.map(p => ({ id: p.id, nome: p.nome, preco: parseFloat(p.preco_kg), custo: parseFloat(p.custo_kg || 0) })));
