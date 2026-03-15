@@ -42,8 +42,17 @@ export default function TabFaturamento({
   // --- TRAVA DE 7 DIAS BASEADA NO CALENDÁRIO ---
   const faltamDiasParaAnalise = useMemo(() => {
     if (!comandas || comandas.length === 0) return 7;
-    const dataPrimeira = new Date(comandas[0].data + 'T12:00:00'); // Assume a primeira comanda como data 0
+    
+    // Mapeia as datas de todas as comandas e encontra a menor (mais antiga)
+    const datasEmMilissegundos = comandas
+      .map(c => new Date(c.data + 'T12:00:00').getTime())
+      .filter(t => !isNaN(t));
+
+    if (datasEmMilissegundos.length === 0) return 7;
+
+    const dataPrimeira = new Date(Math.min(...datasEmMilissegundos)); 
     const dataHoje = new Date(getHoje() + 'T12:00:00');
+    
     const diffDays = Math.floor((dataHoje - dataPrimeira) / (1000 * 60 * 60 * 24));
     return Math.max(0, 7 - diffDays);
   }, [comandas, getHoje]);
