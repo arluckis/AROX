@@ -40,7 +40,6 @@ export default function Header({
   };
 
   const isCaixaAberto = caixaAtual?.status === 'aberto';
-
   let statusCaixa = isCaixaAberto ? 'aberto' : 'fechado';
   if (isCaixaAberto && caixaAtual?.data_abertura) {
     const dataAberturaDB = caixaAtual.data_abertura.substring(0, 10);
@@ -48,8 +47,7 @@ export default function Header({
     const ano = agora.getFullYear();
     const mes = String(agora.getMonth() + 1).padStart(2, '0');
     const dia = String(agora.getDate()).padStart(2, '0');
-    const dataHojeStr = `${ano}-${mes}-${dia}`;
-    if (dataAberturaDB < dataHojeStr && agora.getHours() >= 5) {
+    if (dataAberturaDB < `${ano}-${mes}-${dia}` && agora.getHours() >= 5) {
       statusCaixa = 'esquecido';
     }
   }
@@ -78,18 +76,9 @@ export default function Header({
               statusCaixa === 'esquecido' ? (temaNoturno ? 'bg-orange-900/20 border-orange-800/50' : 'bg-orange-50 border-orange-100') : 
               (temaNoturno ? 'bg-red-900/20 border-red-800/50' : 'bg-red-50 border-red-100')
             }`}>
-              <span className={`w-2 h-2 rounded-full ${
-                statusCaixa === 'aberto' ? 'bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]' : 
-                statusCaixa === 'esquecido' ? 'bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.8)]' : 
-                'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]'
-              }`}></span>
-              <span className={`text-[10px] font-black uppercase tracking-widest whitespace-nowrap ${
-                statusCaixa === 'aberto' ? (temaNoturno ? 'text-green-400' : 'text-green-700') : 
-                statusCaixa === 'esquecido' ? (temaNoturno ? 'text-orange-400' : 'text-orange-700') : 
-                (temaNoturno ? 'text-red-400' : 'text-red-700')
-              }`}>
-                {statusCaixa === 'aberto' ? `Caixa Aberto: ${formatarDataCaixa(caixaAtual?.data_abertura)}` : 
-                 statusCaixa === 'esquecido' ? '⚠️ CAIXA DE ONTEM ABERTO!' : 'CAIXA FECHADO'}
+              <span className={`w-2 h-2 rounded-full ${statusCaixa === 'aberto' ? 'bg-green-500 animate-pulse' : statusCaixa === 'esquecido' ? 'bg-orange-500 animate-pulse' : 'bg-red-500'}`}></span>
+              <span className={`text-[10px] font-black uppercase tracking-widest whitespace-nowrap ${statusCaixa === 'aberto' ? (temaNoturno ? 'text-green-400' : 'text-green-700') : statusCaixa === 'esquecido' ? (temaNoturno ? 'text-orange-400' : 'text-orange-700') : (temaNoturno ? 'text-red-400' : 'text-red-700')}`}>
+                {statusCaixa === 'aberto' ? `Caixa Aberto: ${formatarDataCaixa(caixaAtual?.data_abertura)}` : statusCaixa === 'esquecido' ? 'CAIXA PENDENTE (TURNO ANTERIOR)' : 'CAIXA FECHADO'}
               </span>
             </div>
           </>
@@ -132,7 +121,7 @@ export default function Header({
             }`}>
               <span className={`w-2 h-2 rounded-full ${statusCaixa === 'aberto' ? 'bg-green-500 animate-pulse' : statusCaixa === 'esquecido' ? 'bg-orange-500 animate-pulse' : 'bg-red-500'}`}></span>
               <span className={`text-[10px] font-black uppercase tracking-widest ${statusCaixa === 'aberto' ? (temaNoturno ? 'text-green-400' : 'text-green-700') : statusCaixa === 'esquecido' ? (temaNoturno ? 'text-orange-400' : 'text-orange-700') : (temaNoturno ? 'text-red-400' : 'text-red-700')}`}>
-                {statusCaixa === 'aberto' ? formatarDataCaixa(caixaAtual?.data_abertura) : statusCaixa === 'esquecido' ? '⚠️ CAIXA ESQUECIDO!' : 'FECHADO'}
+                {statusCaixa === 'aberto' ? formatarDataCaixa(caixaAtual?.data_abertura) : statusCaixa === 'esquecido' ? 'TURNO PENDENTE' : 'FECHADO'}
               </span>
             </div>
           </>
@@ -225,7 +214,7 @@ export default function Header({
               <span className={`font-black text-sm leading-none ${temaNoturno ? 'text-purple-300' : 'text-purple-900'}`}>{sessao?.nome_usuario || 'Usuário'}</span>
             </div>
             <div className={`w-10 h-10 rounded-full border-2 overflow-hidden shrink-0 flex items-center justify-center ${temaNoturno ? 'border-gray-600 bg-gray-700' : 'border-purple-200 bg-purple-50'}`}>
-               <img src={logoEmpresa} alt="Logo" className="w-full h-full object-cover" onError={(e) => e.target.src='https://cdn-icons-png.flaticon.com/512/3135/3135715.png'} />
+               <img src={logoEmpresa} alt="Logo" className="w-full h-full object-cover" />
             </div>
             <span className={`text-xs ml-1 ${temaNoturno ? 'text-gray-500' : 'text-gray-300'}`}>▼</span>
           </div>

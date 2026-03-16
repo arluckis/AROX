@@ -25,26 +25,17 @@ import AdminDelivery from '@/components/AdminDelivery';
 
 export default function Home() {
 
-  // --- SISTEMA DE FORÇAR LIMPEZA DE CACHE ---
   useEffect(() => {
-    // TODA VEZ QUE VOCÊ SUBIR UMA ATUALIZAÇÃO PARA O CLIENTE, MUDE ESTE NÚMERO
-    // Ex: mude para '1.0.2', depois '1.0.3', etc.
-    const VERSAO_ATUAL = '1.0.8'; 
+    const VERSAO_ATUAL = '1.1.3'; 
     const versaoNoNavegador = localStorage.getItem('bessa_versao_sistema');
 
     if (versaoNoNavegador !== VERSAO_ATUAL) {
-      console.log("Versão antiga detectada. Forçando atualização...");
-      
-      // Atualiza a versão no navegador do cliente
       localStorage.setItem('bessa_versao_sistema', VERSAO_ATUAL);
-      
-      // Um truque para forçar o navegador a recarregar ignorando o cache
       if (typeof window !== 'undefined') {
         window.location.href = window.location.pathname + '?v=' + new Date().getTime();
       }
     }
   }, []);
-  // ------------------------------------------
   
   const getHoje = () => {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
@@ -54,13 +45,7 @@ export default function Home() {
   const getAnoAtual = () => getHoje().substring(0, 4);
 
   const fraseCarregamento = useMemo(() => {
-    const frases = [
-      "Carregando",
-      "Organizando as comandas",
-      "Quase tudo pronto",
-      "Adicionando feitiço para trazer clientes",
-      "Falta só mais isso aqui"
-    ];
+    const frases = ["Carregando", "Organizando as comandas", "Sincronizando banco de dados", "Calculando faturamento", "Falta só mais isso aqui"];
     return frases[Math.floor(Math.random() * frases.length)];
   }, []);
 
@@ -101,7 +86,9 @@ export default function Home() {
   const [selecionadasExclusao, setSelecionadasExclusao] = useState([]);
 
   const [filtroTempo, setFiltroTempo] = useState({ tipo: 'dia', valor: getHoje(), inicio: '', fim: '' });
-  const [clientesFidelidade, setClientesFidelidade] = useState([]); // Novo estado para fidelidade
+  
+  const [clientesFidelidade, setClientesFidelidade] = useState([]);
+  const [metaFidelidade, setMetaFidelidade] = useState({ pontos_necessarios: 10, premio: '1 Açaí', valor_minimo: 0 });
 
   const [modalGlobal, setModalGlobal] = useState({ visivel: false, tipo: 'alerta', titulo: '', mensagem: '', valorInput: '', acaoConfirmar: null });
 
@@ -121,7 +108,6 @@ export default function Home() {
           setAvisoFechamento(false);
        }
     };
-    
     verificarHorario();
     const intervalo = setInterval(verificarHorario, 60000); 
     return () => clearInterval(intervalo);
@@ -130,10 +116,8 @@ export default function Home() {
   useEffect(() => {
     const temaSalvo = localStorage.getItem('bessa_tema_noturno');
     if (temaSalvo !== null) { setTemaNoturno(JSON.parse(temaSalvo)); }
-
     const logoSalva = localStorage.getItem('bessa_logo_empresa');
     if (logoSalva) setLogoEmpresa(logoSalva);
-    
     const sessionData = localStorage.getItem('bessa_session');
     if (sessionData) {
       try {
@@ -159,15 +143,9 @@ export default function Home() {
   const fazerLogout = () => {
     localStorage.removeItem('bessa_session');
     localStorage.removeItem('bessa_logo_empresa');
-    setSessao(null); 
-    setCredenciais({ email: '', senha: '' }); 
-    setMostrarMenuPerfil(false); 
-    setMenuMobileAberto(false); 
-    setAbaAtiva('comandas');
-    setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
+    setSessao(null); setCredenciais({ email: '', senha: '' }); setMostrarMenuPerfil(false); setMenuMobileAberto(false); setAbaAtiva('comandas'); setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
   };
 
-  // Modificado para aceitar isBackground e não piscar a tela
   const fetchData = async (isBackground = false) => {
     if (!sessao?.empresa_id) return;
     if (!isBackground) setIsLoading(true);
@@ -175,7 +153,6 @@ export default function Home() {
     try {
       const { data: empData, error: empError } = await supabase.from('empresas').select('*').eq('id', sessao.empresa_id).single();
       if (empError) {
-        console.warn("Aviso ao buscar empresa:", empError.message);
         if(!isBackground) setNomeEmpresa("A Minha Loja"); 
       } else if (empData) {
         if(!isBackground) setNomeEmpresa(empData.nome || "A Minha Loja");
@@ -193,25 +170,10 @@ export default function Home() {
 
       const { data: caixasAbertos } = await supabase.from('caixas').select('*').eq('empresa_id', sessao.empresa_id).eq('status', 'aberto').order('id', { ascending: false }).limit(1); 
       let caixaData = caixasAbertos && caixasAbertos.length > 0 ? caixasAbertos[0] : null;
+      if (caixaData) setCaixaAtual(caixaData); else setCaixaAtual({ status: 'fechado' });
       
-      if (caixaData) {
-        setCaixaAtual(caixaData);
-      } else {
-        setCaixaAtual({ status: 'fechado' });
-      }
-      
-      // Busca as comandas mais recentes primeiro para não ser cortado pelo limite de 1000 do Supabase
-      const { data: comData } = await supabase
-        .from('comandas')
-        .select('*, produtos:comanda_produtos(*), pagamentos(*)')
-        .eq('empresa_id', sessao.empresa_id)
-        .order('id', { ascending: false }) // Traz as mais novas primeiro
-        .limit(3000); // Aumenta o limite para não afetar os gráficos de faturamento do mês
-
-      if (comData) {
-        // Reverte o array para manter a ordem cronológica que o restante do sistema espera
-        setComandas(comData.reverse());
-      }
+      const { data: comData } = await supabase.from('comandas').select('*, produtos:comanda_produtos(*), pagamentos(*)').eq('empresa_id', sessao.empresa_id).order('id', { ascending: false }).limit(3000);
+      if (comData) setComandas(comData.reverse());
 
       const { data: pesoData } = await supabase.from('config_peso').select('*').eq('empresa_id', sessao.empresa_id);
       if (pesoData) setConfigPeso(pesoData.map(p => ({ id: p.id, nome: p.nome, preco: parseFloat(p.preco_kg), custo: parseFloat(p.custo_kg || 0) })));
@@ -219,60 +181,35 @@ export default function Home() {
       const { data: tagsData } = await supabase.from('tags').select('*').eq('empresa_id', sessao.empresa_id);
       if (tagsData && tagsData.length > 0) {
         setTagsGlobais(tagsData); 
-      } else {
-        if (!isBackground) {
-           const TAGS_INICIAIS = ['Individual', 'Casal', 'Família', 'Estudantes', 'Academia', 'Com Crianças', 'Consumo Local', 'Para Viagem', 'Fidelidade'];
-           const tagsSemente = TAGS_INICIAIS.map(t => ({ nome: t, empresa_id: sessao.empresa_id }));
-           const { data: tagsInseridas } = await supabase.from('tags').insert(tagsSemente).select();
-           if (tagsInseridas) setTagsGlobais(tagsInseridas);
-        }
       }
-    } catch (err) {
-      console.error("Erro inesperado no fetch:", err);
-    } finally {
-      if (!isBackground) setIsLoading(false);
-    }
+
+      const { data: fidelidadeData } = await supabase.from('clientes_fidelidade').select('*').eq('empresa_id', sessao.empresa_id);
+      if (fidelidadeData) setClientesFidelidade(fidelidadeData);
+
+      const { data: configFid } = await supabase.from('config_fidelidade').select('*').eq('empresa_id', sessao.empresa_id).single();
+      if (configFid) setMetaFidelidade(configFid);
+
+    } catch (err) { console.error("Erro inesperado no fetch:", err); } finally { if (!isBackground) setIsLoading(false); }
   };
 
-  // --- O "FALSO REALTIME" (Polling sem Supabase Realtime) ---
   useEffect(() => {
     if (!sessao?.empresa_id) return;
-    
-    fetchData(); // Carregamento inicial
-
-    // Busca atualizações no banco a cada 10 segundos invisivelmente
-    const intervaloPolling = setInterval(() => {
-       fetchData(true); 
-    }, 10000); 
-
+    fetchData(); 
+    const intervaloPolling = setInterval(() => { fetchData(true); }, 10000); 
     return () => clearInterval(intervaloPolling);
   }, [sessao]);
-  // ------------------------------------
 
   const abrirCaixaManual = async (dadosCaixa) => {
     if (!sessao?.empresa_id) return;
     setIsLoading(true);
     try {
-      const payload = {
-        empresa_id: sessao.empresa_id,
-        data_abertura: dadosCaixa.data_abertura,
-        saldo_inicial: dadosCaixa.saldo_inicial || 0,
-        status: 'aberto'
-      };
-      
+      const payload = { empresa_id: sessao.empresa_id, data_abertura: dadosCaixa.data_abertura, saldo_inicial: dadosCaixa.saldo_inicial || 0, status: 'aberto' };
       const { data, error } = await supabase.from('caixas').insert([payload]).select().single();
       if (error) throw error;
-      
       if (data) {
-        setCaixaAtual(data);
-        mostrarAlerta("Sucesso", "Caixa aberto com sucesso!");
-        fetchData();
+        setCaixaAtual(data); mostrarAlerta("Sucesso", "Caixa aberto com sucesso!"); fetchData();
       }
-    } catch (err) {
-      mostrarAlerta("Erro", "Erro ao abrir caixa: " + err.message);
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (err) { mostrarAlerta("Erro", "Erro ao abrir caixa: " + err.message); } finally { setIsLoading(false); }
   };
 
   const salvarConfigEmpresa = async () => {
@@ -285,15 +222,7 @@ export default function Home() {
   const adicionarComanda = async (tipo) => {
     if (modoExclusao || !sessao?.empresa_id) return;
     const qtdHoje = comandas.filter(c => c.data === getHoje()).length;
-    const novaComanda = { 
-      nome: `Comanda ${qtdHoje + 1}`, 
-      tipo, 
-      data: getHoje(), 
-      hora_abertura: new Date().toISOString(), 
-      status: 'aberta', 
-      tags: [], 
-      empresa_id: sessao.empresa_id 
-    };
+    const novaComanda = { nome: `Comanda ${qtdHoje + 1}`, tipo, data: getHoje(), hora_abertura: new Date().toISOString(), status: 'aberta', tags: [], empresa_id: sessao.empresa_id };
     const { data, error } = await supabase.from('comandas').insert([novaComanda]).select().single();
     if (data && !error) setComandas([...comandas, { ...data, produtos: [], pagamentos: [] }]);
   };
@@ -346,32 +275,62 @@ export default function Home() {
     setIdSelecionado(null); 
   };
 
-  const processarPagamento = async (valorFinal, formaPagamento, itensSelecionados, modoDivisao, bairroId = null, taxaEntrega = 0) => {
+  // FUNÇÃO ATUALIZADA - LÊ OS IDs DA MODAL AO INVÉS DO INDEX (RESOLVE O BUG)
+  const processarPagamento = async (valorFinal, formaPagamento, itensSelecionados, modoDivisao, bairroId = null, taxaEntrega = 0, isFidelidade = false) => {
     if (!sessao?.empresa_id) return;
     let novosProdutos = [...(comandaAtiva?.produtos || [])];
     let idsParaPagar = [];
-    if (modoDivisao) { itensSelecionados.forEach(idx => { novosProdutos[idx].pago = true; idsParaPagar.push(novosProdutos[idx].id); }); } 
-    else { novosProdutos = novosProdutos.map(p => ({ ...p, pago: true })); idsParaPagar = novosProdutos.map(p => p.id); }
+    
+    if (modoDivisao) { 
+      novosProdutos = novosProdutos.map(p => {
+         if (itensSelecionados.includes(p.id)) {
+            idsParaPagar.push(p.id);
+            return { ...p, pago: true };
+         }
+         return p;
+      });
+    } else { 
+      novosProdutos = novosProdutos.map(p => ({ ...p, pago: true })); 
+      idsParaPagar = novosProdutos.map(p => p.id); 
+    }
+    
     const todosPagos = novosProdutos.length > 0 && novosProdutos.every(p => p.pago);
-    const payloadPagamento = { comanda_id: idSelecionado, valor: valorFinal, forma: formaPagamento, data: getHoje(), empresa_id: sessao.empresa_id };
+    
+    const valorRegistrado = isFidelidade ? 0 : valorFinal;
+    const payloadPagamento = { comanda_id: idSelecionado, valor: valorRegistrado, forma: formaPagamento, data: getHoje(), empresa_id: sessao.empresa_id };
     
     const { data: pgData, error: errPg } = await supabase.from('pagamentos').insert([payloadPagamento]).select().single();
+    
     if (!errPg) {
       if (idsParaPagar.length > 0) await supabase.from('comanda_produtos').update({ pago: true }).in('id', idsParaPagar);
       const horaFechamento = new Date().toISOString();
-      if (todosPagos) await supabase.from('comandas').update({ status: 'fechada', hora_fechamento: horaFechamento }).eq('id', idSelecionado);
+      
+      const clienteFidelizado = clientesFidelidade.find(c => c.nome.toLowerCase() === comandaAtiva.nome.toLowerCase());
+
+      if (todosPagos) {
+        await supabase.from('comandas').update({ status: 'fechada', hora_fechamento: horaFechamento }).eq('id', idSelecionado);
+        
+        if (clienteFidelizado) {
+          if (isFidelidade) {
+            const novosPts = clienteFidelizado.pontos - metaFidelidade.pontos_necessarios;
+            await supabase.from('clientes_fidelidade').update({ pontos: novosPts }).eq('id', clienteFidelizado.id);
+            setClientesFidelidade(prev => prev.map(c => c.id === clienteFidelizado.id ? { ...c, pontos: novosPts } : c));
+            mostrarAlerta("Prêmio Resgatado", `O prêmio foi resgatado com sucesso e os pontos foram debitados do saldo de ${clienteFidelizado.nome}.`);
+          } else {
+            const totalComanda = novosProdutos.reduce((acc, p) => acc + p.preco, 0) + taxaEntrega;
+            if (totalComanda >= metaFidelidade.valor_minimo) {
+              const novosPts = clienteFidelizado.pontos + 1;
+              const novosTotais = (clienteFidelizado.pontos_totais || clienteFidelizado.pontos) + 1;
+              await supabase.from('clientes_fidelidade').update({ pontos: novosPts, pontos_totais: novosTotais }).eq('id', clienteFidelizado.id);
+              setClientesFidelidade(prev => prev.map(c => c.id === clienteFidelizado.id ? { ...c, pontos: novosPts, pontos_totais: novosTotais } : c));
+            }
+          }
+        }
+      }
       
       setComandas(comandas.map(c => {
         if (c.id === idSelecionado) {
-           return {
-              ...c,
-              produtos: novosProdutos,
-              pagamentos: [...(c.pagamentos || []), pgData],
-              status: todosPagos ? 'fechada' : 'aberta',
-              hora_fechamento: todosPagos ? horaFechamento : c.hora_fechamento,
-              bairro_id: bairroId || c.bairro_id,
-              taxa_entrega: taxaEntrega > 0 ? taxaEntrega : c.taxa_entrega
-           };
+           return { ...c, produtos: novosProdutos, pagamentos: [...(c.pagamentos || []), pgData], status: todosPagos ? 'fechada' : 'aberta', hora_fechamento: todosPagos ? horaFechamento : c.hora_fechamento, bairro_id: bairroId || c.bairro_id, taxa_entrega: taxaEntrega > 0 ? taxaEntrega : c.taxa_entrega };
         }
         return c;
       }));
@@ -412,8 +371,7 @@ export default function Home() {
       const dataFim = getHoje();
       const dtIn = new Date(dataFim + 'T12:00:00');
       dtIn.setDate(dtIn.getDate() - 6);
-      const dataInicio = dtIn.toISOString().split('T')[0];
-      return dataComanda >= dataInicio && dataComanda <= dataFim;
+      return dataComanda >= dtIn.toISOString().split('T')[0] && dataComanda <= dataFim;
     }
     if (filtroTempo.tipo === 'mes') return dataComanda.startsWith(filtroTempo.valor);
     if (filtroTempo.tipo === 'ano') return dataComanda.startsWith(filtroTempo.valor);
@@ -451,18 +409,8 @@ export default function Home() {
     });
   });
   
-  const rankingProdutos = Object.keys(contagemProdutos).map(nome => ({ nome, valor: contagemProdutos[nome].faturamento, volume: contagemProdutos[nome].volume, isPeso: contagemProdutos[nome].isPeso })).sort((a, b) => b.valor - a.valor).slice(0, 7);
+  const rankingProdutos = Object.keys(contagemProdutos).map(nome => ({ nome, valor: contagemProdutos[nome].faturamento, volume: contagemProdutos[nome].volume, isPeso: contagemProdutos[nome].isPeso })).sort((a, b) => b.valor - a.valor);
   
-  // DADOS PÚBLICO ALVO
-  const contagemTipos = { Balcão: 0, Delivery: 0, iFood: 0 };
-  const contagemTags = {};
-  comandasFiltradas.forEach(c => {
-    if ((c.pagamentos || []).some(p => p.forma === 'iFood')) contagemTipos['iFood'] += 1; else contagemTipos[c.tipo] = (contagemTipos[c.tipo] || 0) + 1;
-    (c.tags || []).forEach(t => { contagemTags[t] = (contagemTags[t] || 0) + 1; });
-  });
-  const dadosTipos = Object.keys(contagemTipos).map(k => ({ nome: k, qtd: contagemTipos[k] })).filter(d => d.qtd > 0);
-  const dadosTags = Object.keys(contagemTags).map(k => ({ nome: k, qtd: contagemTags[k] })).sort((a, b) => b.qtd - a.qtd);
-
   if (!sessao) { return <Login getHoje={getHoje} setSessao={setSessao} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />; }
 
   if (isLoading && comandas.length === 0) {
@@ -520,7 +468,7 @@ export default function Home() {
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
               </div>
               <div>
-                <p className="font-black text-sm uppercase tracking-widest">Comandas Pendentes</p>
+                <p className="font-black text-sm uppercase tracking-widest">Turno Anterior Pendente</p>
                 <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-orange-400/70' : 'text-orange-700/80'}`}>Tem <b>{comandasAntigasAbertas.length} comanda(s)</b> de turnos passados abertas. Deseja encerrá-las ou mantê-las ativas?</p>
               </div>
             </div>
@@ -556,7 +504,8 @@ export default function Home() {
         ) : abaAtiva === 'fidelidade' ? (
           <TabFidelidade 
             temaNoturno={temaNoturno} sessao={sessao} mostrarAlerta={mostrarAlerta} mostrarConfirmacao={mostrarConfirmacao}
-            dadosTipos={dadosTipos} dadosTags={dadosTags} clientesFidelidade={clientesFidelidade} setClientesFidelidade={setClientesFidelidade}
+            metaFidelidade={metaFidelidade} setMetaFidelidade={setMetaFidelidade}
+            clientesFidelidade={clientesFidelidade} setClientesFidelidade={setClientesFidelidade} comandas={comandas}
           />
         ) : null}
       </div>
@@ -565,7 +514,15 @@ export default function Home() {
       {mostrarAdminProdutos && sessao && <AdminProdutos empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => { setMostrarAdminProdutos(false); fetchData(); }} />}
       {mostrarAdminDelivery && sessao && <AdminDelivery empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => setMostrarAdminDelivery(false)} />}
       {mostrarModalPeso && <ModalPeso opcoesPeso={configPeso} temaNoturno={temaNoturno} onAdicionar={adicionarProdutoNaComanda} onCancelar={() => setMostrarModalPeso(false)} />}
-      {mostrarModalPagamento && <ModalPagamento comanda={comandaAtiva} temaNoturno={temaNoturno} onConfirmar={processarPagamento} onCancelar={() => setMostrarModalPagamento(false)} />}
+      
+      {/* PASSANDO AS REGRAS E CLIENTES PARA O MODAL DE PAGAMENTO */}
+      {mostrarModalPagamento && (
+        <ModalPagamento 
+           comanda={comandaAtiva} temaNoturno={temaNoturno} onConfirmar={processarPagamento} onCancelar={() => setMostrarModalPagamento(false)} 
+           clientesFidelidade={clientesFidelidade} metaFidelidade={metaFidelidade}
+        />
+      )}
+
       {mostrarConfigEmpresa && <ModalConfigEmpresa temaNoturno={temaNoturno} nomeEmpresaEdicao={nomeEmpresaEdicao} setNomeEmpresaEdicao={setNomeEmpresaEdicao} logoEmpresaEdicao={logoEmpresaEdicao} setLogoEmpresaEdicao={setLogoEmpresaEdicao} salvarConfigEmpresa={salvarConfigEmpresa} setMostrarConfigEmpresa={setMostrarConfigEmpresa} />}
       {mostrarConfigTags && <ModalConfigTags temaNoturno={temaNoturno} tagsGlobais={tagsGlobais} setTagsGlobais={setTagsGlobais} sessao={sessao} setMostrarConfigTags={setMostrarConfigTags} />}
 
