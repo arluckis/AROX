@@ -26,15 +26,12 @@ export default function PainelComanda({
   const tagsSeguras = Array.isArray(comandaAtiva?.tags) ? comandaAtiva.tags : [];
   const tagsDoSistema = Array.isArray(tagsGlobais) ? tagsGlobais : [];
 
-  // Pega a categoria atual. Como removemos "Todas", o padrão vai ser sempre a primeira caso esteja inválido
   const categoriaSelecionada = categoriasSeguras.find(c => c.id === filtroCategoriaCardapio) || categoriasSeguras[0];
 
-  // Identifica os favoritos dinamicamente para exibí-los sempre no topo
   const produtosFavoritos = useMemo(() => {
-    return categoriasSeguras.flatMap(c => c?.itens || []).filter(p => p && p.favorito).slice(0, 6); // Max 6 para não lotar
+    return categoriasSeguras.flatMap(c => c?.itens || []).filter(p => p && p.favorito).slice(0, 6);
   }, [categoriasSeguras]);
 
-  // Agrupamento de itens para + e -
   const produtosAgrupados = useMemo(() => {
     const grupos = [];
     produtosSeguros.forEach(p => {
@@ -71,7 +68,6 @@ export default function PainelComanda({
     excluirProduto(grupo.ids[grupo.ids.length - 1]);
   };
 
-  // Botão elegante corporativo para renderizar produtos
   const renderBotaoProduto = (item) => (
     <button 
       key={item.id || Math.random()} 
@@ -103,8 +99,8 @@ export default function PainelComanda({
       {/* LADO ESQUERDO: CARDÁPIO */}
       <div className={`w-full md:w-[60%] lg:w-[65%] flex flex-col h-full min-h-0 border-r ${abaDetalheMobile === 'menu' ? 'flex' : 'hidden md:flex'} ${temaNoturno ? 'border-gray-800' : 'border-gray-100'}`}>
         
-        {/* Categorias - Agora em Flex Wrap para fácil acesso, sem rolagens chatas */}
-        <div className={`p-4 border-b flex flex-wrap gap-2 sticky top-0 z-10 shadow-sm ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-gray-50/80 backdrop-blur-md border-gray-200'}`}>
+        {/* Categorias - Sem bordas, fluindo com o fundo */}
+        <div className={`p-4 pb-2 flex flex-wrap gap-2 sticky top-0 z-10 ${temaNoturno ? 'bg-gray-900/90 backdrop-blur-md' : 'bg-gray-50/90 backdrop-blur-md'}`}>
           {categoriasSeguras.map(c => c ? (
             <button key={c.id} onClick={() => setFiltroCategoriaCardapio(c.id)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all border ${(categoriaSelecionada?.id === c.id) ? (temaNoturno ? 'bg-purple-900/50 text-purple-300 border-purple-700' : 'bg-purple-600 text-white border-purple-600 shadow-sm') : (temaNoturno ? 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100')}`}>
               {c.nome}
@@ -114,7 +110,6 @@ export default function PainelComanda({
 
         <div className="flex-1 overflow-y-auto min-h-0 p-4 pb-10 scrollbar-hide">
           
-          {/* BOTÃO PESO CORPORATIVO (Substituiu o Emoji do WhatsApp) */}
           <button onClick={() => setMostrarModalPeso(true)} className={`w-full flex justify-between items-center p-4 mb-6 rounded-xl border transition-all active:scale-95 shadow-sm group ${temaNoturno ? 'bg-gray-800 border-gray-700 hover:border-purple-500 text-gray-200' : 'bg-white border-gray-200 hover:border-purple-400 text-gray-800'}`}>
              <div className="flex flex-col text-left">
                <span className="font-bold text-sm">Adicionar Produto por Peso</span>
@@ -123,7 +118,6 @@ export default function PainelComanda({
              <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${temaNoturno ? 'bg-gray-700 group-hover:bg-purple-600 text-white' : 'bg-gray-100 group-hover:bg-purple-100 group-hover:text-purple-700'}`}>+</span>
           </button>
 
-          {/* SESSÃO FAVORITOS DINÂMICA (Aparece no topo sempre) */}
           {produtosFavoritos.length > 0 && (
              <div className="mb-6">
                <h3 className={`text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-2 ${temaNoturno ? 'text-yellow-500/70' : 'text-yellow-600/80'}`}>⭐ Favoritos Frequentes</h3>
@@ -133,7 +127,6 @@ export default function PainelComanda({
              </div>
           )}
 
-          {/* SESSÃO CATEGORIA ATUAL */}
           {categoriaSelecionada && (
             <div>
               <h3 className={`text-[10px] font-black uppercase tracking-widest mb-3 ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -154,7 +147,6 @@ export default function PainelComanda({
       {/* LADO DIREITO: RESUMO DO CARRINHO */}
       <div className={`w-full md:w-[40%] lg:w-[35%] flex flex-col h-full min-h-0 relative ${abaDetalheMobile === 'resumo' ? 'flex' : 'hidden md:flex'} ${temaNoturno ? 'bg-gray-900/50' : 'bg-gray-50/50'}`}>
         
-        {/* Sessão de Tags Discreta (Oculta por Padrão) */}
         <div className={`p-4 border-b shrink-0 flex flex-col gap-2 ${temaNoturno ? 'border-gray-800' : 'border-gray-200'}`}>
           <div className="flex justify-between items-center">
              <span className={`text-[10px] uppercase tracking-widest font-bold ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Classificação (Tags)</span>

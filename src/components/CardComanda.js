@@ -36,7 +36,7 @@ export default function CardComanda({ comanda, onClick, temaNoturno }) {
   return (
     <button 
       onClick={onClick} 
-      className={`w-44 h-48 rounded-3xl p-4 flex flex-col hover:shadow-xl transition-all duration-300 cursor-pointer text-left relative active:scale-95 border shadow-sm overflow-hidden ${bgClass}`}
+      className={`w-44 min-h-[12rem] h-fit rounded-3xl p-4 flex flex-col hover:shadow-xl transition-all duration-300 cursor-pointer text-left relative active:scale-95 border shadow-sm overflow-hidden ${bgClass}`}
     >
       {/* Banner vermelho destacando o dia que foi aberta caso seja antiga */}
       {abertura.isOutroDia && (
@@ -68,14 +68,14 @@ export default function CardComanda({ comanda, onClick, temaNoturno }) {
               ? (temaNoturno ? 'bg-red-900/40 text-red-300 px-1.5 py-0.5 rounded-md border border-red-800/50' : 'bg-red-50 text-red-700 px-1.5 py-0.5 rounded-md border border-red-200')
               : (temaNoturno ? 'text-gray-400' : 'text-gray-600')
           }`}>
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             {abertura.texto}
           </span>
         )}
       </div>
 
       {comanda.tags && comanda.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2 w-full pb-1 overflow-hidden h-8">
+        <div className="flex flex-wrap gap-1 mb-2 w-full pb-1">
           {comanda.tags.map(tag => (
             <span key={tag} className={`text-[9px] px-2 py-0.5 rounded-md font-bold whitespace-nowrap border shrink-0 ${
               temaNoturno ? 'bg-gray-800/50 text-gray-300 border-gray-600' : 'bg-white/60 text-gray-600 border-gray-300'
@@ -86,11 +86,11 @@ export default function CardComanda({ comanda, onClick, temaNoturno }) {
         </div>
       )}
 
-      <div className={`mt-auto pt-3 border-t w-full ${temaNoturno ? 'border-gray-700/50' : 'border-gray-300/50'}`}>
+      <div className={`mt-auto pt-3 border-t w-full shrink-0 ${temaNoturno ? 'border-gray-700/50' : 'border-gray-300/50'}`}>
         <div className={`flex justify-between items-center text-[10px] font-bold mb-1 ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>
           <span>Itens: {produtosSeguros.length}</span>
         </div>
-        <p className={`font-black text-xl tracking-tight ${temaNoturno ? 'text-green-400' : 'text-green-600'}`}>
+        <p className={`font-black text-xl tracking-tight whitespace-nowrap overflow-hidden text-ellipsis ${temaNoturno ? 'text-green-400' : 'text-green-600'}`}>
           <span className="text-[10px] opacity-70">R$</span> {restante.toFixed(2)}
         </p>
       </div>

@@ -29,7 +29,7 @@ export default function TabFechadas({
   });
 
   return (
-    <div className="w-full animate-in slide-in-from-bottom-4 duration-500 px-2 lg:px-0 pb-10">
+    <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
       {/* TÍTULO FUNDIDO AO HEADER */}
       <div className={`p-5 lg:p-6 pt-4 lg:pt-5 rounded-b-3xl shadow-sm border-x border-b border-t-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative transition-colors duration-500 mb-6 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>

@@ -59,7 +59,7 @@ export default function Header({
   };
 
   return (
-    <header className={`flex items-center justify-between gap-4 p-3 xl:p-4 rounded-t-3xl border border-b-0 relative z-40 transition-colors duration-500 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+    <header className={`flex items-center justify-between gap-2 sm:gap-4 py-3 px-2 sm:px-4 xl:px-6 rounded-t-3xl border border-b-0 relative z-40 transition-colors duration-500 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
       
       {/* SEÇÃO ESQUERDA */}
       <div className="flex flex-1 justify-start items-center gap-3 min-w-0">

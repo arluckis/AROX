@@ -240,7 +240,6 @@ export default function Home() {
     const { error } = await supabase.from('comandas').update({ nome: novoNome, tags: novasTags }).eq('id', idComanda);
     if (!error) {
       setComandas(comandas.map(c => c.id === idComanda ? { ...c, nome: novoNome, tags: novasTags } : c));
-      // Popup removido conforme solicitado para manter agilidade!
     }
   };
 
@@ -377,22 +376,39 @@ export default function Home() {
   const pagamentosAgrupados = pagamentosFiltrados.reduce((acc, p) => { acc[p.forma] = (acc[p.forma] || 0) + p.valor; return acc; }, {});
   const dadosPizza = Object.keys(pagamentosAgrupados).map(key => ({ name: key, value: pagamentosAgrupados[key] })).filter(d => d.value > 0);
 
+  // AGRUPAMENTO DE PRODUTOS PARA RANKING (AGORA IGNORANDO ACENTOS E CASE)
   const contagemProdutos = {};
   comandasFiltradas.forEach(c => {
     (c.produtos || []).forEach(p => {
-      const nomeP = String(p?.nome || '');
-      const isPeso = nomeP.toLowerCase().includes('peso') || nomeP.toLowerCase().includes('balança');
-      let nomeChave = isPeso ? nomeP.replace(/\s*\(\d+(?:\.\d+)?\s*g\)/i, '').trim() : nomeP;
-      if (!contagemProdutos[nomeChave]) { contagemProdutos[nomeChave] = { faturamento: 0, volume: 0, isPeso: isPeso }; }
+      const nomeOriginal = String(p?.nome || '');
+      const isPeso = nomeOriginal.toLowerCase().includes('peso') || nomeOriginal.toLowerCase().includes('balança');
+      let nomeDisplay = isPeso ? nomeOriginal.replace(/\s*\(\d+(?:\.\d+)?\s*g\)/i, '').trim() : nomeOriginal;
+      
+      // Remove acentos (diacríticos) e joga para maiúsculo para ser a chave de agrupamento
+      const nomeChave = nomeDisplay.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+
+      if (!contagemProdutos[nomeChave]) { 
+        contagemProdutos[nomeChave] = { 
+          nomeDisplay: nomeDisplay.toUpperCase(), // Mantemos a versão formatada e bonita para o gráfico
+          faturamento: 0, 
+          volume: 0, 
+          isPeso: isPeso 
+        }; 
+      }
+      
       contagemProdutos[nomeChave].faturamento += (p.preco || 0);
       if (isPeso) {
-        const matchGramas = nomeP.match(/(\d+(?:\.\d+)?)\s*g/i);
+        const matchGramas = nomeOriginal.match(/(\d+(?:\.\d+)?)\s*g/i);
         contagemProdutos[nomeChave].volume += matchGramas ? parseFloat(matchGramas[1]) : 0;
-      } else { contagemProdutos[nomeChave].volume += 1; }
+      } else { 
+        contagemProdutos[nomeChave].volume += 1; 
+      }
     });
   });
   
-  const rankingProdutos = Object.keys(contagemProdutos).map(nome => ({ nome, valor: contagemProdutos[nome].faturamento, volume: contagemProdutos[nome].volume, isPeso: contagemProdutos[nome].isPeso })).sort((a, b) => b.valor - a.valor);
+  const rankingProdutos = Object.values(contagemProdutos)
+    .map(item => ({ nome: item.nomeDisplay, valor: item.faturamento, volume: item.volume, isPeso: item.isPeso }))
+    .sort((a, b) => b.valor - a.valor);
   
   if (!sessao) { return <Login getHoje={getHoje} setSessao={setSessao} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />; }
 
@@ -420,7 +436,6 @@ export default function Home() {
   return (
     <main className={`min-h-screen flex flex-col transition-colors duration-500 ${temaNoturno ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
       
-      {/* Retornada a margem nas laterais e topos que o cliente pediu (p-3 md:p-6) */}
       <div className="w-full p-3 md:p-6 pb-0 md:pb-0 flex flex-col max-w-7xl mx-auto">
         <Header 
           comandaAtiva={comandaAtiva} setIdSelecionado={setIdSelecionado} setMenuMobileAberto={setMenuMobileAberto}
@@ -468,35 +483,6 @@ export default function Home() {
         setMostrarConfigEmpresa={setMostrarConfigEmpresa} setMostrarAdminUsuarios={setMostrarAdminUsuarios}
         setMostrarAdminProdutos={setMostrarAdminProdutos} setMostrarConfigTags={setMostrarConfigTags} fazerLogout={fazerLogout}
       />
-
-      <div className="max-w-7xl mx-auto w-full flex flex-col gap-3 mb-6 px-4 xl:px-0">
-        {avisoFechamento && !comandaAtiva && (
-          <div className={`p-4 rounded-3xl flex items-center gap-4 border shadow-sm transition-colors duration-300 animate-in slide-in-from-bottom-2 ${temaNoturno ? 'bg-red-900/10 border-red-800/30 text-red-400' : 'bg-red-50 border-red-100 text-red-800'}`}>
-            <div className={`p-2.5 rounded-full shrink-0 ${temaNoturno ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-600'}`}>
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            </div>
-            <div>
-              <p className="font-black text-sm uppercase tracking-widest">Lembrete de Fechamento</p>
-              <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-red-400/70' : 'text-red-700/80'}`}>Já passou das 22h50. Recomendamos realizar o fechamento do caixa ao final do expediente para evitar a mistura de turnos.</p>
-            </div>
-          </div>
-        )}
-
-        {comandasAntigasAbertas.length > 0 && !ignorarAvisoAntigas && !comandaAtiva && abaAtiva === 'comandas' && (
-          <div className={`p-4 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border shadow-sm transition-colors duration-300 animate-in slide-in-from-bottom-2 ${temaNoturno ? 'bg-orange-900/10 border-orange-800/30 text-orange-400' : 'bg-orange-50 border-orange-100 text-orange-800'}`}>
-            <div className="flex items-center gap-4">
-              <div className={`p-2.5 rounded-full shrink-0 ${temaNoturno ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-600'}`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              </div>
-              <div>
-                <p className="font-black text-sm uppercase tracking-widest">Turno Anterior Pendente</p>
-                <p className={`text-sm mt-0.5 font-medium leading-relaxed ${temaNoturno ? 'text-orange-400/70' : 'text-orange-700/80'}`}>Tem <b>{comandasAntigasAbertas.length} comanda(s)</b> de turnos passados abertas. Deseja encerrá-las ou mantê-las ativas?</p>
-              </div>
-            </div>
-            <button onClick={() => setIgnorarAvisoAntigas(true)} className={`shrink-0 px-5 py-2.5 text-xs font-bold rounded-xl transition ${temaNoturno ? 'bg-orange-900/40 hover:bg-orange-900/60 text-orange-300' : 'bg-orange-200/50 hover:bg-orange-200 text-orange-800'}`}>Manter Abertas</button>
-          </div>
-        )}
-      </div>
 
       {mostrarAdminUsuarios && sessao && <AdminUsuarios empresaId={sessao.empresa_id} usuarioAtualId={sessao.id} temaNoturno={temaNoturno} onFechar={() => setMostrarAdminUsuarios(false)} />}
       {mostrarAdminProdutos && sessao && <AdminProdutos empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => { setMostrarAdminProdutos(false); fetchData(); }} />}
