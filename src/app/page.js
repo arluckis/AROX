@@ -494,8 +494,14 @@ export default function Home() {
             temaNoturno={temaNoturno} comandasAbertas={comandasAbertas} modoExclusao={modoExclusao} setModoExclusao={setModoExclusao} selecionadasExclusao={selecionadasExclusao} toggleSelecaoExclusao={toggleSelecaoExclusao} confirmarExclusaoEmMassa={confirmarExclusaoEmMassa} adicionarComanda={adicionarComanda} setIdSelecionado={setIdSelecionado} caixaAtual={caixaAtual} abrirCaixaManual={abrirCaixaManual} mostrarAlerta={mostrarAlerta}
           />
         ) : abaAtiva === 'fechadas' ? (
-          <TabFechadas temaNoturno={temaNoturno} comandasFechadasHoje={comandasFechadasHoje} reabrirComandaFechada={reabrirComandaFechada} excluirComandaFechada={excluirComandaFechada} />
-        ) : abaAtiva === 'faturamento' ? (
+  <TabFechadas 
+    temaNoturno={temaNoturno} 
+    comandasFechadas={comandas.filter(c => c.status === 'fechada')} 
+    reabrirComandaFechada={reabrirComandaFechada} 
+    excluirComandaFechada={excluirComandaFechada} 
+    getHoje={getHoje} 
+  />
+) : abaAtiva === 'faturamento' ? (
           <TabFaturamento 
             temaNoturno={temaNoturno} filtroTempo={filtroTempo} setFiltroTempo={setFiltroTempo} getHoje={getHoje} getMesAtual={getMesAtual} getAnoAtual={getAnoAtual} faturamentoTotal={faturamentoTotal} lucroEstimado={lucroEstimado} dadosPizza={dadosPizza} rankingProdutos={rankingProdutos} comandasFiltradas={comandasFiltradas} comandas={comandas} 
           />

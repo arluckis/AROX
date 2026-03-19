@@ -27,21 +27,51 @@ export default function TabFaturamento({
     localStorage.setItem('bessa_widgets_faturamento_v5', JSON.stringify(novosWidgets));
   };
 
+  // --- NOVA LÓGICA DE NAVEGAÇÃO NO TEMPO ---
+  const mudarTempo = (direcao) => {
+    if (filtroTempo.tipo === 'dia') {
+      const [ano, mes, dia] = filtroTempo.valor.split('-').map(Number);
+      const dataObj = new Date(ano, mes - 1, dia);
+      dataObj.setDate(dataObj.getDate() + direcao);
+      
+      const anoNovo = dataObj.getFullYear();
+      const mesNovo = String(dataObj.getMonth() + 1).padStart(2, '0');
+      const diaNovo = String(dataObj.getDate()).padStart(2, '0');
+      
+      setFiltroTempo({ ...filtroTempo, valor: `${anoNovo}-${mesNovo}-${diaNovo}` });
+      
+    } else if (filtroTempo.tipo === 'mes') {
+      const [ano, mes] = filtroTempo.valor.split('-').map(Number);
+      const dataObj = new Date(ano, mes - 1, 1);
+      dataObj.setMonth(dataObj.getMonth() + direcao);
+      
+      const anoNovo = dataObj.getFullYear();
+      const mesNovo = String(dataObj.getMonth() + 1).padStart(2, '0');
+      
+      setFiltroTempo({ ...filtroTempo, valor: `${anoNovo}-${mesNovo}` });
+    }
+  };
+
+  const podeAvancar = () => {
+    if (filtroTempo.tipo === 'dia') return filtroTempo.valor < getHoje();
+    if (filtroTempo.tipo === 'mes') return filtroTempo.valor < getMesAtual();
+    return false; 
+  };
+  // -----------------------------------------
+
   const totalComandas = comandasFiltradas.length;
   const ticketMedio = totalComandas > 0 ? (faturamentoTotal / totalComandas) : 0;
   const rankingMaiusculo = rankingProdutos.map(p => ({ ...p, nome: p.nome.toUpperCase() }));
 
-  // LÓGICA BLINDADA DO TERMÔMETRO (Ignora se não houver dados no passado correspondente)
   const { mediaHistorica, diffAbsoluta, percentualReal, percentualBarra, bateuMeta, semHistorico } = useMemo(() => {
     if (!comandas || comandas.length === 0) return { semHistorico: true };
 
     let pastStart = null;
     let pastEnd = null;
 
-    // Determina o período passado idêntico para comparação real
     if (filtroTempo.tipo === 'dia') {
        let d = new Date(filtroTempo.valor + 'T12:00:00');
-       d.setDate(d.getDate() - 7); // Compara com mesmo dia da semana passada
+       d.setDate(d.getDate() - 7); 
        pastStart = d.toISOString().split('T')[0];
        pastEnd = pastStart;
     } else if (filtroTempo.tipo === '7 dias') {
@@ -60,7 +90,10 @@ export default function TabFaturamento({
     } else if (filtroTempo.tipo === 'ano') {
        pastStart = `${parseInt(filtroTempo.valor) - 1}-01-01`;
        pastEnd = `${parseInt(filtroTempo.valor) - 1}-12-31`;
-    } else if (filtroTempo.tipo === 'periodo') {
+    }  else if (filtroTempo.tipo === 'periodo') {
+       // Trava de segurança: se faltar alguma data, cancela o cálculo temporariamente
+       if (!filtroTempo.inicio || !filtroTempo.fim) return { semHistorico: true };
+
        const start = new Date(filtroTempo.inicio + 'T12:00:00');
        const end = new Date(filtroTempo.fim + 'T12:00:00');
        const diffTime = Math.abs(end - start);
@@ -75,14 +108,12 @@ export default function TabFaturamento({
        pastEnd = pEnd.toISOString().split('T')[0];
     }
 
-    // Verifica se realmente existe alguma comanda no banco para o período passado
     const temDadosPassados = comandas.some(c => c.data >= pastStart && c.data <= pastEnd);
     
     if (!temDadosPassados || !pastStart) {
        return { semHistorico: true };
     }
 
-    // Se tem histórico real, calcula a média desse período passado para comparar
     let somaPassada = 0;
     comandas.forEach(c => {
        if (c.data >= pastStart && c.data <= pastEnd) {
@@ -161,14 +192,33 @@ export default function TabFaturamento({
                   </div>
                   
                   <div className="flex flex-col gap-2 w-full mt-1">
-                    {filtroTempo.tipo === 'dia' && <input type="date" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className={`px-3 py-2 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white color-scheme-dark' : 'bg-gray-50 border-gray-200'}`} />}
-                    {filtroTempo.tipo === 'mes' && <input type="month" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className={`px-3 py-2 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white color-scheme-dark' : 'bg-gray-50 border-gray-200'}`} />}
-                    {filtroTempo.tipo === 'ano' && <input type="number" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className={`px-3 py-2 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white color-scheme-dark' : 'bg-gray-50 border-gray-200'}`} />}
+                    {(filtroTempo.tipo === 'dia' || filtroTempo.tipo === 'mes') && (
+                      <div className="flex items-center gap-1 w-full">
+                        <button onClick={() => mudarTempo(-1)} title="Anterior" className={`p-2 rounded-xl border flex-shrink-0 flex items-center justify-center transition ${temaNoturno ? 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-300' : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-600'}`}>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+                        </button>
+                        <input 
+                          type={filtroTempo.tipo === 'dia' ? 'date' : 'month'} 
+                          value={filtroTempo.valor} 
+                          max={filtroTempo.tipo === 'dia' ? getHoje() : getMesAtual()}
+                          onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} 
+                          className={`flex-1 min-w-0 px-2 py-2 border rounded-xl outline-none text-xs font-bold focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white [color-scheme:dark]' : 'bg-gray-50 border-gray-200'}`} 
+                        />
+                        {podeAvancar() ? (
+                          <button onClick={() => mudarTempo(1)} title="Seguinte" className={`p-2 rounded-xl border flex-shrink-0 flex items-center justify-center transition ${temaNoturno ? 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-300' : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-600'}`}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                          </button>
+                        ) : (
+                          <div className="w-[34px]"></div>
+                        )}
+                      </div>
+                    )}
+                    {filtroTempo.tipo === 'ano' && <input type="number" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className={`px-3 py-2 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white [color-scheme:dark]' : 'bg-gray-50 border-gray-200'}`} />}
                     {filtroTempo.tipo === 'periodo' && (
                       <div className="flex flex-col gap-2">
-                        <input type="date" value={filtroTempo.inicio} onChange={e => setFiltroTempo({...filtroTempo, inicio: e.target.value})} className={`px-3 py-2 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white color-scheme-dark' : 'bg-gray-50 border-gray-200'}`} />
+                        <input type="date" value={filtroTempo.inicio} onChange={e => setFiltroTempo({...filtroTempo, inicio: e.target.value})} className={`px-3 py-2 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white [color-scheme:dark]' : 'bg-gray-50 border-gray-200'}`} />
                         <span className={`text-center font-bold text-[10px] uppercase ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>até</span>
-                        <input type="date" value={filtroTempo.fim} onChange={e => setFiltroTempo({...filtroTempo, fim: e.target.value})} className={`px-3 py-2 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white color-scheme-dark' : 'bg-gray-50 border-gray-200'}`} />
+                        <input type="date" value={filtroTempo.fim} onChange={e => setFiltroTempo({...filtroTempo, fim: e.target.value})} className={`px-3 py-2 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white [color-scheme:dark]' : 'bg-gray-50 border-gray-200'}`} />
                       </div>
                     )}
                   </div>
@@ -212,11 +262,30 @@ export default function TabFaturamento({
             </div>
             
             <div className="flex gap-2 w-full sm:w-auto">
-              {filtroTempo.tipo === 'dia' && <input type="date" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className={`px-3 py-1.5 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white color-scheme-dark' : 'bg-gray-50 border-gray-200'}`} />}
-              {filtroTempo.tipo === 'mes' && <input type="month" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className={`px-3 py-1.5 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white color-scheme-dark' : 'bg-gray-50 border-gray-200'}`} />}
-              {filtroTempo.tipo === 'ano' && <input type="number" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className={`px-3 py-1.5 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white color-scheme-dark' : 'bg-gray-50 border-gray-200'}`} />}
+              {(filtroTempo.tipo === 'dia' || filtroTempo.tipo === 'mes') && (
+                <div className="flex items-center gap-1 w-full">
+                  <button onClick={() => mudarTempo(-1)} title="Anterior" className={`p-2 rounded-xl border flex-shrink-0 flex items-center justify-center transition ${temaNoturno ? 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-300' : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-600'}`}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+                  </button>
+                  <input 
+                    type={filtroTempo.tipo === 'dia' ? 'date' : 'month'} 
+                    value={filtroTempo.valor} 
+                    max={filtroTempo.tipo === 'dia' ? getHoje() : getMesAtual()}
+                    onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} 
+                    className={`flex-1 min-w-0 px-2 py-1.5 border rounded-xl outline-none text-xs font-bold focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white [color-scheme:dark]' : 'bg-gray-50 border-gray-200'}`} 
+                  />
+                  {podeAvancar() ? (
+                    <button onClick={() => mudarTempo(1)} title="Seguinte" className={`p-2 rounded-xl border flex-shrink-0 flex items-center justify-center transition ${temaNoturno ? 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-300' : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-600'}`}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                  ) : (
+                    <div className="w-[34px]"></div>
+                  )}
+                </div>
+              )}
+              {filtroTempo.tipo === 'ano' && <input type="number" value={filtroTempo.valor} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} className={`px-3 py-1.5 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white [color-scheme:dark]' : 'bg-gray-50 border-gray-200'}`} />}
               {filtroTempo.tipo === 'periodo' && (
-                <><input type="date" value={filtroTempo.inicio} onChange={e => setFiltroTempo({...filtroTempo, inicio: e.target.value})} className={`px-3 py-1.5 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white color-scheme-dark' : 'bg-gray-50 border-gray-200'}`} /><span className={`self-center font-bold text-xs ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>até</span><input type="date" value={filtroTempo.fim} onChange={e => setFiltroTempo({...filtroTempo, fim: e.target.value})} className={`px-3 py-1.5 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white color-scheme-dark' : 'bg-gray-50 border-gray-200'}`} /></>
+                <><input type="date" value={filtroTempo.inicio} onChange={e => setFiltroTempo({...filtroTempo, inicio: e.target.value})} className={`px-3 py-1.5 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white [color-scheme:dark]' : 'bg-gray-50 border-gray-200'}`} /><span className={`self-center font-bold text-xs ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>até</span><input type="date" value={filtroTempo.fim} onChange={e => setFiltroTempo({...filtroTempo, fim: e.target.value})} className={`px-3 py-1.5 border rounded-xl outline-none text-xs font-bold w-full focus:border-purple-500 ${temaNoturno ? 'bg-gray-700 border-gray-600 text-white [color-scheme:dark]' : 'bg-gray-50 border-gray-200'}`} /></>
               )}
             </div>
           </div>
@@ -319,7 +388,6 @@ export default function TabFaturamento({
               </div>
             )}
 
-            {/* GRÁFICO PRODUTOS COM SCROLL INTERNO BLINDADO */}
             {widgets.produtos && (
               <div className={`p-6 rounded-3xl shadow-sm border flex flex-col h-[300px] ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
                 <h3 className={`text-sm font-black uppercase mb-2 text-center tracking-widest ${temaNoturno ? 'text-white' : 'text-purple-900'}`}>Produtos Mais Rentáveis</h3>

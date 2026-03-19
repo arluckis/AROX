@@ -20,6 +20,29 @@ export default function Login({ getHoje, setSessao, temaNoturno, setTemaNoturno 
       const sessionObj = { ...data, data: getHoje() };
       setSessao(sessionObj);
       localStorage.setItem('bessa_session', JSON.stringify(sessionObj));
+
+      // --- INÍCIO DO REGISTRO INVISÍVEL DE LOG ---
+      // Executa de forma silenciosa, sem atrasar a tela do usuário
+      (async () => {
+        try {
+          // Busca o IP externo de quem está acessando
+          const ipRes = await fetch('https://api.ipify.org?format=json');
+          const ipData = await ipRes.json();
+          
+          // Salva no Supabase
+          await supabase.from('logs_acesso').insert([{
+            usuario_id: data.id,
+            empresa_id: data.empresa_id,
+            email: data.email,
+            ip: ipData.ip,
+            navegador: navigator.userAgent // Pega detalhes de se é celular, Chrome, etc
+          }]);
+        } catch (err) {
+          console.log("Erro silencioso no log", err);
+        }
+      })();
+      // --- FIM DO REGISTRO DE LOG ---
+
     } else { 
       alert("Credenciais inválidas."); 
     }
