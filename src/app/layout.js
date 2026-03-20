@@ -16,7 +16,6 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: 'Comandas Bom A Bessa',
   description: 'Sistema de gestão de comandas',
-  // Estas tags avisam os navegadores para não congelarem o site no cache
   other: {
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
