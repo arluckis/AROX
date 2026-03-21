@@ -141,32 +141,24 @@ export default function Home() {
     setSessao(null); setCredenciais({ email: '', senha: '' }); setMostrarMenuPerfil(false); setMenuMobileAberto(false); setAbaAtiva('comandas'); setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
   };
 
-  const fetchData = async (isBackground = false) => {
+  // 1. FUNÇÃO PARA DADOS ESTÁTICOS (Baixa apenas 1 vez)
+  const fetchDadosEstaticos = async () => {
     if (!sessao?.empresa_id) return;
-    if (!isBackground) setIsLoading(true);
-    
     try {
-      const { data: empData, error: empError } = await supabase.from('empresas').select('*').eq('id', sessao.empresa_id).single();
-      if (!empError && empData) {
-        if(!isBackground) setNomeEmpresa(empData.nome || "A Minha Loja");
-        if(!isBackground) setNomeEmpresaEdicao(empData.nome || "");
+      const { data: empData } = await supabase.from('empresas').select('*').eq('id', sessao.empresa_id).single();
+      if (empData) {
+        setNomeEmpresa(empData.nome || "A Minha Loja");
+        setNomeEmpresaEdicao(empData.nome || "");
         const urlLogo = empData.logo || empData.logo_url;
         if (urlLogo) {
-          if(!isBackground) setLogoEmpresa(urlLogo); 
-          if(!isBackground) setLogoEmpresaEdicao(urlLogo); 
+          setLogoEmpresa(urlLogo); 
+          setLogoEmpresaEdicao(urlLogo); 
           localStorage.setItem('bessa_logo_empresa', urlLogo); 
         }
       }
 
       const { data: catData } = await supabase.from('categorias').select('*, itens:produtos(*)').eq('empresa_id', sessao.empresa_id);
       if (catData) setMenuCategorias(catData);
-
-      const { data: caixasAbertos } = await supabase.from('caixas').select('*').eq('empresa_id', sessao.empresa_id).eq('status', 'aberto').order('id', { ascending: false }).limit(1); 
-      let caixaData = caixasAbertos && caixasAbertos.length > 0 ? caixasAbertos[0] : null;
-      if (caixaData) setCaixaAtual(caixaData); else setCaixaAtual({ status: 'fechado' });
-      
-      const { data: comData } = await supabase.from('comandas').select('*, produtos:comanda_produtos(*), pagamentos(*)').eq('empresa_id', sessao.empresa_id).order('id', { ascending: false }).limit(3000);
-      if (comData) setComandas(comData.reverse());
 
       const { data: pesoData } = await supabase.from('config_peso').select('*').eq('empresa_id', sessao.empresa_id);
       if (pesoData) setConfigPeso(pesoData.map(p => ({ id: p.id, nome: p.nome, preco: parseFloat(p.preco_kg), custo: parseFloat(p.custo_kg || 0) })));
@@ -180,13 +172,71 @@ export default function Home() {
       const { data: configFid } = await supabase.from('config_fidelidade').select('*').eq('empresa_id', sessao.empresa_id).single();
       if (configFid) setMetaFidelidade(configFid);
 
-    } catch (err) { console.error("Fetch falhou:", err); } finally { if (!isBackground) setIsLoading(false); }
+    } catch (err) { console.error("Fetch estático falhou:", err); }
   };
 
+  // 2. FUNÇÃO DE CARGA INICIAL (Traz o histórico completo 1 VEZ para o Faturamento funcionar)
+  const fetchHistoricoCompleto = async () => {
+    if (!sessao?.empresa_id) return;
+    setIsLoading(true);
+    
+    try {
+      // Atualiza o Caixa na carga inicial
+      const { data: caixasAbertos } = await supabase.from('caixas').select('*').eq('empresa_id', sessao.empresa_id).eq('status', 'aberto').order('id', { ascending: false }).limit(1); 
+      let caixaData = caixasAbertos && caixasAbertos.length > 0 ? caixasAbertos[0] : null;
+      if (caixaData) setCaixaAtual(caixaData); else setCaixaAtual({ status: 'fechado' });
+      
+      // Traz as comandas para alimentar os gráficos
+      const { data: comData } = await supabase.from('comandas').select('*, produtos:comanda_produtos(*), pagamentos(*)').eq('empresa_id', sessao.empresa_id).order('id', { ascending: false }).limit(3000);
+      if (comData) setComandas(comData.reverse());
+
+    } catch (err) { console.error("Fetch falhou:", err); } finally { setIsLoading(false); }
+  };
+
+  // 3. FUNÇÃO SUPER LEVE PARA POLLING (Roda a cada 30s e gasta quase zero dados)
+  const fetchApenasAtualizacoes = async () => {
+    if (!sessao?.empresa_id) return;
+    
+    try {
+      // Verifica só se fecharam/abriram o caixa
+      const { data: caixasAbertos } = await supabase.from('caixas').select('*').eq('empresa_id', sessao.empresa_id).eq('status', 'aberto').order('id', { ascending: false }).limit(1); 
+      if (caixasAbertos && caixasAbertos.length > 0) setCaixaAtual(caixasAbertos[0]); 
+      else setCaixaAtual({ status: 'fechado' });
+
+      // O PULO DO GATO: Busca no Supabase APENAS as comandas que estão ABERTAS hoje ou FECHADAS HOJE. 
+      // Ignora todo o histórico antigo, pois ele já está salvo no estado da tela.
+      const { data: comDataHoje } = await supabase.from('comandas')
+        .select('*, produtos:comanda_produtos(*), pagamentos(*)')
+        .eq('empresa_id', sessao.empresa_id)
+        .or(`status.eq.aberta,data.eq.${getHoje()}`);
+
+      if (comDataHoje) {
+        setComandas(comandasAntigas => {
+          // Filtra da memória as comandas antigas que não mudam mais (fechadas de dias anteriores)
+          const historicoIntacto = comandasAntigas.filter(c => c.status === 'fechada' && c.data !== getHoje());
+          
+          // Junta o histórico intacto com as comandas fresquinhas que acabaram de chegar do banco
+          const novoEstado = [...historicoIntacto, ...comDataHoje.reverse()];
+          
+          // Reordena pelo ID para não bagunçar a tela
+          return novoEstado.sort((a, b) => a.id - b.id);
+        });
+      }
+
+    } catch (err) { console.error("Erro no polling leve:", err); }
+  };
+
+  // 4. EFFECT ATUALIZADO
   useEffect(() => {
     if (!sessao?.empresa_id) return;
-    fetchData(); 
-    const intervaloPolling = setInterval(() => { fetchData(true); }, 10000); 
+    
+    // Na hora que o utilizador inicia sessão, carrega tudo 1 vez
+    fetchDadosEstaticos();
+    fetchHistoricoCompleto(); 
+    
+    // Depois, a cada 30 segundos, roda apenas a função super leve
+    const intervaloPolling = setInterval(() => { fetchApenasAtualizacoes(); }, 30000); 
+    
     return () => clearInterval(intervaloPolling);
   }, [sessao]);
 
@@ -197,7 +247,7 @@ export default function Home() {
       const payload = { empresa_id: sessao.empresa_id, data_abertura: dadosCaixa.data_abertura, saldo_inicial: dadosCaixa.saldo_inicial || 0, status: 'aberto' };
       const { data, error } = await supabase.from('caixas').insert([payload]).select().single();
       if (error) throw error;
-      if (data) { setCaixaAtual(data); mostrarAlerta("Sucesso", "Caixa aberto com sucesso!"); fetchData(); }
+      if (data) { setCaixaAtual(data); mostrarAlerta("Sucesso", "Caixa aberto com sucesso!"); fetchApenasAtualizacoes(); }
     } catch (err) { mostrarAlerta("Erro", "Erro ao abrir caixa: " + err.message); } finally { setIsLoading(false); }
   };
 
@@ -413,10 +463,9 @@ export default function Home() {
   
   if (!sessao) { return <Login getHoje={getHoje} setSessao={setSessao} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />; }
 
-  // Redireciona para o Painel Master se for o teu utilizador Super Admin
-if (sessao.role === 'super_admin') {
-  return <SuperAdminPainel fazerLogout={fazerLogout} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />;
-}
+  if (sessao.role === 'super_admin') {
+    return <SuperAdminPainel fazerLogout={fazerLogout} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />;
+  }
 
   if (isLoading && comandas.length === 0) {
     return (
@@ -451,7 +500,7 @@ if (sessao.role === 'super_admin') {
           setMostrarAdminDelivery={setMostrarAdminDelivery}
           setMostrarConfigEmpresa={setMostrarConfigEmpresa} setMostrarAdminUsuarios={setMostrarAdminUsuarios}
           setMostrarAdminProdutos={setMostrarAdminProdutos} setMostrarConfigTags={setMostrarConfigTags} fazerLogout={fazerLogout}
-          fetchData={fetchData} clientesFidelidade={clientesFidelidade} vincularClienteFidelidade={vincularClienteFidelidade}
+          fetchData={fetchApenasAtualizacoes} clientesFidelidade={clientesFidelidade} vincularClienteFidelidade={vincularClienteFidelidade}
         />
 
         <div className="flex-1 w-full">
@@ -472,7 +521,7 @@ if (sessao.role === 'super_admin') {
               temaNoturno={temaNoturno} filtroTempo={filtroTempo} setFiltroTempo={setFiltroTempo} getHoje={getHoje} getMesAtual={getMesAtual} getAnoAtual={getAnoAtual} faturamentoTotal={faturamentoTotal} lucroEstimado={lucroEstimado} dadosPizza={dadosPizza} rankingProdutos={rankingProdutos} comandasFiltradas={comandasFiltradas} comandas={comandas} 
             />
           ) : abaAtiva === 'caixa' ? (
-            <TabFechamentoCaixa temaNoturno={temaNoturno} sessao={sessao} caixaAtual={caixaAtual} comandas={comandas} fetchData={fetchData} mostrarAlerta={mostrarAlerta} mostrarConfirmacao={mostrarConfirmacao} />
+            <TabFechamentoCaixa temaNoturno={temaNoturno} sessao={sessao} caixaAtual={caixaAtual} comandas={comandas} fetchData={fetchApenasAtualizacoes} mostrarAlerta={mostrarAlerta} mostrarConfirmacao={mostrarConfirmacao} />
           ) : abaAtiva === 'fidelidade' ? (
             <TabFidelidade 
               temaNoturno={temaNoturno} sessao={sessao} mostrarAlerta={mostrarAlerta} mostrarConfirmacao={mostrarConfirmacao}
@@ -491,7 +540,7 @@ if (sessao.role === 'super_admin') {
       />
 
       {mostrarAdminUsuarios && sessao && <AdminUsuarios empresaId={sessao.empresa_id} usuarioAtualId={sessao.id} temaNoturno={temaNoturno} onFechar={() => setMostrarAdminUsuarios(false)} />}
-      {mostrarAdminProdutos && sessao && <AdminProdutos empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => { setMostrarAdminProdutos(false); fetchData(); }} />}
+      {mostrarAdminProdutos && sessao && <AdminProdutos empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => { setMostrarAdminProdutos(false); fetchApenasAtualizacoes(); }} />}
       {mostrarAdminDelivery && sessao && <AdminDelivery empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => setMostrarAdminDelivery(false)} />}
       {mostrarModalPeso && <ModalPeso opcoesPeso={configPeso} temaNoturno={temaNoturno} onAdicionar={adicionarProdutoNaComanda} onCancelar={() => setMostrarModalPeso(false)} />}
       
