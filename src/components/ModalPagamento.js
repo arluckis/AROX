@@ -3,8 +3,8 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaNoturno, clientesFidelidade, metaFidelidade }) {
+  const [pagamentos, setPagamentos] = useState([]);
   const [desconto, setDesconto] = useState('');
-  const [formaPagamento, setFormaPagamento] = useState('');
   const [valorRecebido, setValorRecebido] = useState('');
   const [modoDivisao, setModoDivisao] = useState(false);
   const [itensSelecionados, setItensSelecionados] = useState([]);
@@ -12,8 +12,6 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
   const [precisaBairro, setPrecisaBairro] = useState(false);
   const [bairros, setBairros] = useState([]);
   const [bairroSelecionado, setBairroSelecionado] = useState('');
-
-  const valorRecebidoRef = useRef(null);
 
   useEffect(() => {
     const verificarMotoboy = async () => {
@@ -27,45 +25,13 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
     verificarMotoboy();
   }, [comanda.empresa_id, comanda.tipo]);
 
-  // --- ATALHOS DO PAGAMENTO (1 A 5) E ESC ---
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); onCancelar(); return; }
-      const tag = document.activeElement.tagName.toLowerCase();
-      if (tag !== 'input' && tag !== 'select') {
-        if (e.key === '1') setFormaPagamento('Dinheiro');
-        if (e.key === '2') { setFormaPagamento('Pix'); setValorRecebido(''); }
-        if (e.key === '3') { setFormaPagamento('Cartão'); setValorRecebido(''); }
-        if (e.key === '4') { setFormaPagamento('iFood'); setValorRecebido(''); }
-        if (e.key === '5') { setFormaPagamento('Fidelidade'); setValorRecebido(''); }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onCancelar]);
-
-  useEffect(() => {
-    if (formaPagamento === 'Dinheiro' && valorRecebidoRef.current) {
-       setTimeout(() => valorRecebidoRef.current.focus(), 50);
-    }
-  }, [formaPagamento]);
-
+  // Valores e totais bases
   const bairroObj = bairros.find(b => String(b.id) === String(bairroSelecionado));
   const taxaEntrega = bairroObj ? parseFloat(bairroObj.taxa) : 0;
 
   const clienteFidelizado = clientesFidelidade?.find(c => c.nome.toLowerCase() === comanda.nome.toLowerCase());
   const temPontosParaResgate = clienteFidelizado && clienteFidelizado.pontos >= metaFidelidade?.pontos_necessarios;
-  const isFidelidade = formaPagamento === 'Fidelidade';
-
-  const handleConfirmar = async () => {
-    if (precisaBairro && bairroSelecionado) {
-      await supabase.from('comandas').update({ 
-        bairro_id: bairroSelecionado,
-        taxa_entrega: taxaEntrega 
-      }).eq('id', comanda.id);
-    }
-    onConfirmar(valorFinal, formaPagamento, itensSelecionados, modoDivisao, bairroSelecionado, taxaEntrega, isFidelidade);
-  };
+  const isFidelidade = pagamentos.some(p => p.forma === 'Fidelidade');
 
   const itensPendentes = comanda.produtos.filter(p => !p.pago);
   const totalPendente = itensPendentes.reduce((acc, p) => acc + p.preco, 0);
@@ -78,18 +44,81 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
   const valorDesconto = parseFloat(desconto) || 0;
   
   const valorFinal = isFidelidade ? 0 : (subtotal - valorDesconto);
-  
+  const totalPago = pagamentos.reduce((acc, p) => acc + parseFloat(p.valor || 0), 0);
+  const restante = isFidelidade ? 0 : Math.max(0, valorFinal - totalPago);
+
+  // Múltiplos Pagamentos
+  const adicionarPagamento = (forma) => {
+    if (forma === 'Fidelidade') {
+      setPagamentos([{ id: Date.now(), forma: 'Fidelidade', valor: valorFinal }]);
+      return;
+    }
+    
+    let novosPagamentos = pagamentos.filter(p => p.forma !== 'Fidelidade');
+    let pagoAtual = novosPagamentos.reduce((acc, p) => acc + parseFloat(p.valor || 0), 0);
+    let falta = valorFinal - pagoAtual;
+
+    if (falta > 0 || novosPagamentos.length === 0) {
+      novosPagamentos.push({ id: Date.now(), forma, valor: falta > 0 ? Number(falta.toFixed(2)) : 0 });
+    }
+    setPagamentos(novosPagamentos);
+  };
+
+  const atualizarValorPagamento = (id, novoValor) => {
+    setPagamentos(prev => prev.map(p => p.id === id ? { ...p, valor: novoValor } : p));
+  };
+
+  const removerPagamento = (id) => {
+    setPagamentos(prev => prev.filter(p => p.id !== id));
+  };
+
+  // --- ATALHOS DO PAGAMENTO (1 A 6, M) E ESC ---
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); onCancelar(); return; }
+      const tag = document.activeElement.tagName.toLowerCase();
+      if (tag !== 'input' && tag !== 'select') {
+        if (e.key === '1') adicionarPagamento('Dinheiro');
+        if (e.key === '2') adicionarPagamento('Pix');
+        if (e.key === '3') adicionarPagamento('Cartão de Crédito');
+        if (e.key === '4') adicionarPagamento('Cartão de Débito');
+        if (e.key === '5') adicionarPagamento('iFood');
+        if (e.key === '6') adicionarPagamento('Fidelidade');
+        if (e.key.toLowerCase() === 'm') { e.preventDefault(); /* atalho múltiplo / focar último */ }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onCancelar, valorFinal, pagamentos]);
+
+  const handleConfirmar = async () => {
+    if (precisaBairro && bairroSelecionado) {
+      await supabase.from('comandas').update({ 
+        bairro_id: bairroSelecionado,
+        taxa_entrega: taxaEntrega 
+      }).eq('id', comanda.id);
+    }
+    // Passando o array completo de pagamentos no lugar da string singular
+    onConfirmar(valorFinal, pagamentos, itensSelecionados, modoDivisao, bairroSelecionado, taxaEntrega, isFidelidade);
+  };
+
   const descontoInvalido = !isFidelidade && (valorDesconto > subtotal);
   const recebido = parseFloat(valorRecebido) || 0;
-  const troco = recebido - valorFinal;
-  const dinheiroInsuficiente = formaPagamento === 'Dinheiro' && recebido > 0 && recebido < valorFinal;
+  const totalDinheiroCobrado = pagamentos.filter(p => p.forma === 'Dinheiro').reduce((acc, p) => acc + parseFloat(p.valor || 0), 0);
+  const troco = recebido - totalDinheiroCobrado;
+  const temDinheiro = pagamentos.some(p => p.forma === 'Dinheiro');
+  const dinheiroInsuficiente = temDinheiro && recebido > 0 && recebido < totalDinheiroCobrado;
   const nadaSelecionado = modoDivisao && itensSelecionados.length === 0;
 
+  // Tolerância para ponto flutuante no JavaScript
+  const totalValido = totalPago >= (valorFinal - 0.01);
+
   const btnFinalizarDesabilitado = 
-     !formaPagamento || 
+     pagamentos.length === 0 || 
+     (!isFidelidade && !totalValido) || 
      descontoInvalido || 
      dinheiroInsuficiente || 
-     (formaPagamento === 'Dinheiro' && recebido === 0) || 
+     (temDinheiro && recebido === 0) || 
      nadaSelecionado || 
      (precisaBairro && !bairroSelecionado) ||
      (isFidelidade && !temPontosParaResgate);
@@ -99,7 +128,7 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
     else setItensSelecionados([...itensSelecionados, id]);
   };
 
-  const atalhosForma = { 'Dinheiro': '1', 'Pix': '2', 'Cartão': '3', 'iFood': '4', 'Fidelidade': '5' };
+  const atalhosForma = { 'Dinheiro': '1', 'Pix': '2', 'Cartão de Crédito': '3', 'Cartão de Débito': '4', 'iFood': '5', 'Fidelidade': '6' };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
@@ -136,13 +165,34 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-            {['Dinheiro', 'Pix', 'Cartão', 'iFood', 'Fidelidade'].map(forma => (
-              <button key={forma} onClick={() => { setFormaPagamento(forma); if (forma !== 'Dinheiro') setValorRecebido(''); }} className={`p-2 rounded-xl border-2 font-bold text-xs transition ${formaPagamento === forma ? (forma === 'Fidelidade' ? 'border-purple-500 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : (temaNoturno ? 'border-green-500 bg-green-900/20 text-green-400' : 'border-green-500 bg-green-50 text-green-700')) : (temaNoturno ? 'border-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-200 text-gray-500 hover:border-gray-300')} ${forma === 'Fidelidade' ? 'col-span-2 sm:col-span-1' : ''}`}>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+            {['Dinheiro', 'Pix', 'Cartão de Crédito', 'Cartão de Débito', 'iFood', 'Fidelidade'].map(forma => (
+              <button key={forma} onClick={() => adicionarPagamento(forma)} className={`p-2 rounded-xl border-2 font-bold text-xs transition ${pagamentos.some(p => p.forma === forma) ? (forma === 'Fidelidade' ? 'border-purple-500 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : (temaNoturno ? 'border-green-500 bg-green-900/20 text-green-400' : 'border-green-500 bg-green-50 text-green-700')) : (temaNoturno ? 'border-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-200 text-gray-500 hover:border-gray-300')} ${forma === 'Fidelidade' ? 'col-span-2 sm:col-span-1' : ''}`}>
                 {forma} <span className="text-[9px] opacity-70 ml-1">[{atalhosForma[forma]}]</span>
               </button>
             ))}
           </div>
+
+          {/* Área de Múltiplos Pagamentos Adicionados */}
+          {pagamentos.length > 0 && !isFidelidade && (
+            <div className={`mb-4 p-4 rounded-xl border animate-in fade-in slide-in-from-top-2 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+              <h4 className={`text-[10px] font-black uppercase tracking-widest mb-3 ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>Formas Adicionadas</h4>
+              {pagamentos.map(pag => (
+                 <div key={pag.id} className="flex items-center gap-2 mb-2">
+                   <span className={`flex-1 text-xs font-bold ${temaNoturno ? 'text-gray-300' : 'text-gray-700'}`}>{pag.forma}</span>
+                   <span className={`text-sm font-bold ${temaNoturno ? 'text-gray-400' : 'text-gray-600'}`}>R$</span>
+                   <input type="number" step="0.01" value={pag.valor} onChange={(e) => atualizarValorPagamento(pag.id, e.target.value)} className={`w-24 p-2 rounded-lg border outline-none text-right text-sm font-bold transition-colors ${temaNoturno ? 'bg-gray-900 border-gray-600 text-white focus:border-green-500' : 'bg-white border-gray-300 focus:border-green-500'}`} />
+                   <button onClick={() => removerPagamento(pag.id)} className="text-red-500 hover:text-red-700 font-bold px-2 py-1 active:scale-95">X</button>
+                 </div>
+              ))}
+              {restante > 0 && (
+                <div className={`mt-3 pt-3 flex justify-between items-center border-t ${temaNoturno ? 'border-gray-700' : 'border-gray-200'}`}>
+                   <span className="font-bold uppercase text-[10px] tracking-widest text-orange-500">Falta Pagar:</span>
+                   <span className="text-sm font-black text-orange-500">R$ {restante.toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {isFidelidade && (
             <div className={`mb-4 p-4 rounded-xl border animate-in fade-in slide-in-from-top-2 ${!clienteFidelizado || !temPontosParaResgate ? (temaNoturno ? 'bg-red-900/20 border-red-800/50' : 'bg-red-50 border-red-200') : (temaNoturno ? 'bg-purple-900/20 border-purple-800/50' : 'bg-purple-50 border-purple-200')}`}>
@@ -188,11 +238,11 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
             </div>
           )}
 
-          {formaPagamento === 'Dinheiro' && !isFidelidade && (
+          {temDinheiro && !isFidelidade && (
             <div className={`mb-4 p-4 rounded-xl border animate-in fade-in slide-in-from-top-2 ${temaNoturno ? 'bg-green-900/10 border-green-800/50' : 'bg-green-50 border-green-200'}`}>
-              <label className={`text-[10px] uppercase font-black mb-2 block tracking-widest ${temaNoturno ? 'text-green-400' : 'text-green-800'}`}>Recebido do Cliente (R$)</label>
-              <input ref={valorRecebidoRef} type="number" placeholder="Ex: 50.00" className={`w-full text-lg p-3 border-2 rounded-xl outline-none font-bold transition ${dinheiroInsuficiente ? 'border-red-400 text-red-600 dark:bg-red-900/20 focus:ring-red-500/50 focus:border-red-500' : (temaNoturno ? 'bg-gray-900 border-green-700/50 text-white focus:border-green-500 focus:ring-green-500/50' : 'bg-white border-green-300 focus:border-green-600 focus:ring-green-500/50')}`} value={valorRecebido} onChange={(e) => setValorRecebido(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.getElementById('btnFinalizarPgto')?.focus(); }} />
-              {recebido > valorFinal && !descontoInvalido && (
+              <label className={`text-[10px] uppercase font-black mb-2 block tracking-widest ${temaNoturno ? 'text-green-400' : 'text-green-800'}`}>Recebido em Dinheiro pelo Cliente (R$)</label>
+              <input type="number" placeholder={`Cobrado em dinheiro: R$ ${totalDinheiroCobrado.toFixed(2)}`} className={`w-full text-lg p-3 border-2 rounded-xl outline-none font-bold transition ${dinheiroInsuficiente ? 'border-red-400 text-red-600 dark:bg-red-900/20 focus:ring-red-500/50 focus:border-red-500' : (temaNoturno ? 'bg-gray-900 border-green-700/50 text-white focus:border-green-500 focus:ring-green-500/50' : 'bg-white border-green-300 focus:border-green-600 focus:ring-green-500/50')}`} value={valorRecebido} onChange={(e) => setValorRecebido(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.getElementById('btnFinalizarPgto')?.focus(); }} />
+              {recebido > totalDinheiroCobrado && !descontoInvalido && (
                 <div className={`mt-3 flex justify-between items-center border-t pt-3 ${temaNoturno ? 'border-green-800/50' : 'border-green-200'}`}>
                   <span className={`font-bold uppercase text-[10px] tracking-widest ${temaNoturno ? 'text-green-400/80' : 'text-green-800'}`}>Troco a devolver:</span>
                   <span className={`text-xl font-black ${temaNoturno ? 'text-green-400' : 'text-green-700'}`}>R$ {troco.toFixed(2)}</span>

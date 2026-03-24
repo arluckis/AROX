@@ -30,6 +30,11 @@ export default function PainelComanda({
   const [quantidadesEditaveis, setQuantidadesEditaveis] = useState({});
   const inputBuscaRef = useRef(null);
 
+  // Estados para nova linha de categorias responsiva
+  const [categoriasExpandidas, setCategoriasExpandidas] = useState(false);
+  const categoriasContainerRef = useRef(null);
+  const [precisaBotaoMais, setPrecisaBotaoMais] = useState(false);
+
   const categoriasSeguras = Array.isArray(menuCategorias) ? menuCategorias : [];
   const produtosSeguros = Array.isArray(comandaAtiva?.produtos) ? comandaAtiva.produtos : [];
   const tagsSeguras = Array.isArray(comandaAtiva?.tags) ? comandaAtiva.tags : [];
@@ -41,6 +46,19 @@ export default function PainelComanda({
     if (inputBuscaRef.current && !modalAberto) inputBuscaRef.current.focus();
   }, [comandaAtiva?.id, modalAberto]);
 
+  // Listener para identificar se a barra de categorias precisa do botão de expandir
+  useEffect(() => {
+    const checkOverflow = () => {
+      if (categoriasContainerRef.current) {
+        const hasOverflow = categoriasContainerRef.current.scrollWidth > categoriasContainerRef.current.clientWidth;
+        setPrecisaBotaoMais(hasOverflow);
+      }
+    };
+    checkOverflow();
+    window.addEventListener('resize', checkOverflow);
+    return () => window.removeEventListener('resize', checkOverflow);
+  }, [categoriasSeguras]);
+
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       const activeEl = document.activeElement;
@@ -49,25 +67,22 @@ export default function PainelComanda({
       
       if (modalAberto) return;
 
-      const isSpecialKey = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'Escape', 'Enter'].includes(e.key);
+      // REMOVIDO F4 da lista de atalhos globais
+      const isSpecialKey = ['F1', 'F2', 'F3', 'F5', 'F6', 'Escape', 'Enter'].includes(e.key);
       
       if (!isSpecialKey && isInput) return;
 
-      // 1. ESC Inteligente: Foco condicional
       if (e.key === 'Escape') { 
         e.preventDefault(); 
         if (isInput && activeEl !== inputBuscaRef.current) {
-          // Se estava pesquisando cliente ou em outro input, volta pra barra de produto
           inputBuscaRef.current?.focus();
         } else {
-          // Se já estava na barra de produto ou fora de inputs, fecha a comanda
           activeEl?.blur();
           if (setIdSelecionado) setIdSelecionado(null); 
         }
         return;
       }
 
-      // 2. F5 + ENTER Inteligente
       if (e.key === 'Enter' && isInput) {
         const placeholder = activeEl?.placeholder?.toLowerCase() || '';
         if (placeholder.includes('liente') || placeholder.includes('fidelidade')) {
@@ -75,7 +90,6 @@ export default function PainelComanda({
            const primeiroCliente = document.querySelector('ul > li, li[class*="cursor-pointer"], div[class*="cursor-pointer"][class*="hover"], .item-cliente');
            if (primeiroCliente) {
               primeiroCliente.click();
-              // Retorna foco para a busca de produtos logo após selecionar
               setTimeout(() => {
                 inputBuscaRef.current?.focus();
               }, 150);
@@ -88,7 +102,6 @@ export default function PainelComanda({
         return; 
       }
 
-      // 3. Atalhos Globais: Usamos blur() antes para evitar vazamento de digitação (Bug do F2)
       if (e.key === 'F1') { e.preventDefault(); activeEl?.blur(); setMostrarModalPeso(true); }
       if (e.key === 'F2') { 
         e.preventDefault(); 
@@ -104,7 +117,6 @@ export default function PainelComanda({
            encerrarMesa(); 
         }
       }
-      if (e.key === 'F4') { e.preventDefault(); activeEl?.blur(); if(alterarNomeComanda) alterarNomeComanda(comandaAtiva.id, comandaAtiva.nome); }
       
       if (e.key === 'F5') { 
         e.preventDefault();
@@ -122,18 +134,14 @@ export default function PainelComanda({
     
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [modalAberto, produtosSeguros, comandaAtiva, setMostrarModalPeso, setMostrarModalPagamento, encerrarMesa, setIdSelecionado, alterarNomeComanda, adicionarClienteComanda, alternarTipoComanda]);
+  }, [modalAberto, produtosSeguros, comandaAtiva, setMostrarModalPeso, setMostrarModalPagamento, encerrarMesa, setIdSelecionado, adicionarClienteComanda, alternarTipoComanda]);
 
   const itensFiltrados = useMemo(() => {
-    // Se não tem texto, mostra só a categoria atual
     if (!filtroTexto) return categoriaSelecionada?.itens || [];
-    
     const busca = filtroTexto.toLowerCase();
     const termoBuscaReal = busca.includes('*') ? busca.split('*')[1].trim() : busca;
-    
     if (!termoBuscaReal) return categoriaSelecionada?.itens || [];
 
-    // Busca Global: Junta os itens de TODAS as categorias da empresa se houver texto
     return categoriasSeguras.flatMap(c => c.itens || []).filter(p => 
       p.nome.toLowerCase().includes(termoBuscaReal) || 
       (p.codigo && String(p.codigo).toLowerCase().includes(termoBuscaReal))
@@ -159,7 +167,6 @@ export default function PainelComanda({
       let produtoEncontrado = null;
       let idCategoriaDoProduto = null;
 
-      // Procura o produto em todas as categorias por ID ou Código
       for (const cat of categoriasSeguras) {
         if (cat.itens) {
           produtoEncontrado = cat.itens.find(p => String(p.id) === busca || (p.codigo && String(p.codigo).toLowerCase() === busca));
@@ -170,10 +177,8 @@ export default function PainelComanda({
         }
       }
 
-      // Se não achou por código/ID exato, pega o primeiro da lista filtrada (Busca Global)
       if (!produtoEncontrado && itensFiltrados.length > 0) {
         produtoEncontrado = itensFiltrados[0];
-        // Descobre de qual categoria é esse primeiro produto encontrado
         const catEncontrada = categoriasSeguras.find(c => c.itens?.some(i => i.id === produtoEncontrado.id));
         if (catEncontrada) idCategoriaDoProduto = catEncontrada.id;
       }
@@ -181,8 +186,6 @@ export default function PainelComanda({
       if (produtoEncontrado) {
         adicionarProdutoNaComanda(produtoEncontrado, qtd);
         setFiltroTexto('');
-        
-        // MUDA A CATEGORIA VISUALMENTE para a do produto encontrado
         if (idCategoriaDoProduto && idCategoriaDoProduto !== filtroCategoriaCardapio) {
           setFiltroCategoriaCardapio(idCategoriaDoProduto);
         }
@@ -226,7 +229,6 @@ export default function PainelComanda({
     const grupos = [];
     produtosSeguros.forEach(p => {
       if (!p.id) return;
-
       const index = grupos.findIndex(g => g.nome === p.nome && g.precoUnitario === Number(p.preco) && g.observacao === p.observacao && g.pago === p.pago);
       if (index >= 0) { grupos[index].quantidade += 1; grupos[index].ids.push(p.id); grupos[index].precoTotal += Number(p.preco); } 
       else { grupos.push({ nome: p.nome, precoUnitario: Number(p.preco), precoTotal: Number(p.preco), observacao: p.observacao, pago: p.pago, quantidade: 1, ids: [p.id], custo: p.custo || 0 }); }
@@ -255,37 +257,78 @@ export default function PainelComanda({
   return (
     <div className={`flex flex-col w-full h-[calc(100vh-140px)] min-h-[500px] animate-in zoom-in-95 duration-300 rounded-b-2xl shadow-xl border-x border-b border-t-0 overflow-hidden ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
       
-      {/* Barra de atalhos expandida e com tamanho fixo */}
-      <div className={`w-full shrink-0 flex items-center gap-4 overflow-x-auto scrollbar-hide px-4 border-b text-[10px] font-bold uppercase tracking-widest min-h-[48px] max-h-[48px] h-12 ${temaNoturno ? 'bg-gray-950 border-gray-800 text-gray-400' : 'bg-gray-100 border-gray-200 text-gray-600'}`}>
-        <button onClick={() => setIdSelecionado(null)} className="hover:text-purple-500 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-          <kbd className={`px-1.5 py-0.5 rounded shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'}`}>ESC</kbd> Voltar
-        </button>
+      {/* --- NOVA BARRA SUPERIOR (PESQUISA ESQUERDA, ATALHOS DIREITA) --- */}
+      <div className={`w-full shrink-0 flex flex-col md:flex-row items-center justify-between gap-4 p-4 border-b min-h-[64px] ${temaNoturno ? 'bg-gray-950 border-gray-800' : 'bg-white border-gray-200'}`}>
         
-        <div className={`w-px h-4 ${temaNoturno ? 'bg-gray-800' : 'bg-gray-300'}`}></div>
+        {/* Barra de Pesquisa */}
+        <div className="w-full md:w-1/2 relative">
+          <input 
+              ref={inputBuscaRef} type="text" 
+              placeholder="Busque pelo nome ou código do produto" 
+              value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)} onKeyDown={handleBuscaKeyDown}
+              className={`w-full p-3 pl-10 rounded-xl outline-none font-bold text-sm transition-all border ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white focus:border-purple-500' : 'bg-gray-50 border-gray-300 text-black focus:border-purple-500 shadow-sm'}`}
+          />
+          <svg className="w-4 h-4 absolute left-4 top-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        </div>
 
-        <button onClick={() => setMostrarModalPeso(true)} className="hover:text-purple-500 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-          <kbd className={`px-1.5 py-0.5 rounded shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'}`}>F1</kbd> Peso
-        </button>
-        
-        <button onClick={() => { if(produtosSeguros.filter(p => !p.pago).length > 0) setMostrarModalPagamento(true); }} className="hover:text-purple-500 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-          <kbd className={`px-1.5 py-0.5 rounded shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'}`}>F2</kbd> Cobrar
-        </button>
-        
-        <button onClick={() => { if(produtosSeguros.length > 0 && !produtosSeguros.some(p => !p.pago)) encerrarMesa(); }} className="hover:text-purple-500 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-          <kbd className={`px-1.5 py-0.5 rounded shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'}`}>F3</kbd> Encerrar
-        </button>
+        {/* Barra de Atalhos Exclusiva Desktop (hidden md:flex) */}
+        <div className={`hidden md:flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest ${temaNoturno ? 'text-gray-400' : 'text-gray-600'}`}>
+          <button onClick={() => setIdSelecionado(null)} className="hover:text-purple-500 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+            <kbd className={`px-1.5 py-0.5 rounded shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'}`}>ESC</kbd> Voltar
+          </button>
+          
+          <div className={`w-px h-4 ${temaNoturno ? 'bg-gray-800' : 'bg-gray-300'}`}></div>
 
-        <div className={`w-px h-4 ${temaNoturno ? 'bg-gray-800' : 'bg-gray-300'}`}></div>
-        
-        <button onClick={() => alterarNomeComanda(comandaAtiva.id, comandaAtiva.nome)} className="hover:text-purple-500 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-          <kbd className={`px-1.5 py-0.5 rounded shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'}`}>F4</kbd> Comanda
-        </button>
-        
-        <button onClick={() => adicionarClienteComanda(comandaAtiva.id, comandaAtiva.nome)} className="hover:text-purple-500 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-          <kbd className={`px-1.5 py-0.5 rounded shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'}`}>F5</kbd> Cliente
-        </button>
-        
+          <button onClick={() => setMostrarModalPeso(true)} className="hover:text-purple-500 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+            <kbd className={`px-1.5 py-0.5 rounded shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'}`}>F1</kbd> Peso
+          </button>
+          
+          <button onClick={() => { if(produtosSeguros.filter(p => !p.pago).length > 0) setMostrarModalPagamento(true); }} className="hover:text-purple-500 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+            <kbd className={`px-1.5 py-0.5 rounded shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'}`}>F2</kbd> Cobrar
+          </button>
+          
+          <button onClick={() => { if(produtosSeguros.length > 0 && !produtosSeguros.some(p => !p.pago)) encerrarMesa(); }} className="hover:text-purple-500 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+            <kbd className={`px-1.5 py-0.5 rounded shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'}`}>F3</kbd> Encerrar
+          </button>
 
+          <div className={`w-px h-4 ${temaNoturno ? 'bg-gray-800' : 'bg-gray-300'}`}></div>
+          
+          {/* F4 FOI REMOVIDO DA INTERFACE */}
+
+          <button onClick={() => adicionarClienteComanda(comandaAtiva.id, comandaAtiva.nome)} className="hover:text-purple-500 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+            <kbd className={`px-1.5 py-0.5 rounded shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'}`}>F5</kbd> Cliente
+          </button>
+        </div>
+      </div>
+
+      {/* --- NOVA LINHA DE CATEGORIAS RESPONSIVA --- */}
+      <div className={`w-full shrink-0 border-b relative p-3 ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
+        <div className="flex gap-2 items-center w-full">
+          <div 
+            ref={categoriasContainerRef}
+            className={`flex gap-2 overflow-hidden transition-all duration-300 w-full ${categoriasExpandidas ? 'flex-wrap max-h-[300px]' : 'flex-nowrap max-h-12 pr-24'}`}
+          >
+            {categoriasSeguras.map(c => c ? (
+              <button 
+                key={c.id} 
+                onClick={() => { setFiltroCategoriaCardapio(c.id); setFiltroTexto(''); setCategoriasExpandidas(false); }} 
+                className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${categoriaSelecionada?.id === c.id ? (temaNoturno ? 'bg-purple-600 text-white shadow-md' : 'bg-purple-600 text-white shadow-md') : (temaNoturno ? 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200')}`}
+              >
+                {c.nome}
+              </button>
+            ) : null)}
+          </div>
+          
+          {/* Botão para Expandir Categorias no mobile ou telas pequenas */}
+          {precisaBotaoMais && !categoriasExpandidas && (
+            <button 
+              onClick={() => setCategoriasExpandidas(true)} 
+              className={`absolute right-0 top-0 h-full px-4 font-black text-[10px] uppercase tracking-widest flex items-center shadow-[-10px_0_15px_rgba(0,0,0,0.1)] transition-colors ${temaNoturno ? 'bg-gray-900 text-purple-400 hover:text-purple-300' : 'bg-gray-50 text-purple-600 hover:text-purple-700'}`}
+            >
+              + Categorias
+            </button>
+          )}
+        </div>
       </div>
       
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
@@ -299,31 +342,13 @@ export default function PainelComanda({
         
         <div className={`w-full md:w-[60%] lg:w-[65%] flex flex-col h-full min-h-0 border-r ${abaDetalheMobile === 'menu' ? 'flex' : 'hidden md:flex'} ${temaNoturno ? 'border-gray-800' : 'border-gray-100'}`}>
           
-          <div className={`p-4 shrink-0 flex gap-2 flex-wrap border-b ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-            {categoriasSeguras.map(c => c ? (
-              <button key={c.id} onClick={() => { setFiltroCategoriaCardapio(c.id); setFiltroTexto(''); }} className={`px-5 py-2.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${categoriaSelecionada?.id === c.id ? (temaNoturno ? 'bg-purple-600 text-white shadow-md shadow-purple-900/50' : 'bg-purple-600 text-white shadow-md shadow-purple-200') : (temaNoturno ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}`}>
-                {c.nome}
-              </button>
-            ) : null)}
-          </div>
-
-          <div className={`p-4 shrink-0 border-b ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
-            <div className="relative">
-              <input 
-                  ref={inputBuscaRef} type="text" 
-                  placeholder="Busque pelo nome ou código do produto" 
-                  value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)} onKeyDown={handleBuscaKeyDown}
-                  className={`w-full p-4 pl-12 rounded-xl outline-none font-bold text-sm transition-all border ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white focus:border-purple-500' : 'bg-white border-gray-300 text-black focus:border-purple-500 shadow-sm'}`}
-              />
-              <svg className="w-5 h-5 absolute left-4 top-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-            </div>
-          </div>
+          {/* Pesquisa e Categorias foram movidas para a Global Top Bar */}
 
           <div className="flex-1 overflow-y-auto min-h-0 p-4 pb-10 scrollbar-hide">
             
             <button onClick={() => setMostrarModalPeso(true)} className={`w-full flex justify-between items-center p-4 mb-6 rounded-xl border transition-all active:scale-95 shadow-sm group ${temaNoturno ? 'bg-gray-800 border-gray-700 hover:border-purple-500 text-gray-200' : 'bg-white border-gray-200 hover:border-purple-400 text-gray-800'}`}>
                <div className="flex flex-col text-left">
-                 <span className="font-bold text-sm">Adicionar Produto por Peso <span className="opacity-70 text-purple-500 ml-1">[F1]</span></span>
+                 <span className="font-bold text-sm">Adicionar Produto por Peso <span className="opacity-70 text-purple-500 ml-1 hidden md:inline">[F1]</span></span>
                  <span className={`text-[10px] font-medium uppercase tracking-widest ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Pesagem Manual Integrada</span>
                </div>
                <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${temaNoturno ? 'bg-gray-700 group-hover:bg-purple-600 text-white' : 'bg-gray-100 group-hover:bg-purple-100 group-hover:text-purple-700'}`}>+</span>
@@ -394,8 +419,8 @@ export default function PainelComanda({
               <span className="text-3xl font-black text-green-600 dark:text-green-400 tracking-tighter">R$ {produtosSeguros.filter(p => !p.pago).reduce((acc, p) => acc + Number(p.preco || 0), 0).toFixed(2)}</span>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setMostrarModalPagamento(true)} disabled={produtosSeguros.filter(p=>!p.pago).length === 0} className="flex-[2] bg-green-600 hover:bg-green-700 py-4 rounded-xl font-black text-white text-sm uppercase tracking-widest transition-all shadow-lg disabled:opacity-50 active:scale-95">COBRAR <span className="text-[10px] opacity-70 ml-1">[F2]</span></button>
-              <button onClick={encerrarMesa} disabled={!comandaAtiva || produtosSeguros.length === 0 || produtosSeguros.some(p => !p.pago)} className={`flex-1 py-4 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all disabled:opacity-30 active:scale-95 flex flex-col items-center justify-center ${temaNoturno ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}><span>Encerrar</span><span className="text-[8px] opacity-70">[F3]</span></button>
+              <button onClick={() => setMostrarModalPagamento(true)} disabled={produtosSeguros.filter(p=>!p.pago).length === 0} className="flex-[2] bg-green-600 hover:bg-green-700 py-4 rounded-xl font-black text-white text-sm uppercase tracking-widest transition-all shadow-lg disabled:opacity-50 active:scale-95">COBRAR <span className="text-[10px] opacity-70 ml-1 hidden md:inline">[F2]</span></button>
+              <button onClick={encerrarMesa} disabled={!comandaAtiva || produtosSeguros.length === 0 || produtosSeguros.some(p => !p.pago)} className={`flex-1 py-4 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all disabled:opacity-30 active:scale-95 flex flex-col items-center justify-center ${temaNoturno ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}><span>Encerrar</span><span className="text-[8px] opacity-70 hidden md:inline">[F3]</span></button>
             </div>
           </div>
         </div>
