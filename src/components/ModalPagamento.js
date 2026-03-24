@@ -66,6 +66,8 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
   const troco = Math.max(0, totalPago - valorFinal);
 
   const adicionarPagamento = useCallback((forma) => {
+    setListaItensExpandida(false); // Recolhe automaticamente a div de itens a pagar
+
     setPagamentos(prev => {
       if (forma === 'Fidelidade') {
         return [{ id: Date.now(), forma: 'Fidelidade', valor: valorFinal }];
