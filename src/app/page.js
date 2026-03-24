@@ -43,13 +43,13 @@ export default function Home() {
   const getAnoAtual = () => getHoje().substring(0, 4);
 
   const fraseCarregamento = useMemo(() => {
-    const frases = ["Carregando", "Organizando as comandas", "Sincronizando banco de dados", "Calculando faturamento", "Falta só mais isso aqui"];
+    const frases = ["Iniciando conexão segura", "Carregando módulos", "Sincronizando banco de dados", "Validando criptografia", "Quase pronto"];
     return frases[Math.floor(Math.random() * frases.length)];
   }, []);
 
   const [sessao, setSessao] = useState(null); 
   const [credenciais, setCredenciais] = useState({ email: '', senha: '' });
-  const [nomeEmpresa, setNomeEmpresa] = useState('A Carregar...'); 
+  const [nomeEmpresa, setNomeEmpresa] = useState('Bom a Bessa'); // Nome genérico padrão
   const [temaNoturno, setTemaNoturno] = useState(false);
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
 
@@ -59,7 +59,6 @@ export default function Home() {
   const [logoEmpresaEdicao, setLogoEmpresaEdicao] = useState('');
   const [nomeUsuarioEdicao, setNomeUsuarioEdicao] = useState('');
   
-  // NOVO: Estado para armazenar os dados do plano direto da tabela Empresas
   const [dadosPlano, setDadosPlano] = useState({ nome: 'Free', validade: null });
 
   const [ignorarAvisoAntigas, setIgnorarAvisoAntigas] = useState(false);
@@ -129,43 +128,38 @@ export default function Home() {
 
   useEffect(() => {
     localStorage.setItem('bessa_tema_noturno', JSON.stringify(temaNoturno));
-    document.body.style.backgroundColor = temaNoturno ? '#111827' : '#f9fafb'; 
+    document.body.style.backgroundColor = temaNoturno ? '#0f172a' : '#f8fafc'; 
     let metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (!metaThemeColor) {
       metaThemeColor = document.createElement('meta');
       metaThemeColor.name = 'theme-color';
       document.head.appendChild(metaThemeColor);
     }
-    metaThemeColor.setAttribute('content', temaNoturno ? '#1f2937' : '#ffffff');
+    metaThemeColor.setAttribute('content', temaNoturno ? '#1e293b' : '#ffffff');
   }, [temaNoturno]);
 
   const fazerLogout = () => {
     localStorage.removeItem('bessa_session');
     localStorage.removeItem('bessa_logo_empresa');
-    setSessao(null); setCredenciais({ email: '', senha: '' }); setMostrarMenuPerfil(false); setMenuMobileAberto(false); setAbaAtiva('comandas'); setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
+    setSessao(null); 
+    setCredenciais({ email: '', senha: '' }); 
+    setMostrarMenuPerfil(false); 
+    setMenuMobileAberto(false); 
+    setAbaAtiva('comandas'); 
+    setNomeEmpresa('Bom a Bessa'); // Reseta para o padrão
+    setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png'); // Reseta para a logo padrão
   };
 
-  // 1. FUNÇÃO PARA DADOS ESTÁTICOS - ATUALIZADA PARA PEGAR O PLANO
   const fetchDadosEstaticos = async () => {
     if (!sessao?.empresa_id) return;
     try {
       const { data: empData } = await supabase.from('empresas').select('*').eq('id', sessao.empresa_id).single();
       if (empData) {
-        setNomeEmpresa(empData.nome || "A Minha Loja");
+        setNomeEmpresa(empData.nome || "Bom a Bessa");
         setNomeEmpresaEdicao(empData.nome || "");
-        
-        // Puxando o plano da empresa
-        setDadosPlano({
-          nome: empData.plano || 'Free',
-          validade: empData.validade_plano || null
-        });
-
+        setDadosPlano({ nome: empData.plano || 'Free', validade: empData.validade_plano || null });
         const urlLogo = empData.logo || empData.logo_url;
-        if (urlLogo) {
-          setLogoEmpresa(urlLogo); 
-          setLogoEmpresaEdicao(urlLogo); 
-          localStorage.setItem('bessa_logo_empresa', urlLogo); 
-        }
+        if (urlLogo) { setLogoEmpresa(urlLogo); setLogoEmpresaEdicao(urlLogo); localStorage.setItem('bessa_logo_empresa', urlLogo); }
       }
 
       const { data: catData } = await supabase.from('categorias').select('*, itens:produtos(*)').eq('empresa_id', sessao.empresa_id);
@@ -183,10 +177,9 @@ export default function Home() {
       const { data: configFid } = await supabase.from('config_fidelidade').select('*').eq('empresa_id', sessao.empresa_id).single();
       if (configFid) setMetaFidelidade(configFid);
 
-    } catch (err) { console.error("Fetch estático falhou:", err); }
+    } catch (err) {}
   };
 
-  // 2. FUNÇÃO DE CARGA INICIAL
   const fetchHistoricoCompleto = async () => {
     if (!sessao?.empresa_id) return;
     setIsLoading(true);
@@ -197,10 +190,9 @@ export default function Home() {
       
       const { data: comData } = await supabase.from('comandas').select('*, produtos:comanda_produtos(*), pagamentos(*)').eq('empresa_id', sessao.empresa_id).order('id', { ascending: false }).limit(3000);
       if (comData) setComandas(comData.reverse());
-    } catch (err) { console.error("Fetch falhou:", err); } finally { setIsLoading(false); }
+    } catch (err) {} finally { setIsLoading(false); }
   };
 
-  // 3. FUNÇÃO SUPER LEVE PARA POLLING
   const fetchApenasAtualizacoes = async () => {
     if (!sessao?.empresa_id) return;
     try {
@@ -220,7 +212,7 @@ export default function Home() {
           return novoEstado.sort((a, b) => a.id - b.id);
         });
       }
-    } catch (err) { console.error("Erro no polling leve:", err); }
+    } catch (err) {}
   };
 
   useEffect(() => {
@@ -243,35 +235,25 @@ export default function Home() {
     } catch (err) { mostrarAlerta("Erro", "Erro ao abrir caixa: " + err.message); } finally { setIsLoading(false); }
   };
 
-  // FUNÇÃO SALVAR EMPRESA
   const salvarConfigEmpresa = async () => {
     if (nomeEmpresaEdicao.trim() === '') return mostrarAlerta("Aviso", "O nome do estabelecimento não pode estar vazio.");
-    
     const { error: errorEmpresa } = await supabase.from('empresas').update({ nome: nomeEmpresaEdicao, logo_url: logoEmpresaEdicao }).eq('id', sessao.empresa_id);
     const { error: errorUsuario } = await supabase.from('usuarios').update({ nome_usuario: nomeUsuarioEdicao }).eq('id', sessao.id);
-
     if (errorEmpresa || errorUsuario) {
       return mostrarAlerta("Erro", "Erro ao salvar no banco de dados: " + (errorEmpresa?.message || errorUsuario?.message));
     }
-
     setNomeEmpresa(nomeEmpresaEdicao); 
     setLogoEmpresa(logoEmpresaEdicao || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'); 
-    
     const novaSessao = { ...sessao, nome_usuario: nomeUsuarioEdicao };
     setSessao(novaSessao);
     localStorage.setItem('bessa_session', JSON.stringify(novaSessao));
-
     setMostrarConfigEmpresa(false);
     mostrarAlerta("Sucesso", "Configurações atualizadas com sucesso!");
   };
 
-  // NOVA FUNÇÃO: ALTERAR SENHA
   const alterarSenhaConta = async (senhaAtualInformada, novaSenhaDesejada) => {
     try {
-      const { data: usuarioAuth, error: errorAuth } = await supabase.auth.updateUser({
-        password: novaSenhaDesejada
-      });
-      
+      const { data: usuarioAuth, error: errorAuth } = await supabase.auth.updateUser({ password: novaSenhaDesejada });
       if (errorAuth) throw errorAuth;
       mostrarAlerta("Segurança", "Sua senha foi atualizada com sucesso no banco de dados.");
     } catch (err) {
@@ -284,16 +266,79 @@ export default function Home() {
     const qtdHoje = comandas.filter(c => c.data === getHoje()).length;
     const novaComanda = { nome: `Comanda ${qtdHoje + 1}`, tipo, data: getHoje(), hora_abertura: new Date().toISOString(), status: 'aberta', tags: [], empresa_id: sessao.empresa_id };
     const { data, error } = await supabase.from('comandas').insert([novaComanda]).select().single();
-    if (data && !error) setComandas([...comandas, { ...data, produtos: [], pagamentos: [] }]);
+    if (data && !error) {
+       setComandas([...comandas, { ...data, produtos: [], pagamentos: [] }]);
+       setIdSelecionado(data.id); 
+    }
   };
 
-  const adicionarProdutoNaComanda = async (produto) => {
-    if (!sessao?.empresa_id) return;
-    const payload = { comanda_id: idSelecionado, nome: produto.nome, preco: produto.preco, custo: produto.custo || 0, pago: false, observacao: '', empresa_id: sessao.empresa_id };
-    const { data, error } = await supabase.from('comanda_produtos').insert([payload]).select().single();
+  const alterarNomeComanda = (id, nomeAtual) => {
+    mostrarPrompt("Alterar Nome [F4]", "Digite o novo nome ou identificador da comanda:", nomeAtual, async (novoNome) => {
+      if(novoNome) {
+        await supabase.from('comandas').update({nome: novoNome}).eq('id', id);
+        setComandas(comandas.map(c => c.id === id ? {...c, nome: novoNome} : c));
+      }
+    });
+  };
+
+  const adicionarClienteComanda = (id, nomeAtual) => {
+    mostrarPrompt("Atribuir Cliente [F5]", "Digite o nome do cliente:", "", async (cliente) => {
+      if(cliente) {
+        const novoNome = `${nomeAtual} - ${cliente}`;
+        await supabase.from('comandas').update({nome: novoNome}).eq('id', id);
+        setComandas(comandas.map(c => c.id === id ? {...c, nome: novoNome} : c));
+      }
+    });
+  };
+
+  const alternarTipoComanda = async (id, tipoAtual) => {
+    const novoTipo = tipoAtual === 'Balcão' ? 'Delivery' : 'Balcão';
+    await supabase.from('comandas').update({tipo: novoTipo}).eq('id', id);
+    setComandas(comandas.map(c => c.id === id ? {...c, tipo: novoTipo} : c));
+  };
+
+  const adicionarProdutoNaComanda = async (produto, quantidade = 1) => {
+    if (!sessao?.empresa_id || !idSelecionado) return;
+    const qtdValida = parseInt(quantidade);
+    if (isNaN(qtdValida) || qtdValida === 0) return;
+
+    if (qtdValida < 0) {
+      const comanda = comandas.find(c => c.id === idSelecionado);
+      if (!comanda) return;
+      
+      const produtosParaExcluir = (comanda.produtos || [])
+        .filter(p => p.nome === produto.nome && Number(p.preco) === Number(produto.preco) && !p.pago && p.id)
+        .slice(0, Math.abs(qtdValida)); 
+
+      if (produtosParaExcluir.length > 0) {
+        const ids = produtosParaExcluir.map(p => p.id);
+        const { error } = await supabase.from('comanda_produtos').delete().in('id', ids);
+        if (!error) {
+           setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: (c.produtos || []).filter(p => !ids.includes(p.id)) } : c));
+        }
+      }
+      return;
+    }
+    
+    const payloadArray = Array.from({ length: qtdValida }).map(() => ({ 
+      comanda_id: idSelecionado, 
+      nome: produto.nome, 
+      preco: produto.preco, 
+      custo: produto.custo || 0, 
+      pago: false, 
+      observacao: '', 
+      empresa_id: sessao.empresa_id 
+    }));
+    
+    const { data, error } = await supabase.from('comanda_produtos').insert(payloadArray).select();
+    
     if (data && !error) {
-      setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: [...(c.produtos || []), data] } : c));
-      setMostrarModalPeso(false); setAbaDetalheMobile('resumo');
+      setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: [...(c.produtos || []), ...data] } : c));
+      setMostrarModalPeso(false); 
+      setAbaDetalheMobile('resumo');
+    } else if (error) {
+       console.error("Erro ao inserir: ", error);
+       mostrarAlerta("Erro", "Ocorreu um problema ao adicionar os produtos.");
     }
   };
 
@@ -310,12 +355,25 @@ export default function Home() {
     const tagsAtuais = comandaAtual?.tags || [];
     const novasTags = tagsAtuais.includes("Fidelidade") ? tagsAtuais : [...tagsAtuais, "Fidelidade"];
     const { error } = await supabase.from('comandas').update({ nome: novoNome, tags: novasTags }).eq('id', idComanda);
-    if (!error) {
-      setComandas(comandas.map(c => c.id === idComanda ? { ...c, nome: novoNome, tags: novasTags } : c));
+    if (!error) setComandas(comandas.map(c => c.id === idComanda ? { ...c, nome: novoNome, tags: novasTags } : c));
+  };
+
+  const excluirGrupoProdutos = async (nome, preco) => {
+    if (!idSelecionado) return;
+    const comanda = comandas.find(c => c.id === idSelecionado);
+    if (!comanda) return;
+
+    const produtosDoGrupo = (comanda.produtos || []).filter(p => p.nome === nome && Number(p.preco) === Number(preco) && !p.pago && p.id);
+    const ids = produtosDoGrupo.map(p => p.id);
+    
+    if (ids.length > 0) {
+      await supabase.from('comanda_produtos').delete().in('id', ids);
+      setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: (c.produtos || []).filter(p => !ids.includes(p.id)) } : c));
     }
   };
 
   const excluirProduto = async (idProduto) => {
+    if (!idProduto) return;
     await supabase.from('comanda_produtos').delete().eq('id', idProduto);
     setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: (c.produtos || []).filter(p => p.id !== idProduto) } : c));
   };
@@ -433,13 +491,9 @@ export default function Home() {
   };
 
   const comandaAtiva = comandas.find(c => c.id === idSelecionado);
-  const alertaTags = comandas.filter(c => c.status === 'aberta').length >= 3 && comandas.filter(c => c.status === 'aberta').every(c => !(c.tags || []).length);
-
   const comandasFiltradas = comandas.filter(c => isComandaInFiltro(c.data));
   const comandasAbertas = comandas.filter(c => c.status === 'aberta');
-  const comandasFechadasHoje = comandas.filter(c => c.status === 'fechada' && c.data === getHoje());
-  const comandasAntigasAbertas = comandas.filter(c => c.status === 'aberta' && caixaAtual?.data_abertura && c.data && String(c.data).substring(0,10) !== String(caixaAtual.data_abertura).substring(0,10));
-
+  
   const faturamentoTotal = comandasFiltradas.reduce((acc, c) => acc + (c.produtos || []).reduce((sum, p) => sum + (p.preco || 0), 0), 0);
   const custoTotalFiltrado = comandasFiltradas.reduce((acc, c) => acc + (c.produtos || []).reduce((sum, p) => sum + (p.custo || 0), 0), 0);
   const lucroEstimado = faturamentoTotal - custoTotalFiltrado;
@@ -454,16 +508,10 @@ export default function Home() {
       const nomeOriginal = String(p?.nome || '');
       const isPeso = nomeOriginal.toLowerCase().includes('peso') || nomeOriginal.toLowerCase().includes('balança');
       let nomeDisplay = isPeso ? nomeOriginal.replace(/\s*\(\d+(?:\.\d+)?\s*g\)/i, '').trim() : nomeOriginal;
-      
       const nomeChave = nomeDisplay.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
 
       if (!contagemProdutos[nomeChave]) { 
-        contagemProdutos[nomeChave] = { 
-          nomeDisplay: nomeDisplay.toUpperCase(),
-          faturamento: 0, 
-          volume: 0, 
-          isPeso: isPeso 
-        }; 
+        contagemProdutos[nomeChave] = { nomeDisplay: nomeDisplay.toUpperCase(), faturamento: 0, volume: 0, isPeso: isPeso }; 
       }
       
       contagemProdutos[nomeChave].faturamento += (p.preco || 0);
@@ -476,39 +524,48 @@ export default function Home() {
     });
   });
   
-  const rankingProdutos = Object.values(contagemProdutos)
-    .map(item => ({ nome: item.nomeDisplay, valor: item.faturamento, volume: item.volume, isPeso: item.isPeso }))
-    .sort((a, b) => b.valor - a.valor);
+  const rankingProdutos = Object.values(contagemProdutos).map(item => ({ nome: item.nomeDisplay, valor: item.faturamento, volume: item.volume, isPeso: item.isPeso })).sort((a, b) => b.valor - a.valor);
   
-  if (!sessao) { return <Login getHoje={getHoje} setSessao={setSessao} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />; }
+  if (!sessao) return <Login getHoje={getHoje} setSessao={setSessao} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />; 
+  if (sessao.role === 'super_admin') return <SuperAdminPainel fazerLogout={fazerLogout} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />;
 
-  if (sessao.role === 'super_admin') {
-    return <SuperAdminPainel fazerLogout={fazerLogout} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />;
-  }
-
+  // --- TELA DE CARREGAMENTO PREMIUM - SOFISTICADA E SÉRIA ---
   if (isLoading && comandas.length === 0) {
     return (
-      <div className={`min-h-screen flex flex-col items-center justify-center gap-8 ${temaNoturno ? 'bg-gray-900' : 'bg-gray-50'}`}>
-        <div className="relative">
-          <div className={`absolute inset-0 rounded-full blur-2xl opacity-20 animate-pulse ${temaNoturno ? 'bg-purple-500' : 'bg-purple-600'}`}></div>
-          <div className={`relative w-32 h-32 rounded-full border-4 overflow-hidden shadow-2xl animate-in zoom-in duration-500 flex items-center justify-center ${temaNoturno ? 'border-gray-800 bg-gray-800' : 'border-white bg-white'}`}>
-            <img src={logoEmpresa} alt="A carregar" className="w-full h-full object-cover" />
+      <div className={`min-h-screen flex flex-col items-center justify-center ${temaNoturno ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'}`}>
+        <div className="flex flex-col items-center gap-8 animate-in fade-in duration-700 p-8">
+          
+          <div className="relative flex items-center justify-center w-24 h-24">
+            <svg className="absolute inset-0 w-full h-full animate-spin text-purple-600/20" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="48" fill="none" strokeWidth="4" stroke="currentColor" strokeDasharray="301.59" strokeDashoffset="0"></circle>
+            </svg>
+            <svg className="absolute inset-0 w-full h-full animate-spin text-purple-600" style={{ animationDuration: '1.5s' }} viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="48" fill="none" strokeWidth="4" stroke="currentColor" strokeDasharray="301.59" strokeDashoffset="226.19" strokeLinecap="round"></circle>
+            </svg>
+            <div className={`w-16 h-16 rounded-full overflow-hidden shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+              <img src={logoEmpresa} alt="Logo" className="w-full h-full object-cover" />
+            </div>
           </div>
-        </div>
-        <div className="flex flex-col items-center animate-in fade-in slide-in-from-bottom-2 duration-700">
-          <p className={`font-black text-sm uppercase tracking-[0.2em] mb-3 text-center ${temaNoturno ? 'text-gray-500' : 'text-purple-400'}`}>{fraseCarregamento}</p>
-          <div className="flex gap-1.5 items-center justify-center h-4">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '0ms' }}></span>
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '150ms' }}></span>
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+
+          <div className="flex flex-col items-center gap-2">
+            <h2 className={`text-xl font-bold tracking-tight ${temaNoturno ? 'text-gray-200' : 'text-gray-800'}`}>
+              Preparando ambiente
+            </h2>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-purple-600"></span>
+              <span className={`text-xs font-medium uppercase tracking-widest ${temaNoturno ? 'text-gray-500' : 'text-gray-500'}`}>
+                {fraseCarregamento}...
+              </span>
+            </div>
           </div>
+          
         </div>
       </div>
     );
   }
 
   return (
-    <main className={`min-h-screen flex flex-col transition-colors duration-500 ${temaNoturno ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+    <main className={`min-h-screen flex flex-col transition-colors duration-500 ${temaNoturno ? 'bg-[#0f172a] text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
       
       <div className="w-full p-3 md:p-6 pb-0 md:pb-0 flex flex-col max-w-7xl mx-auto">
         <Header 
@@ -525,11 +582,16 @@ export default function Home() {
         <div className="flex-1 w-full">
           {comandaAtiva ? (
             <PainelComanda 
-              temaNoturno={temaNoturno} comandaAtiva={comandaAtiva} abaDetalheMobile={abaDetalheMobile} setAbaDetalheMobile={setAbaDetalheMobile} filtroCategoriaCardapio={filtroCategoriaCardapio} setFiltroCategoriaCardapio={setFiltroCategoriaCardapio} menuCategorias={menuCategorias} adicionarProdutoNaComanda={adicionarProdutoNaComanda} setMostrarModalPeso={setMostrarModalPeso} tagsGlobais={tagsGlobais} toggleTag={toggleTag} editarProduto={editarProduto} excluirProduto={excluirProduto} setMostrarModalPagamento={setMostrarModalPagamento} encerrarMesa={encerrarMesa} 
+              temaNoturno={temaNoturno} comandaAtiva={comandaAtiva} abaDetalheMobile={abaDetalheMobile} setAbaDetalheMobile={setAbaDetalheMobile} filtroCategoriaCardapio={filtroCategoriaCardapio} setFiltroCategoriaCardapio={setFiltroCategoriaCardapio} menuCategorias={menuCategorias} adicionarProdutoNaComanda={adicionarProdutoNaComanda} excluirGrupoProdutos={excluirGrupoProdutos} setMostrarModalPeso={setMostrarModalPeso} tagsGlobais={tagsGlobais} toggleTag={toggleTag} editarProduto={editarProduto} excluirProduto={excluirProduto} setMostrarModalPagamento={setMostrarModalPagamento} encerrarMesa={encerrarMesa} 
+              setIdSelecionado={setIdSelecionado} 
+              alterarNomeComanda={alterarNomeComanda} 
+              adicionarClienteComanda={adicionarClienteComanda} 
+              alternarTipoComanda={alternarTipoComanda}
+              modalAberto={mostrarModalPeso || mostrarModalPagamento}
             />
           ) : abaAtiva === 'comandas' ? (
             <TabComandas 
-              temaNoturno={temaNoturno} comandasAbertas={comandasAbertas} modoExclusao={modoExclusao} setModoExclusao={setModoExclusao} selecionadasExclusao={selecionadasExclusao} toggleSelecaoExclusao={toggleSelecaoExclusao} confirmarExclusaoEmMassa={confirmarExclusaoEmMassa} adicionarComanda={adicionarComanda} setIdSelecionado={setIdSelecionado} caixaAtual={caixaAtual} abrirCaixaManual={abrirCaixaManual} mostrarAlerta={mostrarAlerta}
+              temaNoturno={temaNoturno} comandasAbertas={comandasAbertas} modoExclusao={modoExclusao} setModoExclusao={setModoExclusao} selecionadasExclusao={selecionadasExclusao} toggleSelecaoExclusao={toggleSelecaoExclusao} confirmarExclusaoEmMassa={confirmarExclusaoEmMassa} adicionarComanda={adicionarComanda} setIdSelecionado={setIdSelecionado} caixaAtual={caixaAtual} abrirCaixaManual={abrirCaixaManual}
             />
           ) : abaAtiva === 'fechadas' ? (
             <TabFechadas 
@@ -570,20 +632,12 @@ export default function Home() {
         />
       )}
 
-      {/* --- O NOVO MODAL DE CONFIGURAÇÃO PREMIUM AQUI --- */}
       {mostrarConfigEmpresa && (
         <ModalConfigEmpresa 
-          temaNoturno={temaNoturno} 
-          nomeEmpresaEdicao={nomeEmpresaEdicao} 
-          setNomeEmpresaEdicao={setNomeEmpresaEdicao} 
-          logoEmpresaEdicao={logoEmpresaEdicao} 
-          setLogoEmpresaEdicao={setLogoEmpresaEdicao} 
-          nomeUsuarioEdicao={nomeUsuarioEdicao} 
-          setNomeUsuarioEdicao={setNomeUsuarioEdicao} 
-          planoUsuario={dadosPlano} // <-- Aqui agora ele usa o state que puxou da tabela 'empresas'
-          salvarConfigEmpresa={salvarConfigEmpresa} 
-          setMostrarConfigEmpresa={setMostrarConfigEmpresa} 
-          alterarSenhaConta={alterarSenhaConta} // <-- Nova função de Auth
+          temaNoturno={temaNoturno} nomeEmpresaEdicao={nomeEmpresaEdicao} setNomeEmpresaEdicao={setNomeEmpresaEdicao} 
+          logoEmpresaEdicao={logoEmpresaEdicao} setLogoEmpresaEdicao={setLogoEmpresaEdicao} nomeUsuarioEdicao={nomeUsuarioEdicao} 
+          setNomeUsuarioEdicao={setNomeUsuarioEdicao} planoUsuario={dadosPlano} salvarConfigEmpresa={salvarConfigEmpresa} 
+          setMostrarConfigEmpresa={setMostrarConfigEmpresa} alterarSenhaConta={alterarSenhaConta} 
         />
       )}
       
@@ -591,7 +645,7 @@ export default function Home() {
 
       {modalGlobal.visivel && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in">
-          <div className={`rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col border text-center ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
+          <div className={`rounded-3xl p-6 w-full max-sm shadow-2xl flex flex-col border text-center ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
             <h2 className={`text-xl font-black mb-2 ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>{modalGlobal.titulo}</h2>
             <p className={`text-sm mb-6 ${temaNoturno ? 'text-gray-400' : 'text-gray-600'}`}>{modalGlobal.mensagem}</p>
             {modalGlobal.tipo === 'prompt' && (

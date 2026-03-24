@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import CardComanda from '@/components/CardComanda';
 
 export default function TabComandas({
@@ -11,12 +11,42 @@ export default function TabComandas({
   const [saldoInicial, setSaldoInicial] = useState('');
   const [dataHoje, setDataHoje] = useState('');
   const [mostrarAntigas, setMostrarAntigas] = useState(false);
+  const debounceRef = useRef(false);
 
   useEffect(() => {
-    // Pega a data de hoje no formato YYYY-MM-DD
     const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); 
     setDataHoje(hoje);
   }, []);
+
+  // --- ATALHOS OTIMIZADOS: ENTER E 1,2,3... ---
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const tag = document.activeElement.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+
+      if (!modoExclusao && caixaAtual?.status === 'aberto') {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (!debounceRef.current) {
+            debounceRef.current = true;
+            adicionarComanda('Balcão');
+            setTimeout(() => { debounceRef.current = false; }, 1000); 
+          }
+        }
+        
+        if (e.key >= '1' && e.key <= '9') {
+          const index = parseInt(e.key) - 1;
+          const comandasHoje = comandasAbertas.filter(c => !c.data || c.data >= dataHoje);
+          if (comandasHoje[index]) {
+            e.preventDefault();
+            setIdSelecionado(comandasHoje[index].id);
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modoExclusao, caixaAtual, adicionarComanda, comandasAbertas, dataHoje, setIdSelecionado]);
 
   const handleAbrirCaixa = () => {
     abrirCaixaManual({
@@ -25,17 +55,13 @@ export default function TabComandas({
     });
   };
 
-  // Separação inteligente das comandas
   const comandasHoje = comandasAbertas.filter(c => !c.data || c.data >= dataHoje);
   const comandasAntigas = comandasAbertas.filter(c => c.data && c.data < dataHoje);
-
-  // Define qual lista renderizar no loop principal (se modo exclusão, vê tudo)
   const comandasParaRenderizar = modoExclusao ? comandasAbertas : comandasHoje;
 
   return (
     <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       
-      {/* HEADER DO PAINEL */}
       <div className={`p-5 md:p-6 pt-4 md:pt-5 rounded-b-2xl shadow-sm border-x border-b border-t-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative transition-colors duration-500 mb-6 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
           <div className="mt-2 md:mt-0">
             <h2 className={`text-xl font-black flex items-center gap-2 uppercase tracking-wide ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>
@@ -51,8 +77,12 @@ export default function TabComandas({
             <div className="flex flex-wrap gap-2 w-full md:w-auto animate-in fade-in zoom-in-95 duration-300">
                 {!modoExclusao && (
                   <>
-                    <button onClick={() => adicionarComanda('Balcão')} className={`px-4 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all border border-dashed active:scale-95 ${temaNoturno ? 'bg-purple-900/20 text-purple-400 border-purple-800 hover:bg-purple-900/40' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'}`}>+ Nova Comanda</button>
-                    <button onClick={() => adicionarComanda('Delivery')} className={`px-4 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all border border-dashed active:scale-95 ${temaNoturno ? 'bg-orange-900/20 text-orange-400 border-orange-800 hover:bg-orange-900/40' : 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100'}`}>+ Novo Delivery</button>
+                    <button onClick={() => adicionarComanda('Balcão')} className={`px-4 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all border border-dashed active:scale-95 ${temaNoturno ? 'bg-purple-900/20 text-purple-400 border-purple-800 hover:bg-purple-900/40' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'}`}>
+                      + Nova Comanda <span className="opacity-70 ml-1">[ENTER]</span>
+                    </button>
+                    <button onClick={() => adicionarComanda('Delivery')} className={`px-4 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all border border-dashed active:scale-95 ${temaNoturno ? 'bg-orange-900/20 text-orange-400 border-orange-800 hover:bg-orange-900/40' : 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100'}`}>
+                      + Novo Delivery
+                    </button>
                   </>
                 )}
                 {comandasAbertas.length > 0 && (
@@ -71,7 +101,6 @@ export default function TabComandas({
 
       <div className="flex-1 flex flex-col min-w-0 max-w-7xl mx-auto">
         
-        {/* === NOVA POSIÇÃO DA NOTIFICAÇÃO (NO TOPO) === */}
         {!modoExclusao && comandasAntigas.length > 0 && caixaAtual?.status === 'aberto' && (
           <div className="w-full mb-6 animate-in slide-in-from-top-2 duration-300">
             <button 
@@ -79,7 +108,6 @@ export default function TabComandas({
               className={`w-full flex items-center justify-between p-4 rounded-xl border transition-colors ${temaNoturno ? 'bg-blue-900/20 border-blue-800/50 text-blue-400 hover:bg-blue-900/40' : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'}`}
             >
               <div className="flex items-center gap-3">
-                {/* ÍCONE DE RELÓGIO (CONTAS EM ABERTO/FIADO) */}
                 <div className={`p-2 rounded-lg ${temaNoturno ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-600'}`}>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 </div>
@@ -95,7 +123,6 @@ export default function TabComandas({
               <div className="flex flex-wrap gap-4 md:gap-6 justify-start w-full mt-6 pb-6 border-b border-dashed border-gray-300 animate-in slide-in-from-top-4 fade-in duration-300">
                 {comandasAntigas.map(comanda => (
                   <div key={comanda.id} className="relative group transition-all hover:-translate-y-1 opacity-90 hover:opacity-100">
-                    {/* AQUI REMOVI O 'grayscale' PARA AS COMANDAS FICAREM COM AS CORES NORMAIS */}
                     <CardComanda comanda={comanda} onClick={() => setIdSelecionado(comanda.id)} temaNoturno={temaNoturno} />
                   </div>
                 ))}
@@ -105,8 +132,6 @@ export default function TabComandas({
         )}
 
         {caixaAtual?.status !== 'aberto' ? (
-          
-          /* TELA DE ABERTURA DE CAIXA MANTIDA INTACTA */
           <div className={`w-full max-w-lg mx-auto p-6 mb-6 rounded-3xl border shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
             <div className="text-center mb-6">
               <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 ${temaNoturno ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-600'}`}>
@@ -130,8 +155,7 @@ export default function TabComandas({
           </div>
 
         ) : (
-          /* SEÇÃO DE HOJE: LISTA PRINCIPAL (mb-12 pt-6... do final foi removida) */
-          <div className="flex flex-wrap gap-4 md:gap-6 justify-start w-full">
+          <div className="flex flex-wrap gap-4 md:gap-6 justify-start w-full mt-2">
             {comandasHoje.length === 0 && !modoExclusao && (
               <div className={`w-full p-12 rounded-3xl text-center border border-dashed animate-in fade-in zoom-in-95 ${temaNoturno ? 'border-gray-700 text-gray-500 bg-gray-800/50' : 'border-gray-300 text-gray-400 bg-gray-50'}`}>
                 <p className="font-bold uppercase tracking-widest text-[10px]">Nenhuma comanda aberta hoje</p>
@@ -139,14 +163,24 @@ export default function TabComandas({
               </div>
             )}
 
-            {comandasParaRenderizar.map(comanda => (
-              <div key={comanda.id} className="relative group animate-in fade-in zoom-in-95 duration-300">
+            {comandasParaRenderizar.map((comanda, index) => (
+              <div key={comanda.id} className="relative group animate-in fade-in zoom-in-95 duration-300 transition-all hover:-translate-y-1">
+                
+                {/* --- AQUI: A TAG AGORA FICA NO CANTO SUPERIOR ESQUERDO PARA NÃO SOBREPOR O TEXTO --- */}
+                {index < 9 && !modoExclusao && (
+                  <div className="absolute -top-3 -left-3 z-20 pointer-events-none transition-opacity">
+                     <kbd className={`px-2.5 py-1.5 rounded-lg border shadow-md text-[11px] font-black font-mono flex items-center justify-center ${temaNoturno ? 'bg-purple-900 border-purple-700 text-purple-100' : 'bg-purple-100 border-purple-300 text-purple-800'}`}>
+                       {index + 1}
+                     </kbd>
+                  </div>
+                )}
+
                 {modoExclusao && (
                   <div className="absolute -top-2 -right-2 z-20">
                       <input type="checkbox" checked={selecionadasExclusao.includes(comanda.id)} onChange={() => toggleSelecaoExclusao(comanda.id)} className="w-6 h-6 rounded-full border-2 border-red-500 text-red-500 cursor-pointer shadow-sm" />
                   </div>
                 )}
-                <div className={modoExclusao ? 'opacity-50 scale-95 transition-all' : 'transition-all hover:-translate-y-1'}>
+                <div className={modoExclusao ? 'opacity-50 scale-95 transition-all' : ''}>
                   <CardComanda comanda={comanda} onClick={() => { if (!modoExclusao) setIdSelecionado(comanda.id); else toggleSelecaoExclusao(comanda.id); }} temaNoturno={temaNoturno} />
                 </div>
               </div>

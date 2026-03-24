@@ -7,7 +7,7 @@ export default function Login({ getHoje, setSessao }) {
   const [loadingLogin, setLoadingLogin] = useState(false);
   const [erro, setErro] = useState('');
 
-  // Estados Premium
+  // Estados 
   const [lastLogin, setLastLogin] = useState(null);
   const [mostrarFormPadrao, setMostrarFormPadrao] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -161,7 +161,7 @@ export default function Login({ getHoje, setSessao }) {
   return (
     <div className="min-h-screen flex bg-gray-50">
       
-      {/* LADO ESQUERDO: Arte Abstrata Premium */}
+      {/* LADO ESQUERDO: Arte Abstrata  */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-[#0B0F19] overflow-hidden justify-center items-center">
         <div className="absolute top-8 left-10 flex items-center gap-3 z-20">
           <div className="w-8 h-8 bg-purple-500/20 border border-purple-500/30 rounded-lg flex items-center justify-center shadow-sm">
@@ -191,7 +191,7 @@ export default function Login({ getHoje, setSessao }) {
       {/* LADO DIREITO: Componentes Interativos */}
       <div className="w-full lg:w-1/2 flex flex-col justify-center items-center p-6 sm:p-12 lg:p-24 bg-white shadow-2xl z-10 relative">
         
-        {/* Glow de fundo sutil no lado branco para ficar mais premium */}
+        {/* Glow de fundo sutil no lado branco para ficar mais  */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-50 rounded-full blur-[100px] pointer-events-none opacity-60"></div>
         
         <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 relative z-10">
@@ -210,9 +210,6 @@ export default function Login({ getHoje, setSessao }) {
 
           {stepTrocaSenha ? (
              
-             // ==========================================
-             // PASSO 3: TROCA DE SENHA (SUPER PREMIUM)
-             // ==========================================
             <div className="mt-8 animate-in slide-in-from-right-8 duration-500">
               <div className="mb-6">
                 <h2 className="text-xl font-black text-gray-900 mb-2">Bem-vindo(a), {tempUser?.nome_usuario}!</h2>
@@ -293,9 +290,6 @@ export default function Login({ getHoje, setSessao }) {
 
           ) : (!mostrarFormPadrao && lastLogin) ? (
             
-            // ==========================================
-            // PASSO 2: CARD LOGIN SALVO (SUPER PREMIUM)
-            // ==========================================
             <div className="mt-8 flex flex-col items-center animate-in zoom-in-95 duration-500 w-full relative">
               
               <div className="w-full relative bg-white border border-gray-100 p-8 pt-10 rounded-[2.5rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] flex flex-col items-center text-center overflow-hidden z-10 group transition-all hover:shadow-[0_20px_50px_-12px_rgba(147,51,234,0.15)]">
@@ -303,7 +297,7 @@ export default function Login({ getHoje, setSessao }) {
                 {/* Linha gradiente no topo do card */}
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500"></div>
                 
-                {/* AVATAR 100% REDONDO COM BORDA PREMIUM */}
+                {/* AVATAR 100% REDONDO COM BORDA */}
                 <div className="relative mb-6">
                   {/* Anel de brilho pulsante atrás do avatar */}
                   <div className="absolute inset-[-4px] bg-gradient-to-tr from-purple-600 to-blue-400 rounded-full opacity-30 blur-md group-hover:opacity-50 transition-opacity duration-500"></div>
@@ -347,7 +341,7 @@ export default function Login({ getHoje, setSessao }) {
           ) : (
             
              // ==========================================
-             // PASSO 1: FORMULÁRIO PADRÃO (PREMIUM)
+             // PASSO 1: FORMULÁRIO PADRÃO
              // ==========================================
             <div className="mt-8 animate-in fade-in duration-300">
               <h2 className="text-xl font-bold text-gray-800">Acesso ao Sistema</h2>

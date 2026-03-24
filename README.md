@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+Guia de Contexto Técnico - Comandas Bom a Bessa
+Arquitetura do Sistema
+Framework: Next.js (App Router).
 
-## Getting Started
+Interface e Estilização: Tailwind CSS e Lucide React para iconografia.
 
-First, run the development server:
+Backend e Persistência: Supabase (PostgreSQL e Supabase Auth).
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Instância do Cliente: Centralizada em src/lib/supabase.js.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Definição da Estrutura de Dados (Supabase)
+Tabela comandas: Armazena os registros principais dos pedidos (id, numero, status, mesa, cliente, total, empresa_id).
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+Tabela itens_comanda: Detalha os produtos vinculados a cada comanda (id, comanda_id, produto_id, quantidade, preco_unitario, observacoes).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Tabela produtos: Cadastro de itens comercializáveis (id, nome, preco, categoria, codigo_barras, empresa_id).
 
-## Learn More
+Tabela caixas: Registro de operações financeiras, controle de abertura e fechamento vinculado ao usuario_id.
 
-To learn more about Next.js, take a look at the following resources:
+Regras de Negócio Fundamentais
+Isolamento de Dados (Multi-tenancy): Todos os registros são vinculados a um empresa_id. É mandatório filtrar todas as consultas e operações de escrita por este identificador para garantir a segregação de dados entre clientes.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Operações por Peso: Itens comercializados por quilograma são processados via ModalPeso.js, garantindo a precisão no cálculo de produtos fracionados.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Ciclo de Vida da Comanda: Os estados permitidos para o campo status são estritamente: 'aberta', 'fechada' e 'cancelada'.
 
-## Deploy on Vercel
+Sistema de Fidelidade: Implementado em TabFidelidade.js, responsável pela gestão de pontuação e benefícios aos clientes recorrentes.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Padrões de Desenvolvimento e Clean Code
+Componentização: Uso obrigatório de Componentes Funcionais e Arrow Functions.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Gestão de Estado: Utilização padronizada de Hooks nativos (useState, useEffect).
+
+Evolução Arquitetural: Atualmente, as chamadas ao banco de dados estão nos componentes, mas o objetivo é a migração progressiva dessa lógica para camadas isoladas em /services ou Hooks customizados para melhor manutenibilidade.
