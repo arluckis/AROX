@@ -347,7 +347,7 @@ export default function TabFaturamento({
             <div className={`p-4 md:p-5 rounded-[1.25rem] border flex flex-col justify-center h-[240px] relative overflow-hidden ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
               <h3 className={`text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-1.5 ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>
                 <svg className={`w-4 h-4 ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                Performance Gamificada
+                Performance
               </h3>
               
               {semHistorico ? (
@@ -431,21 +431,21 @@ export default function TabFaturamento({
             </div>
           )}
 
-          {widgets.mapaCalor && (
+         {widgets.mapaCalor && (
             <div className={`p-4 md:p-5 rounded-[1.25rem] border flex flex-col h-[240px] overflow-hidden ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
-              <h3 className={`text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-1.5 ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>
+              <h3 className={`text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-1.5 shrink-0 ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>
                 <svg className={`w-4 h-4 ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 Picos de Venda
               </h3>
               {maxCalor > 0 ? (
                 <div className="flex-1 w-full overflow-x-auto scrollbar-hide flex flex-col justify-center">
                   <div className="min-w-[240px] mx-auto">
-                    <div className="grid grid-cols-8 gap-1 mb-1 text-[8px] font-black text-center uppercase tracking-widest text-gray-400">
+                    <div className="grid grid-cols-8 gap-[3px] mb-[3px] text-[8px] font-black text-center uppercase tracking-widest text-gray-400">
                       <div></div>
                       {mapaCalor.horasVisiveis.map(h => <div key={h}>{h}h</div>)}
                     </div>
                     {mapaCalor.diasSemana.map((dia, idx) => (
-                      <div key={dia} className="grid grid-cols-8 gap-1 mb-1 items-center">
+                      <div key={dia} className="grid grid-cols-8 gap-[3px] mb-[3px] items-center">
                         <div className={`flex items-center text-[8px] font-black uppercase tracking-widest ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>{dia}</div>
                         {mapaCalor.horasVisiveis.map(h => {
                           const qtd = mapaCalor.matriz[idx][h];
@@ -453,7 +453,7 @@ export default function TabFaturamento({
                           return (
                             <div 
                               key={`${dia}-${h}`} title={`${qtd} comandas às ${h}h`}
-                              className={`h-6 sm:h-7 rounded-[4px] transition-all cursor-crosshair border ${temaNoturno ? 'border-gray-800' : 'border-white'}`}
+                              className={`h-[18px] sm:h-[22px] rounded-[4px] transition-all cursor-crosshair border ${temaNoturno ? 'border-gray-800' : 'border-white'}`}
                               style={{ backgroundColor: qtd > 0 ? `rgba(168, 85, 247, ${intensidade})` : (temaNoturno ? '#1f2937' : '#f3f4f6') }}
                             ></div>
                           );
