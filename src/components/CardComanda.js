@@ -31,73 +31,98 @@ export default function CardComanda({ comanda, onClick, temaNoturno }) {
   return (
     <div 
       onClick={onClick}
-      className={`w-full sm:w-[260px] cursor-pointer rounded-xl border p-4 transition-all duration-200 flex flex-col justify-between shadow-sm hover:shadow-md active:scale-[0.98] h-[140px] ${
+      className={`relative w-full sm:w-[280px] cursor-pointer rounded-2xl border p-5 transition-all duration-300 ease-out flex flex-col justify-between min-h-[140px] group overflow-hidden ${
         temaNoturno 
-          ? 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04] hover:border-white/10' 
-          : 'bg-white border-zinc-200 hover:border-zinc-300'
+          ? 'bg-[#0A0A0A] border-white/5 hover:bg-[#121212] hover:border-white/10 hover:shadow-lg hover:-translate-y-0.5' 
+          : 'bg-white border-zinc-200/60 shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:border-zinc-300/80 hover:shadow-[0_8px_24px_-4px_rgba(0,0,0,0.06)] hover:-translate-y-0.5'
       }`}
     >
+      {/* IDENTIDADE LOGÍSTICA SUTIL (Gradient Tint for Delivery) */}
+      {isDelivery && (
+        <div className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${temaNoturno ? 'bg-gradient-to-br from-amber-500/[0.03] to-transparent' : 'bg-gradient-to-br from-amber-500/[0.04] to-transparent'}`}></div>
+      )}
+
       {/* HEADER DO CARD */}
-      <div className="flex justify-between items-start gap-3 w-full">
-        <div className="flex flex-col min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className={`font-semibold text-sm truncate tracking-tight ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
+      <div className="flex justify-between items-start gap-3 w-full relative z-10">
+        <div className="flex flex-col min-w-0 gap-2">
+          
+          <div className="flex items-center gap-2">
+            <h3 className={`font-medium text-base truncate tracking-tight ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
               {comanda.nome}
             </h3>
-            {comanda.tags && comanda.tags.length > 0 && (
-              <span className={`w-2 h-2 rounded-full shrink-0 ${temaNoturno ? 'bg-purple-500' : 'bg-purple-600'}`}></span>
-            )}
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
+          
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wide uppercase ${
               isDelivery 
-                ? (temaNoturno ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200')
-                : (temaNoturno ? 'bg-white/5 text-zinc-400 border-white/10' : 'bg-zinc-50 text-zinc-500 border-zinc-200')
+                ? (temaNoturno ? 'bg-amber-500/10 text-amber-500/90' : 'bg-amber-50 text-amber-700')
+                : (temaNoturno ? 'bg-white/5 text-zinc-500' : 'bg-zinc-100 text-zinc-600')
             }`}>
-              {isDelivery ? 'Delivery' : 'Balcão'}
+              {isDelivery ? 'Delivery' : 'Local'}
             </span>
+            
             {tempoTexto && (
-               <span className={`text-[10px] font-medium ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>
+               <span className={`text-xs font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>
                  {tempoTexto}
                </span>
             )}
           </div>
+
         </div>
 
-        {/* STATUS VISUAL COMPACTO */}
-        <div className="shrink-0 flex gap-1">
+        {/* STATUS VISUAL PREMIUM */}
+        <div className="shrink-0 flex items-center justify-end">
           {isPagaTotal && (
-             <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${temaNoturno ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-600'}`}>
-               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+             <div className={`px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase flex items-center gap-1.5 ${temaNoturno ? 'bg-[#0A0A0A] text-emerald-400 ring-1 ring-inset ring-emerald-500/20' : 'bg-white text-emerald-600 ring-1 ring-inset ring-emerald-500/20 shadow-sm'}`}>
+               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+               Pago
              </div>
           )}
           {isPagaParcial && !isPagaTotal && (
-             <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${temaNoturno ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-600'}`}>
-               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+             <div className={`px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase flex items-center gap-1.5 ${temaNoturno ? 'bg-[#0A0A0A] text-blue-400 ring-1 ring-inset ring-blue-500/20' : 'bg-white text-blue-600 ring-1 ring-inset ring-blue-500/20 shadow-sm'}`}>
+               <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+               Parcial
              </div>
           )}
         </div>
       </div>
 
-      {/* FOOTER DO CARD */}
-      <div className={`flex justify-between items-end mt-4 pt-3 border-t ${temaNoturno ? 'border-white/5' : 'border-zinc-100'}`}>
-        <div className="flex flex-col">
-           <span className={`text-[11px] font-medium ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>
+      {/* FOOTER DO CARD (Valor reinando absoluto) */}
+      <div className="flex justify-between items-end mt-6 relative z-10">
+        
+        <div className="flex flex-col mb-1.5">
+           <span className={`text-xs font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>
              {qtdProdutos === 0 ? 'Vazio' : `${qtdProdutos} ite${qtdProdutos === 1 ? 'm' : 'ns'}`}
            </span>
         </div>
-        <div className="text-right flex flex-col items-end">
+
+        <div className="text-right flex flex-col items-end leading-none">
            {isPagaParcial && !isPagaTotal ? (
-             <>
-               <span className={`text-[10px] font-medium line-through ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>R$ {totalOriginal.toFixed(2)}</span>
-               <span className={`font-semibold text-sm ${temaNoturno ? 'text-blue-400' : 'text-blue-600'}`}>R$ {totalPendente.toFixed(2)}</span>
-             </>
+             <div className="flex flex-col items-end gap-1.5">
+               <span className={`text-xs font-medium line-through decoration-zinc-400/50 ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>
+                 R$ {totalOriginal.toFixed(2)}
+               </span>
+               <div className="flex items-baseline gap-1">
+                 <span className={`text-sm font-medium ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>R$</span>
+                 <span className={`font-semibold text-2xl tabular-nums tracking-tight ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                   {totalPendente.toFixed(2)}
+                 </span>
+               </div>
+             </div>
            ) : isPagaTotal ? (
-             <span className={`font-semibold text-sm ${temaNoturno ? 'text-emerald-400' : 'text-emerald-600'}`}>R$ {totalOriginal.toFixed(2)}</span>
+             <div className="flex items-baseline gap-1">
+               <span className={`text-sm font-medium ${temaNoturno ? 'text-emerald-500/60' : 'text-emerald-600/60'}`}>R$</span>
+               <span className={`font-semibold text-2xl tabular-nums tracking-tight ${temaNoturno ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                 {totalOriginal.toFixed(2)}
+               </span>
+             </div>
            ) : (
-             <span className={`font-semibold text-sm ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
-               R$ {totalOriginal.toFixed(2)}
-             </span>
+             <div className="flex items-baseline gap-1">
+               <span className={`text-sm font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>R$</span>
+               <span className={`font-semibold text-2xl tabular-nums tracking-tight ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                 {totalOriginal.toFixed(2)}
+               </span>
+             </div>
            )}
         </div>
       </div>

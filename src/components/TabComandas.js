@@ -2,6 +2,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import CardComanda from '@/components/CardComanda';
+import PreComanda from '@/components/PreComanda';
 
 export default function TabComandas({
   temaNoturno, comandasAbertas, modoExclusao, setModoExclusao,
@@ -70,115 +71,107 @@ export default function TabComandas({
   const volumeHoje = calcularVolumeHoje();
 
   return (
-    <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
+    <div className="w-full animate-in fade-in duration-500 pb-20">
       
-      {/* 1. HEADER - PAINEL OPERACIONAL PREMIUM */}
-      <div className={`p-6 md:px-8 md:py-7 rounded-[1.25rem] border shadow-sm flex flex-col xl:flex-row justify-between gap-6 md:gap-8 transition-colors duration-500 mb-8 ${temaNoturno ? 'bg-[#161a20]/60 border-white/[0.04]' : 'bg-white border-zinc-200/80'}`}>
-          
-          <div className="flex flex-col md:flex-row md:items-center gap-6 md:gap-12 w-full xl:w-auto">
-            {/* Estado do Sistema */}
-            <div className="flex flex-col">
-              <span className={`text-[10px] font-bold uppercase tracking-widest mb-1.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Estado do Sistema</span>
-              <div className="flex items-center gap-3">
-                <div className="relative flex items-center justify-center">
-                  <span className={`absolute w-3.5 h-3.5 rounded-full animate-ping opacity-60 ${caixaAtual?.status === 'aberto' ? 'bg-emerald-400' : 'bg-zinc-400'}`}></span>
-                  <span className={`relative w-2 h-2 rounded-full ${caixaAtual?.status === 'aberto' ? 'bg-emerald-500' : 'bg-zinc-400'}`}></span>
-                </div>
-                <h2 className={`text-lg md:text-xl font-semibold tracking-tight leading-none ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
-                  {caixaAtual?.status === 'aberto' ? 'Operação ativa' : 'Turno inativo'}
-                </h2>
-              </div>
+      {/* 1. HEADER OPERACIONAL (Linear/Vercel Vibe) */}
+      {caixaAtual?.status === 'aberto' && (
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10 w-full border-b pb-6 transition-colors duration-300 border-zinc-200/60 dark:border-white/[0.06]">
+            
+            {/* Esquerda: Identidade e Métricas */}
+            <div className="flex flex-col gap-2.5">
+              {!modoExclusao ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <h1 className={`text-xl font-semibold tracking-tight ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                      Contas Abertas
+                    </h1>
+                    <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md border ${temaNoturno ? 'bg-white/5 border-white/10' : 'bg-zinc-100/50 border-zinc-200/80'}`}>
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                      </span>
+                      <span className={`text-xs font-medium tabular-nums ${temaNoturno ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                        {comandasHoje.length}
+                      </span>
+                    </div>
+                  </div>
+                  <div className={`text-sm font-medium tracking-tight ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                    Volume atual <span className="mx-1.5 opacity-40">•</span> <span className={temaNoturno ? 'text-zinc-300' : 'text-zinc-700'}>R$ {volumeHoje.toFixed(2)}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3">
+                    <h1 className={`text-xl font-semibold tracking-tight ${temaNoturno ? 'text-red-400' : 'text-red-600'}`}>
+                      Modo de Exclusão
+                    </h1>
+                  </div>
+                  <div className={`text-sm font-medium tracking-tight ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                    {selecionadasExclusao.length} {selecionadasExclusao.length === 1 ? 'conta selecionada' : 'contas selecionadas'}
+                  </div>
+                </>
+              )}
             </div>
-
-            {caixaAtual?.status === 'aberto' && (
-              <>
-                <div className={`hidden md:block w-px h-10 ${temaNoturno ? 'bg-white/[0.06]' : 'bg-zinc-200'}`}></div>
-                
-                {/* Métricas Principais */}
-                <div className="flex items-center gap-8 md:gap-12">
-                  <div className="flex flex-col">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Contas em Aberto</span>
-                    <span className={`text-xl font-semibold tracking-tight leading-none ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>{comandasHoje.length}</span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Volume em Trânsito</span>
-                    <span className={`text-xl font-semibold tracking-tight leading-none ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
-                      <span className={`text-sm font-medium mr-1 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>R$</span>
-                      {volumeHoje.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-          
-          {/* Ações (Hierarquia Clara) */}
-          {caixaAtual?.status === 'aberto' && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full xl:w-auto animate-in fade-in duration-300">
+            
+            {/* Direita: Ações */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                 {!modoExclusao ? (
                   <>
                     {comandasAbertas.length > 0 && (
-                      <button onClick={() => setModoExclusao(!modoExclusao)} className={`px-4 py-3 sm:py-2.5 rounded-xl font-medium text-[13px] transition-colors border active:scale-[0.98] ${temaNoturno ? 'bg-transparent text-zinc-400 border-transparent hover:bg-white/5 hover:text-zinc-200' : 'bg-transparent text-zinc-500 border-transparent hover:bg-zinc-100 hover:text-zinc-800'}`}>
-                        Gerenciar múltiplas
+                      <button onClick={() => setModoExclusao(!modoExclusao)} className={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${temaNoturno ? 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/80'}`}>
+                        Selecionar para excluir
                       </button>
                     )}
                     
-                    {/* Ação Secundária */}
-                    <button onClick={() => adicionarComanda('Delivery')} className={`px-4 py-3 sm:py-2.5 rounded-xl font-medium text-[13px] transition-all border shadow-sm active:scale-[0.98] flex justify-center items-center gap-2 ${temaNoturno ? 'bg-[#1c2128] text-zinc-300 border-white/[0.08] hover:bg-[#232931]' : 'bg-white text-zinc-700 border-zinc-200/80 hover:bg-zinc-50'}`}>
-                      <svg className="w-4 h-4 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"></path></svg>
-                      Criar pedido delivery
+                    <button onClick={() => adicionarComanda('Delivery')} className={`px-4 py-2 rounded-lg font-medium text-sm transition-all shadow-sm ring-1 ring-inset flex items-center justify-center gap-2 ${temaNoturno ? 'bg-[#111] text-zinc-300 ring-white/10 hover:bg-[#1A1A1A] hover:ring-white/20' : 'bg-white text-zinc-700 ring-black/[0.08] hover:bg-zinc-50 hover:ring-black/[0.15]'}`}>
+                      Novo Delivery
                     </button>
 
-                    {/* Ação Primária Dominante */}
-                    <button onClick={() => adicionarComanda('Balcão')} className={`px-5 py-3 sm:py-2.5 rounded-xl font-semibold text-[14px] transition-all shadow-md active:scale-[0.98] flex justify-center items-center gap-2 group ${temaNoturno ? 'bg-zinc-100 text-zinc-950 hover:bg-white' : 'bg-zinc-900 text-white hover:bg-zinc-800'}`}>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"></path></svg>
-                      Abrir nova conta
+                    <button onClick={() => adicionarComanda('Balcão')} className={`px-5 py-2 rounded-lg font-medium text-sm transition-all shadow-sm flex items-center justify-center gap-2 ${temaNoturno ? 'bg-white text-black hover:bg-zinc-200' : 'bg-black text-white hover:bg-zinc-800'}`}>
+                      Nova conta
                     </button>
                   </>
                 ) : (
                   <>
-                    <button onClick={() => setModoExclusao(false)} className={`px-5 py-3 sm:py-2.5 rounded-xl font-medium text-[13px] transition-all border active:scale-[0.98] w-full sm:w-auto ${temaNoturno ? 'bg-[#161a20] text-zinc-300 border-white/[0.08] hover:bg-white/5' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'}`}>
-                      Cancelar Operação
+                    <button onClick={() => setModoExclusao(false)} className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ring-1 ring-inset w-full sm:w-auto ${temaNoturno ? 'bg-transparent text-zinc-400 ring-white/10 hover:bg-white/5 hover:text-zinc-200' : 'bg-transparent text-zinc-600 ring-black/[0.08] hover:bg-zinc-50 hover:text-zinc-900'}`}>
+                      Cancelar
                     </button>
-                    <button onClick={confirmarExclusaoEmMassa} disabled={selecionadasExclusao.length === 0} className="px-5 py-3 sm:py-2.5 rounded-xl font-semibold text-[13px] bg-rose-600 hover:bg-rose-500 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md w-full sm:w-auto active:scale-[0.98]">
-                      Deletar registros ({selecionadasExclusao.length})
+                    <button onClick={confirmarExclusaoEmMassa} disabled={selecionadasExclusao.length === 0} className="px-5 py-2 rounded-lg font-medium text-sm bg-red-600 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto shadow-sm hover:bg-red-700">
+                      Excluir definitivamente
                     </button>
                   </>
                 )}
             </div>
-          )}
-      </div>
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col min-w-0 mx-auto w-full">
         
-        {/* 2. BLOCO DE PENDÊNCIAS (AUDITORIA OPERACIONAL) */}
+        {/* 2. BLOCO DE PENDÊNCIAS (Header de Seção Clicável) */}
         {!modoExclusao && comandasAntigas.length > 0 && caixaAtual?.status === 'aberto' && (
           <div className="w-full mb-10 animate-in slide-in-from-top-2 duration-300">
-            <div className={`w-full p-5 md:p-6 rounded-[1.25rem] border transition-colors shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 ${temaNoturno ? 'bg-[#161a20]/80 border-white/[0.06]' : 'bg-zinc-50 border-zinc-200'}`}>
-              
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${temaNoturno ? 'bg-[#111318] border-white/5 text-zinc-400' : 'bg-white border-zinc-200 text-zinc-500'}`}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                </div>
-                <div className="text-left">
-                  <div className="flex items-center gap-2">
-                    <p className={`font-semibold text-[14px] tracking-tight ${temaNoturno ? 'text-zinc-200' : 'text-zinc-900'}`}>Pendências operacionais detectadas</p>
-                    <span className={`w-2 h-2 rounded-full ${temaNoturno ? 'bg-amber-500/80' : 'bg-amber-500'}`}></span>
-                  </div>
-                  <p className={`text-xs font-medium mt-0.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>{comandasAntigas.length} {comandasAntigas.length === 1 ? 'registro de turno anterior não finalizado' : 'registros de turnos anteriores não finalizados'}.</p>
-                </div>
+            <button 
+              onClick={() => setMostrarAntigas(!mostrarAntigas)} 
+              className={`w-full pb-3 flex justify-between items-center group cursor-pointer transition-all border-b ${temaNoturno ? 'border-amber-500/20 hover:border-amber-500/40' : 'border-amber-600/20 hover:border-amber-600/40'}`}
+            >
+              <div className="flex items-center gap-3">
+                <p className={`text-sm font-medium tracking-tight flex items-center gap-2 ${temaNoturno ? 'text-amber-500/90' : 'text-amber-700'}`}>
+                  Pendências de turnos anteriores
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold tabular-nums ${temaNoturno ? 'bg-amber-500/10 text-amber-500' : 'bg-amber-100 text-amber-800'}`}>
+                    {comandasAntigas.length}
+                  </span>
+                </p>
               </div>
               
-              <button onClick={() => setMostrarAntigas(!mostrarAntigas)} className={`px-4 py-2.5 text-[13px] font-medium rounded-xl transition-all border shadow-sm shrink-0 w-full sm:w-auto ${temaNoturno ? 'bg-[#1c2128] text-zinc-300 border-white/[0.05] hover:bg-[#232931]' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'}`}>
-                {mostrarAntigas ? 'Ocultar registros' : 'Visualizar registros'}
-              </button>
-
-            </div>
+              <div className={`transition-transform duration-300 ${mostrarAntigas ? 'rotate-180' : ''} ${temaNoturno ? 'text-amber-500/50' : 'text-amber-700/50'}`}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+              </div>
+            </button>
 
             {mostrarAntigas && (
-              <div className={`flex flex-wrap gap-5 justify-start w-full mt-4 pt-4 border-t border-dashed animate-in slide-in-from-top-2 fade-in duration-300 ${temaNoturno ? 'border-white/[0.05]' : 'border-zinc-200'}`}>
+              <div className="flex flex-wrap gap-5 justify-start w-full mt-6 animate-in slide-in-from-top-2 fade-in duration-300">
                 {comandasAntigas.map(comanda => (
-                  <div key={comanda.id} className="relative group transition-all duration-300 hover:-translate-y-1 hover:shadow-xl opacity-80 hover:opacity-100 grayscale-[20%] hover:grayscale-0">
+                  <div key={comanda.id} className="relative group transition-all duration-300 opacity-90 hover:opacity-100">
                     <CardComanda comanda={comanda} onClick={() => setIdSelecionado(comanda.id)} temaNoturno={temaNoturno} />
                   </div>
                 ))}
@@ -187,73 +180,58 @@ export default function TabComandas({
           </div>
         )}
 
-        {/* CAIXA FECHADO - TELA SETUP */}
-        {caixaAtual?.status !== 'aberto' ? (
-          <div className={`w-full max-w-md mx-auto p-10 mt-8 rounded-[1.5rem] border shadow-2xl shadow-black/5 animate-in fade-in slide-in-from-bottom-4 duration-500 ${temaNoturno ? 'bg-[#161a20]/80 border-white/[0.06] backdrop-blur-xl' : 'bg-white border-zinc-200/80'}`}>
-            <div className="text-center mb-8">
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5 border ${temaNoturno ? 'bg-[#111318] border-white/5 text-zinc-300 shadow-inner' : 'bg-zinc-50 border-zinc-200 text-zinc-600 shadow-sm'}`}>
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-              </div>
-              <h3 className={`text-xl font-bold tracking-tight ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>Iniciar Sessão Operacional</h3>
-              <p className={`text-sm mt-2 font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                Declare o fundo de caixa para o turno de {dataHoje ? dataHoje.split('-').reverse().join('/') : '...'}
-              </p>
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <label className={`text-xs font-semibold tracking-wide mb-2 block ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Fundo Inicial em Espécie (R$)</label>
-                <input 
-                  type="number" 
-                  placeholder="0.00" 
-                  value={saldoInicial} 
-                  onChange={(e) => setSaldoInicial(e.target.value)} 
-                  className={`w-full p-4 rounded-xl border outline-none font-semibold text-center text-lg transition-all shadow-sm focus:ring-2 focus:ring-offset-0 ${temaNoturno ? 'bg-[#0f1115] border-white/10 text-white focus:border-white/20 focus:ring-white/5' : 'bg-zinc-50 border-zinc-200 text-zinc-900 focus:border-zinc-300 focus:ring-zinc-100'}`} 
-                />
-              </div>
-              <button onClick={handleAbrirCaixa} className={`w-full py-4 font-bold text-[14px] rounded-xl transition-all shadow-md active:scale-[0.98] ${temaNoturno ? 'bg-zinc-100 text-zinc-900 hover:bg-white' : 'bg-zinc-900 text-white hover:bg-zinc-800'}`}>
-                Confirmar Abertura
-              </button>
-            </div>
-          </div>
-
-        ) : (
+        {/* SETUP INICIAL */}
+{caixaAtual?.status !== 'aberto' ? (
+  <PreComanda
+    onFinalizarAbertura={(valor) =>
+      abrirCaixaManual({
+        data_abertura: dataHoje,
+        saldo_inicial: valor,
+      })
+    }
+    temPendenciaTurnoAnterior={false}
+    onResolverPendencia={() => {}}
+  />
+) : (
           /* 3. GRID PRINCIPAL */
           <div className="flex flex-wrap gap-5 justify-start w-full">
             
-            {/* Empty State Profissional */}
+            {/* Empty State Refinado */}
             {comandasHoje.length === 0 && !modoExclusao && (
-              <div className={`w-full p-20 rounded-[1.5rem] text-center border border-dashed animate-in fade-in zoom-in-95 ${temaNoturno ? 'bg-[#111318]/50 border-white/[0.05] text-zinc-500' : 'bg-zinc-50/50 border-zinc-200 text-zinc-400'}`}>
-                <div className={`w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-5 ${temaNoturno ? 'bg-white/[0.02]' : 'bg-black/[0.02]'}`}>
-                  <svg className="w-6 h-6 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                </div>
-                <p className={`font-semibold text-base tracking-tight ${temaNoturno ? 'text-zinc-300' : 'text-zinc-700'}`}>Workspace Operacional Limpo</p>
-                <p className={`text-sm font-medium mt-1.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Utilize os botões no painel para iniciar um novo registro.</p>
+              <div className="w-full py-32 flex flex-col items-center justify-center animate-in fade-in zoom-in-95">
+                <p className={`text-base font-medium tracking-tight ${temaNoturno ? 'text-zinc-300' : 'text-zinc-700'}`}>Nenhuma conta aberta</p>
+                <p className={`text-sm mt-3 flex items-center gap-2 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                  Pressione <kbd className={`px-2 py-1 rounded-md text-[11px] font-medium font-sans ring-1 ring-inset shadow-sm ${temaNoturno ? 'bg-[#1A1A1A] ring-white/10 text-zinc-300' : 'bg-white ring-black/[0.08] text-zinc-600'}`}>Enter</kbd> para criar um registro no balcão
+                </p>
               </div>
             )}
 
             {comandasParaRenderizar.map((comanda, index) => (
-              <div key={comanda.id} className="relative group animate-in fade-in zoom-in-95 duration-300 transition-all hover:-translate-y-1 hover:shadow-xl">
+              <div key={comanda.id} className="relative group animate-in fade-in zoom-in-95 duration-300 transition-all">
                 
-                {/* Atalho Sutíl */}
+                {/* Atalho de Teclado */}
                 {index < 9 && !modoExclusao && (
-                  <div className="absolute -top-3 -left-3 z-20 pointer-events-none transition-all duration-300 opacity-0 group-hover:opacity-100 group-hover:-translate-y-0.5">
-                     <div className={`w-7 h-7 rounded-lg border shadow-sm flex items-center justify-center text-[10px] font-bold font-mono ${temaNoturno ? 'bg-[#161a20] border-white/10 text-zinc-300 shadow-black/50' : 'bg-white border-zinc-200 text-zinc-500 shadow-sm'}`}>
-                       {index + 1}
-                     </div>
+                  <div className="absolute -top-2.5 -left-2.5 z-20 pointer-events-none transition-opacity duration-200 opacity-0 group-hover:opacity-100">
+                      <div className={`w-6 h-6 rounded-lg border flex items-center justify-center text-[11px] font-medium shadow-sm backdrop-blur-md ${temaNoturno ? 'bg-[#1A1A1A]/90 border-white/10 text-zinc-400' : 'bg-white/90 border-zinc-200 text-zinc-600'}`}>
+                        {index + 1}
+                      </div>
                   </div>
                 )}
 
-                {/* Checkbox de Seleção em Massa */}
+                {/* Checkbox de Exclusão Destrutivo */}
                 {modoExclusao && (
-                  <div className="absolute -top-3 -right-3 z-20">
-                      <div className={`w-7 h-7 rounded-lg border shadow-sm flex items-center justify-center cursor-pointer transition-colors ${selecionadasExclusao.includes(comanda.id) ? 'bg-rose-500 border-rose-600 shadow-rose-500/20' : (temaNoturno ? 'bg-[#161a20] border-white/10' : 'bg-white border-zinc-200')}`} onClick={() => toggleSelecaoExclusao(comanda.id)}>
-                         {selecionadasExclusao.includes(comanda.id) && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
+                  <div className="absolute top-3 right-3 z-20">
+                      <div className={`w-5 h-5 rounded-md ring-1 ring-inset flex items-center justify-center cursor-pointer transition-all shadow-sm ${selecionadasExclusao.includes(comanda.id) ? 'bg-red-500 ring-red-500' : (temaNoturno ? 'bg-[#111] ring-white/20 hover:ring-red-400' : 'bg-white ring-black/[0.15] hover:ring-red-400')}`} onClick={() => toggleSelecaoExclusao(comanda.id)}>
+                          {selecionadasExclusao.includes(comanda.id) && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
                       </div>
                   </div>
                 )}
                 
-                <div className={modoExclusao ? 'opacity-50 scale-[0.98] transition-all cursor-pointer hover:opacity-80' : ''} onClick={() => { if (modoExclusao) toggleSelecaoExclusao(comanda.id); }}>
+                {/* Container controlando a escala na exclusão */}
+                <div 
+                  className={`transition-all duration-300 ease-out cursor-pointer h-full ${modoExclusao ? (selecionadasExclusao.includes(comanda.id) ? 'ring-2 ring-red-500 ring-offset-2 dark:ring-offset-[#09090B] rounded-2xl scale-[0.98]' : 'opacity-40 grayscale-[50%] hover:opacity-80 scale-[0.98]') : ''}`} 
+                  onClick={() => { if (modoExclusao) toggleSelecaoExclusao(comanda.id); }}
+                >
                   <CardComanda comanda={comanda} onClick={() => { if (!modoExclusao) setIdSelecionado(comanda.id); }} temaNoturno={temaNoturno} />
                 </div>
               </div>

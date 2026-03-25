@@ -1,6 +1,6 @@
-// src/app/page.js
+// page.js
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
 import Login from '@/components/Login';
@@ -13,6 +13,7 @@ import TabAnalises from '@/components/TabAnalises';
 import PainelComanda from '@/components/PainelComanda';
 import TabFechamentoCaixa from '@/components/TabFechamentoCaixa';
 import TabFidelidade from '@/components/TabFidelidade';
+import PreComanda from '@/components/PreComanda'; 
 
 import ModalConfigEmpresa from '@/components/ModalConfigEmpresa';
 import ModalConfigTags from '@/components/ModalConfigTags';
@@ -71,7 +72,7 @@ export default function Home() {
   const [dadosPlano, setDadosPlano] = useState({ nome: 'Free', validade: null });
 
   const [ignorarAvisoAntigas, setIgnorarAvisoAntigas] = useState(false);
-  const [caixaAtual, setCaixaAtual] = useState({ data_abertura: getHoje(), status: 'aberto' });
+  const [caixaAtual, setCaixaAtual] = useState(null); 
   const [comandas, setComandas] = useState([]);
   const [menuCategorias, setMenuCategorias] = useState([]);
   const [tagsGlobais, setTagsGlobais] = useState([]);
@@ -102,6 +103,14 @@ export default function Home() {
 
   const [modalGlobal, setModalGlobal] = useState({ visivel: false, tipo: 'alerta', titulo: '', mensagem: '', valorInput: '', acaoConfirmar: null });
 
+  // === ESTADOS PARA A EXPERIÊNCIA DE ABERTURA (PRE-COMANDA) ===
+  const [mostrarPreComanda, setMostrarPreComanda] = useState(false);
+  const [temPendenciaTurnoAnterior, setTemPendenciaTurnoAnterior] = useState(false);
+  const [isAntecipado, setIsAntecipado] = useState(false);
+  
+  // ESTADO DE BYPASS: Impede a reabertura imediata da PreComanda na mesma sessão de navegação.
+  const preComandaDispensada = useRef(false);
+
   const mostrarAlerta = (titulo, mensagem) => setModalGlobal({ visivel: true, tipo: 'alerta', titulo, mensagem, valorInput: '', acaoConfirmar: null });
   const mostrarConfirmacao = (titulo, mensagem, acaoConfirmar) => setModalGlobal({ visivel: true, tipo: 'confirmacao', titulo, mensagem, valorInput: '', acaoConfirmar });
   const mostrarPrompt = (titulo, mensagem, valorInicial, acaoConfirmar) => setModalGlobal({ visivel: true, tipo: 'prompt', titulo, mensagem, valorInput: valorInicial || '', acaoConfirmar });
@@ -121,6 +130,8 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (mostrarPreComanda) return; 
+    
     const temaSalvo = localStorage.getItem('arox_tema_noturno');
     if (temaSalvo !== null) setTemaNoturno(JSON.parse(temaSalvo));
     const logoSalva = localStorage.getItem('arox_logo_empresa');
@@ -133,9 +144,11 @@ export default function Home() {
         else localStorage.removeItem('bessa_session');
       } catch(e) { localStorage.removeItem('bessa_session'); }
     }
-  }, []);
+  }, [mostrarPreComanda]);
 
   useEffect(() => {
+    if (mostrarPreComanda) return; 
+    
     localStorage.setItem('arox_tema_noturno', JSON.stringify(temaNoturno));
     document.body.style.backgroundColor = temaNoturno ? '#09090b' : '#fafafa'; 
     let metaThemeColor = document.querySelector('meta[name="theme-color"]');
@@ -145,7 +158,7 @@ export default function Home() {
       document.head.appendChild(metaThemeColor);
     }
     metaThemeColor.setAttribute('content', temaNoturno ? '#09090b' : '#ffffff');
-  }, [temaNoturno]);
+  }, [temaNoturno, mostrarPreComanda]);
 
   const fazerLogout = () => {
     localStorage.removeItem('bessa_session');
@@ -157,6 +170,7 @@ export default function Home() {
     setAbaAtiva('comandas'); 
     setNomeEmpresa('AROX');
     setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
+    preComandaDispensada.current = false; // Reseta o bypass ao sair
   };
 
   const fetchDadosEstaticos = async () => {
@@ -195,10 +209,31 @@ export default function Home() {
     try {
       const { data: caixasAbertos } = await supabase.from('caixas').select('*').eq('empresa_id', sessao.empresa_id).eq('status', 'aberto').order('id', { ascending: false }).limit(1); 
       let caixaData = caixasAbertos && caixasAbertos.length > 0 ? caixasAbertos[0] : null;
-      if (caixaData) setCaixaAtual(caixaData); else setCaixaAtual({ status: 'fechado' });
       
       const { data: comData } = await supabase.from('comandas').select('*, produtos:comanda_produtos(*), pagamentos(*)').eq('empresa_id', sessao.empresa_id).order('id', { ascending: false }).limit(3000);
       if (comData) setComandas(comData.reverse());
+
+      if (caixaData) {
+        setCaixaAtual(caixaData);
+        setMostrarPreComanda(false);
+      } else {
+        setCaixaAtual({ status: 'fechado' });
+        
+        const comPendentes = comData ? comData.filter(c => c.status === 'aberta' && c.data !== getHoje()) : [];
+        const pendencia = comPendentes.length > 0;
+        
+        const horaAtual = new Date().getHours();
+        const antecipado = horaAtual < 10; 
+        
+        setTemPendenciaTurnoAnterior(pendencia);
+        setIsAntecipado(antecipado);
+        
+        // Verifica o Bypass explícito antes de engatilhar o takeover
+        if (!preComandaDispensada.current) {
+          setMostrarPreComanda(true); 
+        }
+      }
+
     } catch (err) {} finally { setIsLoading(false); }
   };
 
@@ -240,8 +275,27 @@ export default function Home() {
       const payload = { empresa_id: sessao.empresa_id, data_abertura: dadosCaixa.data_abertura, saldo_inicial: dadosCaixa.saldo_inicial || 0, status: 'aberto' };
       const { data, error } = await supabase.from('caixas').insert([payload]).select().single();
       if (error) throw error;
-      if (data) { setCaixaAtual(data); mostrarAlerta("Sucesso", "Caixa aberto com sucesso."); fetchApenasAtualizacoes(); }
+      if (data) { 
+        setCaixaAtual(data); 
+        setMostrarPreComanda(false); 
+        fetchApenasAtualizacoes(); 
+      }
     } catch (err) { mostrarAlerta("Erro", "Erro ao abrir caixa: " + err.message); } finally { setIsLoading(false); }
+  };
+
+  const onFinalizarAbertura = (valor) => {
+    abrirCaixaManual({ data_abertura: getHoje(), saldo_inicial: valor });
+  };
+  
+  const onResolverPendencia = () => {
+    preComandaDispensada.current = true; // Ativa o bypass
+    setAbaAtiva('comandas');
+    setMostrarPreComanda(false);
+  };
+  
+  const onAcessarSistema = () => {
+    preComandaDispensada.current = true; // Ativa o bypass
+    setMostrarPreComanda(false);
   };
 
   const salvarConfigEmpresa = async () => {
@@ -596,19 +650,42 @@ export default function Home() {
     );
   }
 
+  // --- TAKEOVER ABSOLUTO DA PRE-COMANDA ---
+  // Se montado, domina o fluxo e não renderiza a <main> inteira
+  if (mostrarPreComanda) {
+    return (
+      <PreComanda 
+        onFinalizarAbertura={onFinalizarAbertura} 
+        temPendenciaTurnoAnterior={temPendenciaTurnoAnterior} 
+        isAntecipado={isAntecipado} 
+        temaAnterior={temaNoturno ? 'dark' : 'light'} 
+        onResolverPendencia={onResolverPendencia} 
+        onAcessarSistema={onAcessarSistema} 
+      />
+    );
+  }
+
+  // --- SHELL RESTAURADO COM TRANSIÇÃO MAIS SUAVE E LONGA ---
   return (
-    <main className={`flex h-screen w-full overflow-hidden transition-colors duration-500 selection:bg-zinc-200 selection:text-zinc-900 ${temaNoturno ? 'bg-[#09090b] text-zinc-100 selection:bg-white/20 selection:text-white' : 'bg-zinc-50 text-zinc-900'}`}>
+    <main className={`animate-in fade-in duration-[1500ms] ease-out flex h-screen w-full overflow-hidden transition-colors selection:bg-zinc-200 selection:text-zinc-900 ${temaNoturno ? 'bg-[#09090b] text-zinc-100 selection:bg-white/20 selection:text-white' : 'bg-zinc-50 text-zinc-900'}`}>
       
-      {/* SIDEBAR FIXA (DESKTOP) E DRAWER (MOBILE) */}
-      <Sidebar 
-        menuMobileAberto={menuMobileAberto} setMenuMobileAberto={setMenuMobileAberto} temaNoturno={temaNoturno}
-        logoEmpresa={logoEmpresa} sessao={sessao} nomeEmpresa={nomeEmpresa} abaAtiva={abaAtiva} setAbaAtiva={setAbaAtiva}
-        setMostrarConfigEmpresa={setMostrarConfigEmpresa} setMostrarAdminUsuarios={setMostrarAdminUsuarios}
-        setMostrarAdminProdutos={setMostrarAdminProdutos} setMostrarConfigTags={setMostrarConfigTags} fazerLogout={fazerLogout}
+      <Sidebar
+        menuMobileAberto={menuMobileAberto}
+        setMenuMobileAberto={setMenuMobileAberto}
+        temaNoturno={temaNoturno}
+        setTemaNoturno={setTemaNoturno}
+        logoEmpresa={logoEmpresa}
+        sessao={sessao}
+        nomeEmpresa={nomeEmpresa}
+        abaAtiva={abaAtiva}
+        setAbaAtiva={setAbaAtiva}
+        setMostrarConfigEmpresa={setMostrarConfigEmpresa}
+        setMostrarAdminProdutos={setMostrarAdminProdutos}
+        setMostrarConfigTags={setMostrarConfigTags}
         setMostrarAdminDelivery={setMostrarAdminDelivery}
+        fazerLogout={fazerLogout}
       />
 
-      {/* ÁREA DE CONTEÚDO PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0 h-full relative overflow-hidden bg-transparent">
         
         <Header 
@@ -622,7 +699,6 @@ export default function Home() {
           fetchData={fetchApenasAtualizacoes} clientesFidelidade={clientesFidelidade} vincularClienteFidelidade={vincularClienteFidelidade}
         />
 
-        {/* CONTAINER DE SCROLL */}
         <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8 pt-2 md:pt-6 z-10 flex flex-col relative">
           <div className="w-full max-w-[1400px] mx-auto flex-1 flex flex-col">
             {comandaAtiva ? (
@@ -659,7 +735,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* MODALS */}
       {mostrarAdminUsuarios && sessao && <AdminUsuarios empresaId={sessao.empresa_id} usuarioAtualId={sessao.id} temaNoturno={temaNoturno} onFechar={() => setMostrarAdminUsuarios(false)} />}
       {mostrarAdminProdutos && sessao && <AdminProdutos empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => { setMostrarAdminProdutos(false); fetchApenasAtualizacoes(); }} />}
       {mostrarAdminDelivery && sessao && <AdminDelivery empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => setMostrarAdminDelivery(false)} />}

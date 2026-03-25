@@ -1,32 +1,230 @@
 // src/components/Header.js
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export default function Header({
   comandaAtiva, setIdSelecionado, setMenuMobileAberto, temaNoturno,
-  caixaAtual, abaAtiva, setAbaAtiva, logoEmpresa, setTemaNoturno,
-  mostrarMenuPerfil, setMostrarMenuPerfil, nomeEmpresa, sessao,
-  setMostrarConfigEmpresa, setMostrarAdminUsuarios, setMostrarAdminProdutos,
-  setMostrarConfigTags, setMostrarAdminDelivery, fazerLogout, fetchData,
-  clientesFidelidade, vincularClienteFidelidade
+  abaAtiva, fetchData, sessao
 }) {
   const [editandoNome, setEditandoNome] = useState(false);
   const [tempNome, setTempNome] = useState('');
   
-  const [buscaFidelidade, setBuscaFidelidade] = useState('');
-  const [mostrarResultadosFidelidade, setMostrarResultadosFidelidade] = useState(false);
-  const [buscaMobileAberta, setBuscaMobileAberta] = useState(false);
+  // Estados de Operação e Timeline
+  const [dadosOperacionais, setDadosOperacionais] = useState({ abertura: null, fechamento: null, local: '' });
+  const [linhaDoTempo, setLinhaDoTempo] = useState([]);
+  
+  // Estados de Inteligência e Banners
+  const [insights, setInsights] = useState([]);
+  const [caixaAberto, setCaixaAberto] = useState(false);
+  const [expedienteEncerrado, setExpedienteEncerrado] = useState(false);
+  const [alertaFechamento, setAlertaFechamento] = useState(false);
 
-  const formatarDataCaixa = (data) => {
-    if (!data) return "---";
-    return String(data).substring(0, 10).split('-').reverse().join('/');
+  // Motor Rotativo Central
+  const [mensagensAtivas, setMensagensAtivas] = useState([]);
+  const [indiceMensagem, setIndiceMensagem] = useState(0);
+
+  // 1. Busca Parâmetros da Empresa
+  const carregarConfiguracoes = useCallback(async () => {
+    if (!sessao?.empresa_id) return;
+    try {
+      const { data } = await supabase
+        .from('empresas')
+        .select('horario_abertura, horario_fechamento, localizacao')
+        .eq('id', sessao.empresa_id)
+        .single();
+      
+      if (data) {
+        setDadosOperacionais({
+          abertura: data.horario_abertura,
+          fechamento: data.horario_fechamento,
+          local: data.localizacao
+        });
+        if (data.localizacao) {
+          processarInteligencia(data.localizacao, data.horario_abertura, data.horario_fechamento);
+        }
+      }
+    } catch (err) { 
+      // Silencioso no console
+    }
+  }, [sessao?.empresa_id]);
+
+  // 2. Monitor de Caixa 
+  const checarStatusCaixa = useCallback(async () => {
+    if (!sessao?.empresa_id) return;
+    try {
+      const { data, error } = await supabase
+        .from('caixas')
+        .select('id')
+        .eq('empresa_id', sessao.empresa_id)
+        .eq('status', 'aberto')
+        .limit(1);
+      
+      if (!error) setCaixaAberto(data && data.length > 0);
+    } catch (err) {}
+  }, [sessao?.empresa_id]);
+
+  // 3. Lógica Temporal 
+  const verificarCicloOperacional = useCallback(() => {
+    if (!dadosOperacionais.fechamento || !dadosOperacionais.abertura) return;
+
+    const agora = new Date();
+    const currentMin = agora.getHours() * 60 + agora.getMinutes();
+
+    const [hF, mF] = dadosOperacionais.fechamento.split(':').map(Number);
+    const [hA, mA] = dadosOperacionais.abertura.split(':').map(Number);
+
+    const fechoMin = hF * 60 + (mF || 0);
+    const abroMin = hA * 60 + (mA || 0);
+    const cruzaMadrugada = fechoMin < abroMin;
+
+    let isAberto = false;
+    let minParaFechar = null;
+
+    if (cruzaMadrugada) {
+      if (currentMin >= abroMin) { 
+        isAberto = true; minParaFechar = (fechoMin + 24 * 60) - currentMin;
+      } else if (currentMin <= fechoMin) { 
+        isAberto = true; minParaFechar = fechoMin - currentMin;
+      }
+    } else {
+      if (currentMin >= abroMin && currentMin <= fechoMin) {
+        isAberto = true; minParaFechar = fechoMin - currentMin;
+      }
+    }
+
+    setExpedienteEncerrado(!isAberto);
+    setAlertaFechamento(isAberto && minParaFechar <= 10 && minParaFechar > 0);
+  }, [dadosOperacionais]);
+
+  // 4. Processamento Preditivo e Timeline
+  const processarInteligencia = async (cidade, abertura, fechamento) => {
+    const API_KEY = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
+    if (!API_KEY || !cidade) return;
+
+    try {
+      const res = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(cidade)}&units=metric&lang=pt_br&appid=${API_KEY}`);
+      const data = await res.json();
+
+      if (data.list && data.list.length > 0) {
+        const agora = new Date();
+        const horaAtual = agora.getHours();
+        
+        let hInicio = abertura ? parseInt(abertura.split(':')[0]) : 17;
+        let hFim = fechamento ? parseInt(fechamento.split(':')[0]) : 23;
+        const cruzaMadrugada = hFim < hInicio;
+        
+        let horaStartRender = horaAtual;
+        const noTurnoNormal = !cruzaMadrugada && horaAtual >= hInicio && horaAtual <= hFim;
+        const noTurnoMadrugada = cruzaMadrugada && (horaAtual >= hInicio || horaAtual <= hFim);
+        
+        if (!noTurnoNormal && !noTurnoMadrugada) horaStartRender = hInicio;
+
+        const proximasHoras = [];
+        let hPointer = horaStartRender;
+        for (let i = 0; i < 4; i++) { 
+          proximasHoras.push(hPointer);
+          if (hPointer === hFim) break;
+          hPointer = hPointer === 23 ? 0 : hPointer + 1;
+        }
+
+        const timelineFiltrada = proximasHoras.map(hora => {
+          const alvoTimestamp = new Date(agora);
+          alvoTimestamp.setHours(hora, 0, 0, 0);
+          if (hora < horaAtual) alvoTimestamp.setDate(alvoTimestamp.getDate() + 1);
+
+          const maisProximo = data.list.reduce((prev, curr) => 
+            (Math.abs(curr.dt * 1000 - alvoTimestamp.getTime()) < Math.abs(prev.dt * 1000 - alvoTimestamp.getTime()) ? curr : prev)
+          );
+
+          const cond = maisProximo.weather[0].main.toLowerCase();
+          return {
+            horaStr: `${hora}h`,
+            temp: Math.round(maisProximo.main.temp),
+            condicao: cond,
+            isRain: cond.includes('rain') || cond.includes('drizzle') || cond.includes('thunderstorm'),
+            isCurrent: hora === horaAtual
+          };
+        });
+
+        setLinhaDoTempo(timelineFiltrada);
+
+        // Motor de Insights (Linguagem Direta e Confiante)
+        const novosInsights = [];
+        const chuvaFutura = timelineFiltrada.find(t => t.isRain && !t.isCurrent);
+        const chuvaAgora = timelineFiltrada.find(t => t.isRain && t.isCurrent);
+        const calorExtremo = timelineFiltrada.some(t => t.temp >= 32);
+        const ehPicoNoturno = horaAtual >= 19 && horaAtual <= 21;
+        
+        let faltaPouco = (!cruzaMadrugada && (hFim - horaAtual === 1)) || (cruzaMadrugada && (horaAtual < hFim) && (hFim - horaAtual === 1));
+
+        if (chuvaAgora) {
+          novosInsights.push("Chuva detectada: provável aumento no tempo de permanência.");
+        } else if (chuvaFutura) {
+          novosInsights.push(`Previsão de instabilidade às ${chuvaFutura.horaStr}: fluxo pode se concentrar nesta janela.`);
+        } 
+        
+        if (ehPicoNoturno && !faltaPouco) {
+          novosInsights.push("Janela de pico ativa: alta densidade operacional esperada.");
+        } else if (faltaPouco) {
+          novosInsights.push("Turno na reta final: expectativa de desaceleração.");
+        } else if (!chuvaAgora && !chuvaFutura && !ehPicoNoturno) {
+          novosInsights.push("Período de estabilidade operacional.");
+        }
+
+        if (calorExtremo) novosInsights.push("Clima atípico: possíveis variações de consumo no salão.");
+
+        setInsights(novosInsights);
+      }
+    } catch (err) {
+      setInsights(["Sincronizando timeline operacional..."]);
+    }
   };
+
+  // Efeitos e Monitores
+  useEffect(() => {
+    carregarConfiguracoes();
+    checarStatusCaixa();
+  }, [carregarConfiguracoes, checarStatusCaixa]);
+
+  useEffect(() => {
+    verificarCicloOperacional();
+    const monitorTempo = setInterval(verificarCicloOperacional, 30000); 
+    const monitorCaixa = setInterval(checarStatusCaixa, 60000); 
+    return () => { clearInterval(monitorTempo); clearInterval(monitorCaixa); };
+  }, [verificarCicloOperacional, checarStatusCaixa]);
+
+  // 5. Orquestrador do Banner Rotativo Central
+  useEffect(() => {
+    const fila = [];
+    if (expedienteEncerrado && caixaAberto) {
+      fila.push({ id: 'critico-caixa', tipo: 'critico', icone: 'alerta', texto: 'Pendência crítica: Caixa aberto fora do expediente' });
+    }
+    if (alertaFechamento) {
+      fila.push({ id: 'warn-fecha', tipo: 'alerta', icone: 'relogio', texto: 'Fechamento operacional em 10 minutos' });
+    }
+    insights.forEach((ins, idx) => {
+      fila.push({ id: `ins-${idx}`, tipo: 'insight', icone: 'raio', texto: ins });
+    });
+
+    setMensagensAtivas(fila);
+  }, [expedienteEncerrado, caixaAberto, alertaFechamento, insights]);
+
+  useEffect(() => {
+    if (mensagensAtivas.length <= 1) {
+      setIndiceMensagem(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setIndiceMensagem(curr => (curr + 1) % mensagensAtivas.length);
+    }, 6000); // 6 segundos de leitura por banner
+    return () => clearInterval(interval);
+  }, [mensagensAtivas.length]);
+
 
   const salvarNome = async () => {
     if (!tempNome || !tempNome.trim() || tempNome === comandaAtiva?.nome) {
-      setEditandoNome(false);
-      return;
+      setEditandoNome(false); return;
     }
     const { error } = await supabase.from('comandas').update({ nome: tempNome }).eq('id', comandaAtiva?.id);
     if (!error && fetchData) await fetchData();
@@ -40,179 +238,127 @@ export default function Header({
     if (!error && fetchData) await fetchData();
   };
 
-  const isCaixaAberto = caixaAtual?.status === 'aberto';
-  let statusCaixa = isCaixaAberto ? 'aberto' : 'fechado';
-  if (isCaixaAberto && caixaAtual?.data_abertura) {
-    const dataAberturaDB = String(caixaAtual.data_abertura).substring(0, 10);
-    const agora = new Date();
-    const ano = agora.getFullYear();
-    const mes = String(agora.getMonth() + 1).padStart(2, '0');
-    const dia = String(agora.getDate()).padStart(2, '0');
-    if (dataAberturaDB < `${ano}-${mes}-${dia}` && agora.getHours() >= 5) {
-      statusCaixa = 'esquecido';
-    }
-  }
+  const mapAbaTitulo = { comandas: 'Terminal', fechadas: 'Histórico', faturamento: 'Métricas', caixa: 'Caixa', fidelidade: 'Clientes' };
 
-  const mapAbaTitulo = {
-    comandas: 'Painel Operacional',
-    fechadas: 'Contas Encerradas',
-    faturamento: 'Controle Financeiro',
-    caixa: 'Gestão de Caixa',
-    fidelidade: 'Base de Clientes'
+  // Ícones do Banner
+  const renderIconeBanner = (iconeName) => {
+    if (iconeName === 'alerta') return <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse shrink-0"></div>;
+    if (iconeName === 'relogio') return <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0"></div>;
+    return <svg className="w-3.5 h-3.5 opacity-60 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
+  };
+
+  // Ícones Climáticos Premium (Linear style)
+  const renderClimaIcon = (condicao, temaNoturno, isCurrent) => {
+    let classes = `w-[14px] h-[14px] shrink-0 transition-colors ${isCurrent ? (temaNoturno ? 'text-white' : 'text-zinc-900') : (temaNoturno ? 'text-zinc-500' : 'text-zinc-400')}`;
+    if (condicao.includes('rain') || condicao.includes('drizzle')) return <svg className={classes} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 22v-2m-4 2v-2m8 2v-2" /></svg>;
+    if (condicao.includes('cloud')) return <svg className={classes} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /></svg>;
+    return <svg className={classes} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="5" strokeLinecap="round" strokeLinejoin="round" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>;
   };
 
   return (
-    <header className={`flex items-center justify-between px-4 md:px-8 py-3.5 border-b relative z-40 transition-colors duration-500 backdrop-blur-md sticky top-0 ${temaNoturno ? 'bg-[#0f1115]/90 border-white/[0.04]' : 'bg-white/90 border-zinc-200'}`}>
+    <header className={`flex items-center justify-between px-5 h-[64px] shrink-0 border-b sticky top-0 z-40 transition-colors duration-300 backdrop-blur-xl ${temaNoturno ? 'bg-[#0A0A0A]/85 border-white/[0.04]' : 'bg-white/90 border-black/[0.04]'}`}>
       
-      {/* SEÇÃO ESQUERDA: Ações de Retorno ou Título */}
-      <div className="flex flex-1 justify-start items-center gap-3 min-w-0">
-        <button onClick={() => setMenuMobileAberto(true)} className={`xl:hidden p-2 rounded-lg border shrink-0 transition active:scale-95 ${temaNoturno ? 'bg-[#161a20] border-white/10 text-zinc-300 hover:bg-white/5' : 'bg-white border-zinc-200 text-zinc-800 hover:bg-zinc-50 shadow-sm'}`}>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+      {/* LADO ESQUERDO: Contexto Limpo */}
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <button onClick={() => setMenuMobileAberto(true)} className={`xl:hidden p-1.5 -ml-1.5 rounded-md transition duration-200 active:scale-95 outline-none ${temaNoturno ? 'text-zinc-400 hover:bg-white/10 hover:text-white' : 'text-zinc-600 hover:bg-black/5 hover:text-zinc-900'}`}>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 6h16M4 12h16M4 18h16"></path></svg>
         </button>
 
         {comandaAtiva ? (
-          <button onClick={() => { setIdSelecionado(null); setEditandoNome(false); }} className={`flex items-center shrink-0 gap-2 font-medium px-3 py-1.5 rounded-lg transition active:scale-[0.98] text-sm border ${temaNoturno ? 'bg-[#161a20] text-zinc-300 border-white/[0.06] hover:bg-white/5 hover:text-white shadow-sm' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50 shadow-sm'}`}>
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-            <span className="hidden sm:inline">Voltar</span>
+          <button onClick={() => { setIdSelecionado(null); setEditandoNome(false); }} className={`group flex items-center gap-2 px-1.5 py-1 -ml-1.5 rounded-md transition-all duration-200 text-[13px] font-medium tracking-tight outline-none ${temaNoturno ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-500 hover:text-zinc-900'}`}>
+            <svg className={`w-4 h-4 transition-transform duration-300 ease-out group-hover:-translate-x-1 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+            <span className="hidden sm:inline">Voltar para listagem</span>
           </button>
         ) : (
-          <div className="flex items-center gap-3">
-            <h1 className={`text-[15px] font-semibold tracking-tight hidden md:block ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
-              {mapAbaTitulo[abaAtiva] || 'Overview'}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`w-1.5 h-1.5 rounded-full ${temaNoturno ? 'bg-white/20' : 'bg-black/20'}`}></div>
+            <h1 className={`font-semibold text-[14px] tracking-tight ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
+              {mapAbaTitulo[abaAtiva] || 'Visão Geral'}
             </h1>
           </div>
         )}
       </div>
 
-      {/* SEÇÃO CENTRAL: Ações da Conta (Elegante) */}
-      <div className="flex justify-center items-center shrink min-w-0">
-        {comandaAtiva && (
-          <div className="flex items-center justify-center gap-2 relative w-full max-w-lg">
-            
-            {editandoNome ? (
-              <input 
-                autoFocus
-                className={`text-center font-medium text-sm px-4 py-1.5 rounded-lg outline-none w-full transition-all shadow-sm focus:ring-2 focus:ring-offset-0 ${temaNoturno ? 'bg-[#161a20] text-white border border-white/10 focus:border-white/20 focus:ring-white/5' : 'bg-white text-zinc-900 border border-zinc-300 focus:ring-zinc-100'}`}
-                value={tempNome} onChange={e => setTempNome(e.target.value)} onBlur={salvarNome} onKeyDown={e => e.key === 'Enter' && salvarNome()}
-              />
-            ) : (
-              <h2 onClick={() => { setTempNome(comandaAtiva?.nome || ''); setEditandoNome(true); }} className={`text-[15px] font-semibold truncate text-center cursor-pointer transition-colors flex items-center justify-center gap-1.5 ${temaNoturno ? 'text-zinc-200 hover:text-white' : 'text-zinc-800 hover:text-zinc-950'}`}>
-                {comandaAtiva?.nome || 'Conta sem nome'} 
-                <svg className="w-3 h-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-              </h2>
-            )}
-
-            {/* Busca Fidelidade (Nativa/Sutil) */}
-            <button 
-              onClick={() => setBuscaMobileAberta(!buscaMobileAberta)}
-              className={`sm:hidden flex items-center shrink-0 justify-center p-1.5 rounded-lg transition-all active:scale-[0.98] ml-1 ${buscaMobileAberta ? (temaNoturno ? 'bg-white/10 text-white' : 'bg-zinc-100 text-zinc-900') : (temaNoturno ? 'bg-transparent text-zinc-400 hover:bg-white/5' : 'bg-transparent text-zinc-500 hover:bg-zinc-100')}`}
-            >
-              <svg className="w-4 h-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-            </button>
-
-            <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 sm:mt-0 sm:translate-x-0 sm:relative sm:top-auto sm:left-auto sm:block z-50 animate-in fade-in slide-in-from-top-2 duration-200 ${buscaMobileAberta ? 'block w-64' : 'hidden'}`}>
-              <div className="flex items-center relative ml-3">
-                <svg className={`absolute left-2.5 w-3.5 h-3.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+      {/* CENTRO: Comanda Action Bar OU Banners Rotativos */}
+      <div className="flex justify-center items-center flex-[2] min-w-0 px-4 h-full relative">
+        {comandaAtiva ? (
+          <div className={`flex items-center justify-between p-[3px] rounded-xl border transition-all duration-300 w-full max-w-[340px] shadow-sm ${temaNoturno ? 'bg-[#111111] border-white/[0.06]' : 'bg-white border-black/[0.04]'}`}>
+            <div className="flex-1 relative min-w-0">
+              {editandoNome ? (
                 <input 
-                  type="text" placeholder="Vincular cliente..." value={buscaFidelidade} onChange={(e) => { setBuscaFidelidade(e.target.value); setMostrarResultadosFidelidade(true); }} onFocus={() => setMostrarResultadosFidelidade(true)}
-                  className={`pl-8 pr-3 py-1.5 text-[13px] font-medium rounded-lg border transition-colors outline-none w-full sm:w-44 shadow-sm ${temaNoturno ? 'bg-[#161a20] border-white/[0.06] text-white focus:border-white/20' : 'bg-white border-zinc-200 focus:border-zinc-300 text-zinc-900 placeholder:text-zinc-400'}`}
+                  autoFocus
+                  className={`w-full text-[13px] font-medium tracking-tight px-3 py-1.5 rounded-[8px] outline-none transition-all ${temaNoturno ? 'bg-white/10 text-white' : 'bg-black/[0.03] text-zinc-900'}`}
+                  value={tempNome} onChange={e => setTempNome(e.target.value)} onBlur={salvarNome} onKeyDown={e => e.key === 'Enter' && salvarNome()}
                 />
-              </div>
-              
-              {mostrarResultadosFidelidade && buscaFidelidade.length > 0 && (
-                <div className={`absolute top-full mt-2 left-0 w-full sm:w-64 max-h-48 overflow-y-auto rounded-xl border shadow-xl z-[60] animate-in fade-in zoom-in-95 duration-200 ${temaNoturno ? 'bg-[#1c2128] border-white/10' : 'bg-white border-zinc-200'}`}>
-                  {(clientesFidelidade || []).filter(c => c.nome.toLowerCase().includes(buscaFidelidade.toLowerCase())).length === 0 ? (
-                    <div className={`p-3 text-[13px] font-medium text-center ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Não encontrado.</div>
-                  ) : (
-                    (clientesFidelidade || []).filter(c => c.nome.toLowerCase().includes(buscaFidelidade.toLowerCase())).map(cliente => (
-                      <div 
-                        key={cliente.id} onClick={() => { if(vincularClienteFidelidade) vincularClienteFidelidade(comandaAtiva.id, cliente); setBuscaFidelidade(''); setMostrarResultadosFidelidade(false); setBuscaMobileAberta(false); }}
-                        className={`p-3 sm:p-2 cursor-pointer border-b last:border-0 flex justify-between items-center transition-colors ${temaNoturno ? 'border-white/5 hover:bg-white/5' : 'border-zinc-100 hover:bg-zinc-50'}`}
-                      >
-                        <div>
-                          <p className={`text-[13px] font-medium ${temaNoturno ? 'text-white' : 'text-zinc-900'}`}>{cliente.nome}</p>
-                          <p className="text-[10px] text-zinc-500 mt-0.5">{cliente.pontos} pontos</p>
-                        </div>
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${temaNoturno ? 'text-zinc-400 bg-white/5' : 'text-zinc-600 bg-zinc-100'}`}>+</span>
-                      </div>
-                    ))
-                  )}
+              ) : (
+                <div onClick={() => { setTempNome(comandaAtiva?.nome || ''); setEditandoNome(true); }} className={`w-full px-3 py-1.5 rounded-[8px] cursor-text transition-colors flex items-center gap-2 overflow-hidden ${temaNoturno ? 'hover:bg-white/[0.04]' : 'hover:bg-black/[0.02]'}`}>
+                  <span className={`text-[13px] font-medium tracking-tight truncate ${temaNoturno ? 'text-zinc-200' : 'text-zinc-900'}`}>{comandaAtiva?.nome || 'Sem nome'}</span>
+                  <svg className="w-3 h-3 shrink-0 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                 </div>
               )}
             </div>
-
-            {/* Alternar Modalidade */}
-            <button 
-              onClick={alternarTipoComanda}
-              title={`Mudar para ${comandaAtiva?.tipo === 'Balcão' ? 'Delivery' : 'Balcão'}`}
-              className={`flex items-center shrink-0 gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all border active:scale-[0.98] ml-2 shadow-sm ${
-                comandaAtiva?.tipo === 'Delivery' 
-                  ? (temaNoturno ? 'bg-[#161a20] text-zinc-200 border-white/[0.08] hover:bg-[#1c2128]' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50')
-                  : (temaNoturno ? 'bg-transparent text-zinc-400 border-transparent hover:bg-white/5 hover:text-zinc-200' : 'bg-transparent text-zinc-500 border-transparent hover:bg-zinc-100 hover:text-zinc-800')
-              }`}
-            >
-              {comandaAtiva?.tipo === 'Delivery' ? (
-                <>
-                  <svg className="w-3.5 h-3.5 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 7h12m0 0l3 5v6H8m12-11v11M8 7V5a2 2 0 00-2-2H3v14h1m4-12v12m0 0a2 2 0 11-4 0m4 0a2 2 0 10-4 0m16 0a2 2 0 11-4 0m4 0a2 2 0 10-4 0m-8-2h4"></path></svg>
-                  <span className="hidden xl:inline">Delivery</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-3.5 h-3.5 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
-                  <span className="hidden xl:inline">Balcão</span>
-                </>
-              )}
+            <div className={`w-[1px] h-4 mx-1.5 ${temaNoturno ? 'bg-white/10' : 'bg-black/[0.08]'}`}></div>
+            <button onClick={alternarTipoComanda} className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium tracking-tight transition-all active:scale-[0.97] ${comandaAtiva?.tipo === 'Delivery' ? (temaNoturno ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-50 text-indigo-700 border border-indigo-100') : (temaNoturno ? 'text-zinc-400 hover:text-white' : 'text-zinc-600 hover:text-zinc-900')}`}>
+              {comandaAtiva?.tipo}
             </button>
+          </div>
+        ) : (abaAtiva !== 'faturamento' && mensagensAtivas.length > 0) ? (
+          <div className="relative w-full max-w-[380px] h-[32px] flex justify-center items-center">
+            {mensagensAtivas.map((msg, i) => {
+              const isAct = i === indiceMensagem;
+              
+              let styleClasses = temaNoturno ? 'bg-white/[0.03] border-white/[0.04] text-zinc-300' : 'bg-[#FAFAFA] border-black/[0.04] text-zinc-700';
+              if (msg.tipo === 'critico') styleClasses = temaNoturno ? 'bg-rose-500/10 border-rose-500/20 text-rose-300' : 'bg-rose-50 border-rose-200 text-rose-700';
+              if (msg.tipo === 'alerta') styleClasses = temaNoturno ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700';
+
+              return (
+                <div 
+                  key={msg.id}
+                  className={`absolute flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border shadow-sm transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)]
+                    ${isAct ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto' : 'opacity-0 translate-y-3 scale-[0.97] pointer-events-none'}
+                    ${styleClasses}
+                  `}
+                >
+                  {renderIconeBanner(msg.icone)}
+                  <span className="text-[12px] font-medium tracking-tight whitespace-nowrap">
+                    {msg.texto}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+      
+      {/* LADO DIREITO: Timeline de Fluxo Operacional */}
+      <div className="flex-1 flex justify-end min-w-0">
+        {linhaDoTempo.length > 0 && !comandaAtiva && (
+          <div className={`hidden md:flex items-center p-[3px] rounded-full border shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)] transition-all duration-300 ${temaNoturno ? 'bg-[#111111] border-white/[0.04]' : 'bg-[#F4F4F5] border-black/[0.03]'}`}>
+            {linhaDoTempo.map((item, index) => (
+              <div 
+                key={index} 
+                className={`flex items-center gap-1.5 px-2.5 py-1 min-w-[50px] rounded-full transition-all duration-500 ease-out ${
+                  item.isCurrent 
+                    ? (temaNoturno ? 'bg-[#2A2A2A] shadow-sm' : 'bg-white shadow-sm ring-1 ring-black/[0.04]') 
+                    : `opacity-${Math.max(40, 90 - (index * 20))} hover:opacity-100 ${temaNoturno ? 'hover:bg-white/[0.04]' : 'hover:bg-black/[0.03]'}`
+                }`}
+                title={item.condicao}
+              >
+                <span className={`text-[10px] uppercase font-semibold tracking-wide ${item.isCurrent ? (temaNoturno ? 'text-zinc-200' : 'text-zinc-800') : (temaNoturno ? 'text-zinc-500' : 'text-zinc-500')}`}>
+                  {item.horaStr}
+                </span>
+                <div className="flex items-center gap-1">
+                  {renderClimaIcon(item.condicao, temaNoturno, item.isCurrent)}
+                  <span className={`text-[11px] font-semibold tracking-tight ${item.isCurrent ? (temaNoturno ? 'text-white' : 'text-zinc-900') : (temaNoturno ? 'text-zinc-500' : 'text-zinc-400')}`}>
+                    {item.temp}°
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
       
-      {/* SEÇÃO DIREITA: Status e Perfil */}
-      <div className="flex flex-1 justify-end items-center gap-3 xl:gap-4 min-w-0">
-        
-        {/* Status Caixa Mínimo (Elegante) */}
-        {!comandaAtiva && (
-          <div onClick={() => { setAbaAtiva('caixa'); setIdSelecionado(null); }} className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer transition-all active:scale-[0.98] ${
-            statusCaixa === 'aberto' ? (temaNoturno ? 'bg-emerald-500/[0.04] border-emerald-500/20 text-emerald-400' : 'bg-emerald-50/50 border-emerald-200/80 text-emerald-700') : 
-            statusCaixa === 'esquecido' ? (temaNoturno ? 'bg-amber-500/[0.04] border-amber-500/20 text-amber-400' : 'bg-amber-50/50 border-amber-200/80 text-amber-700') : 
-            (temaNoturno ? 'bg-[#161a20] border-white/5 text-zinc-400' : 'bg-zinc-50 border-zinc-200 text-zinc-500')
-          }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${statusCaixa === 'aberto' ? 'bg-emerald-500 animate-pulse' : statusCaixa === 'esquecido' ? 'bg-amber-500 animate-pulse' : 'bg-zinc-500'}`}></span>
-            <span className="text-[11px] font-medium tracking-wide hidden lg:inline">
-              {statusCaixa === 'aberto' ? 'Operação ativa' : statusCaixa === 'esquecido' ? 'Pendência' : 'Caixa fechado'}
-            </span>
-          </div>
-        )}
-
-        <button onClick={() => setTemaNoturno(!temaNoturno)} className={`p-1.5 rounded-lg border transition-all duration-200 active:scale-[0.98] ${temaNoturno ? 'bg-[#161a20] border-white/[0.06] text-zinc-400 hover:text-white shadow-sm' : 'bg-white border-zinc-200 text-zinc-500 hover:text-zinc-800 shadow-sm'}`}>
-          {temaNoturno ? (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-          ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-          )}
-        </button>
-        
-        <div className="relative shrink-0 cursor-pointer" onClick={() => setMostrarMenuPerfil(!mostrarMenuPerfil)}>
-          <div className="flex items-center gap-2 hover:opacity-80 transition-opacity w-full">
-            <div className={`w-8 h-8 rounded-full border overflow-hidden shrink-0 flex items-center justify-center shadow-sm ${temaNoturno ? 'border-white/10 bg-[#161a20]' : 'border-zinc-200 bg-white'}`}>
-               <img src={logoEmpresa} alt="Logo" className="w-full h-full object-cover" />
-            </div>
-            <div className="hidden sm:flex flex-col text-left min-w-0">
-              <span className={`font-medium text-[13px] leading-none truncate ${temaNoturno ? 'text-zinc-200' : 'text-zinc-900'}`}>{sessao?.nome_usuario || 'Usuário'}</span>
-            </div>
-          </div>
-          
-          {mostrarMenuPerfil && (
-            <div className={`absolute top-12 right-0 shadow-2xl rounded-xl p-1.5 w-56 border z-50 animate-in slide-in-from-top-2 fade-in duration-200 backdrop-blur-xl ${temaNoturno ? 'bg-[#111318]/95 border-white/10' : 'bg-white/95 border-zinc-200'}`}>
-              {sessao?.role === 'dono' && <button onClick={() => { setMostrarConfigEmpresa(true); setMostrarMenuPerfil(false); }} className={`w-full text-left p-2.5 text-[13px] font-medium transition-colors rounded-lg ${temaNoturno ? 'text-zinc-300 hover:bg-white/5 hover:text-white' : 'text-zinc-700 hover:bg-zinc-50'}`}>Ajustes do Sistema</button>}
-              <div className={`h-px my-1 ${temaNoturno ? 'bg-white/5' : 'bg-zinc-100'}`}></div>
-              <button onClick={fazerLogout} className="w-full text-left p-2.5 text-[13px] font-medium text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors flex items-center gap-2">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg> Encerrar sessão
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
     </header>
   );
 }
