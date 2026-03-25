@@ -1,3 +1,4 @@
+// src/app/page.js
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -22,13 +23,21 @@ import AdminUsuarios from '@/components/AdminUsuarios';
 import AdminDelivery from '@/components/AdminDelivery'; 
 import SuperAdminPainel from '@/components/SuperAdminPainel';
 
+const LoadingDots = () => (
+  <div className="flex items-center gap-1.5">
+    <div className="w-2 h-2 bg-current rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+    <div className="w-2 h-2 bg-current rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+    <div className="w-2 h-2 bg-current rounded-full animate-bounce"></div>
+  </div>
+);
+
 export default function Home() {
 
   useEffect(() => {
     const VERSAO_ATUAL = '1.1.5'; 
-    const versaoNoNavegador = localStorage.getItem('bessa_versao_sistema');
+    const versaoNoNavegador = localStorage.getItem('arox_versao_sistema');
     if (versaoNoNavegador !== VERSAO_ATUAL) {
-      localStorage.setItem('bessa_versao_sistema', VERSAO_ATUAL);
+      localStorage.setItem('arox_versao_sistema', VERSAO_ATUAL);
       if (typeof window !== 'undefined') {
         window.location.href = window.location.pathname + '?v=' + new Date().getTime();
       }
@@ -43,14 +52,14 @@ export default function Home() {
   const getAnoAtual = () => getHoje().substring(0, 4);
 
   const fraseCarregamento = useMemo(() => {
-    const frases = ["Iniciando conexão segura", "Carregando módulos", "Sincronizando banco de dados", "Validando criptografia", "Quase pronto"];
+    const frases = ["Iniciando ambiente", "Carregando módulos", "Sincronizando dados", "Autenticando sessão", "Preparando workspace"];
     return frases[Math.floor(Math.random() * frases.length)];
   }, []);
 
   const [sessao, setSessao] = useState(null); 
   const [credenciais, setCredenciais] = useState({ email: '', senha: '' });
-  const [nomeEmpresa, setNomeEmpresa] = useState('Bom a Bessa'); // Nome genérico padrão
-  const [temaNoturno, setTemaNoturno] = useState(false);
+  const [nomeEmpresa, setNomeEmpresa] = useState('AROX'); 
+  const [temaNoturno, setTemaNoturno] = useState(true);
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
 
   const [mostrarConfigEmpresa, setMostrarConfigEmpresa] = useState(false);
@@ -112,9 +121,9 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const temaSalvo = localStorage.getItem('bessa_tema_noturno');
+    const temaSalvo = localStorage.getItem('arox_tema_noturno');
     if (temaSalvo !== null) setTemaNoturno(JSON.parse(temaSalvo));
-    const logoSalva = localStorage.getItem('bessa_logo_empresa');
+    const logoSalva = localStorage.getItem('arox_logo_empresa');
     if (logoSalva) setLogoEmpresa(logoSalva);
     const sessionData = localStorage.getItem('bessa_session');
     if (sessionData) {
@@ -127,27 +136,27 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('bessa_tema_noturno', JSON.stringify(temaNoturno));
-    document.body.style.backgroundColor = temaNoturno ? '#0f172a' : '#f8fafc'; 
+    localStorage.setItem('arox_tema_noturno', JSON.stringify(temaNoturno));
+    document.body.style.backgroundColor = temaNoturno ? '#09090b' : '#fafafa'; 
     let metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (!metaThemeColor) {
       metaThemeColor = document.createElement('meta');
       metaThemeColor.name = 'theme-color';
       document.head.appendChild(metaThemeColor);
     }
-    metaThemeColor.setAttribute('content', temaNoturno ? '#1e293b' : '#ffffff');
+    metaThemeColor.setAttribute('content', temaNoturno ? '#09090b' : '#ffffff');
   }, [temaNoturno]);
 
   const fazerLogout = () => {
     localStorage.removeItem('bessa_session');
-    localStorage.removeItem('bessa_logo_empresa');
+    localStorage.removeItem('arox_logo_empresa');
     setSessao(null); 
     setCredenciais({ email: '', senha: '' }); 
     setMostrarMenuPerfil(false); 
     setMenuMobileAberto(false); 
     setAbaAtiva('comandas'); 
-    setNomeEmpresa('Bom a Bessa'); // Reseta para o padrão
-    setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png'); // Reseta para a logo padrão
+    setNomeEmpresa('AROX');
+    setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
   };
 
   const fetchDadosEstaticos = async () => {
@@ -155,11 +164,11 @@ export default function Home() {
     try {
       const { data: empData } = await supabase.from('empresas').select('*').eq('id', sessao.empresa_id).single();
       if (empData) {
-        setNomeEmpresa(empData.nome || "Bom a Bessa");
+        setNomeEmpresa(empData.nome || "AROX");
         setNomeEmpresaEdicao(empData.nome || "");
-        setDadosPlano({ nome: empData.plano || 'Free', validade: empData.validade_plano || null });
+        setDadosPlano({ nome: empData.plano || 'Starter', validade: empData.validade_plano || null });
         const urlLogo = empData.logo || empData.logo_url;
-        if (urlLogo) { setLogoEmpresa(urlLogo); setLogoEmpresaEdicao(urlLogo); localStorage.setItem('bessa_logo_empresa', urlLogo); }
+        if (urlLogo) { setLogoEmpresa(urlLogo); setLogoEmpresaEdicao(urlLogo); localStorage.setItem('arox_logo_empresa', urlLogo); }
       }
 
       const { data: catData } = await supabase.from('categorias').select('*, itens:produtos(*)').eq('empresa_id', sessao.empresa_id);
@@ -231,7 +240,7 @@ export default function Home() {
       const payload = { empresa_id: sessao.empresa_id, data_abertura: dadosCaixa.data_abertura, saldo_inicial: dadosCaixa.saldo_inicial || 0, status: 'aberto' };
       const { data, error } = await supabase.from('caixas').insert([payload]).select().single();
       if (error) throw error;
-      if (data) { setCaixaAtual(data); mostrarAlerta("Sucesso", "Caixa aberto com sucesso!"); fetchApenasAtualizacoes(); }
+      if (data) { setCaixaAtual(data); mostrarAlerta("Sucesso", "Caixa aberto com sucesso."); fetchApenasAtualizacoes(); }
     } catch (err) { mostrarAlerta("Erro", "Erro ao abrir caixa: " + err.message); } finally { setIsLoading(false); }
   };
 
@@ -248,16 +257,16 @@ export default function Home() {
     setSessao(novaSessao);
     localStorage.setItem('bessa_session', JSON.stringify(novaSessao));
     setMostrarConfigEmpresa(false);
-    mostrarAlerta("Sucesso", "Configurações atualizadas com sucesso!");
+    mostrarAlerta("Sucesso", "Configurações atualizadas.");
   };
 
   const alterarSenhaConta = async (senhaAtualInformada, novaSenhaDesejada) => {
     try {
       const { data: usuarioAuth, error: errorAuth } = await supabase.auth.updateUser({ password: novaSenhaDesejada });
       if (errorAuth) throw errorAuth;
-      mostrarAlerta("Segurança", "Sua senha foi atualizada com sucesso no banco de dados.");
+      mostrarAlerta("Segurança", "Senha atualizada com sucesso.");
     } catch (err) {
-      mostrarAlerta("Erro de Segurança", "Não foi possível atualizar a senha. " + err.message);
+      mostrarAlerta("Erro", "Não foi possível atualizar a senha. " + err.message);
     }
   };
 
@@ -273,7 +282,7 @@ export default function Home() {
   };
 
   const alterarNomeComanda = (id, nomeAtual) => {
-    mostrarPrompt("Alterar Nome [F4]", "Digite o novo nome ou identificador da comanda:", nomeAtual, async (novoNome) => {
+    mostrarPrompt("Identificador", "Digite o novo nome ou identificador:", nomeAtual, async (novoNome) => {
       if(novoNome) {
         await supabase.from('comandas').update({nome: novoNome}).eq('id', id);
         setComandas(comandas.map(c => c.id === id ? {...c, nome: novoNome} : c));
@@ -282,7 +291,7 @@ export default function Home() {
   };
 
   const adicionarClienteComanda = (id, nomeAtual) => {
-    mostrarPrompt("Atribuir Cliente [F5]", "Digite o nome do cliente:", "", async (cliente) => {
+    mostrarPrompt("Atribuir Cliente", "Nome do cliente:", "", async (cliente) => {
       if(cliente) {
         const novoNome = `${nomeAtual} - ${cliente}`;
         await supabase.from('comandas').update({nome: novoNome}).eq('id', id);
@@ -337,8 +346,7 @@ export default function Home() {
       setMostrarModalPeso(false); 
       setAbaDetalheMobile('resumo');
     } else if (error) {
-       console.error("Erro ao inserir: ", error);
-       mostrarAlerta("Erro", "Ocorreu um problema ao adicionar os produtos.");
+       mostrarAlerta("Erro", "Problema ao processar o produto.");
     }
   };
 
@@ -379,7 +387,7 @@ export default function Home() {
   };
 
   const editarProduto = async (idProduto, obsAtual) => {
-    mostrarPrompt("Editar Observação", "Digite a observação para este item:", obsAtual, async (novaObs) => {
+    mostrarPrompt("Nota", "Adicione uma nota para este item:", obsAtual, async (novaObs) => {
       await supabase.from('comanda_produtos').update({ observacao: novaObs }).eq('id', idProduto);
       setComandas(comandas.map(c => c.id === idSelecionado ? { ...c, produtos: (c.produtos || []).map(p => p.id === idProduto ? { ...p, observacao: novaObs } : p) } : c));
     });
@@ -409,13 +417,12 @@ export default function Home() {
     
     const todosPagos = novosProdutos.length > 0 && novosProdutos.every(p => p.pago);
     
-    // Geração de Payloads de Pagamento garantindo a extração da string em vez de arrays/json.
     let formasParaInserir = [];
     if (Array.isArray(formaPagamento)) {
         formasParaInserir = formaPagamento.map(p => ({
             comanda_id: idSelecionado,
             valor: isFidelidade ? 0 : p.valor,
-            forma: String(p.forma), // Garantindo sempre formato string
+            forma: String(p.forma),
             data: getHoje(),
             empresa_id: sessao.empresa_id
         }));
@@ -423,7 +430,7 @@ export default function Home() {
         formasParaInserir = [{
             comanda_id: idSelecionado,
             valor: isFidelidade ? 0 : valorFinal,
-            forma: String(formaPagamento || 'Dinheiro'), // Garantindo sempre formato string
+            forma: String(formaPagamento || 'Dinheiro'),
             data: getHoje(),
             empresa_id: sessao.empresa_id
         }];
@@ -443,7 +450,7 @@ export default function Home() {
             const novosPts = clienteFidelizado.pontos - metaFidelidade.pontos_necessarios;
             await supabase.from('clientes_fidelidade').update({ pontos: novosPts }).eq('id', clienteFidelizado.id);
             setClientesFidelidade(prev => prev.map(c => c.id === clienteFidelizado.id ? { ...c, pontos: novosPts } : c));
-            mostrarAlerta("Prêmio Resgatado", `O prêmio foi resgatado com sucesso e os pontos foram debitados do saldo de ${clienteFidelizado.nome}.`);
+            mostrarAlerta("Prêmio Resgatado", `O resgate foi processado e os pontos foram debitados.`);
           } else {
             const totalComanda = novosProdutos.reduce((acc, p) => acc + p.preco, 0) + taxaEntrega;
             if (totalComanda >= metaFidelidade.valor_minimo) {
@@ -475,8 +482,8 @@ export default function Home() {
   };
 
   const confirmarExclusaoEmMassa = async () => {
-    if (comandas.filter(c => selecionadasExclusao.includes(c.id)).some(c => (c.pagamentos || []).length > 0)) return mostrarAlerta("Atenção", "Desmarque as comandas que já possuem pagamentos.");
-    mostrarConfirmacao("Excluir Comandas", `Excluir ${selecionadasExclusao.length} comandas do banco?`, async () => {
+    if (comandas.filter(c => selecionadasExclusao.includes(c.id)).some(c => (c.pagamentos || []).length > 0)) return mostrarAlerta("Atenção", "Existem comandas com pagamentos na seleção.");
+    mostrarConfirmacao("Excluir", `Remover ${selecionadasExclusao.length} registro(s)?`, async () => {
       await supabase.from('comandas').delete().in('id', selecionadasExclusao);
       setComandas(comandas.filter(c => !selecionadasExclusao.includes(c.id))); setModoExclusao(false); setSelecionadasExclusao([]); 
     });
@@ -485,14 +492,14 @@ export default function Home() {
   const toggleSelecaoExclusao = (id) => setSelecionadasExclusao(selecionadasExclusao.includes(id) ? selecionadasExclusao.filter(item => item !== id) : [...selecionadasExclusao, id]);
   
   const reabrirComandaFechada = async (id) => {
-    mostrarConfirmacao("Reabrir Comanda", "Deseja reabrir esta comanda? Ela voltará para a aba Comandas em Aberto.", async () => {
+    mostrarConfirmacao("Restaurar", "Retornar esta comanda para em andamento?", async () => {
       await supabase.from('comandas').update({ status: 'aberta', hora_fechamento: null }).eq('id', id);
       setComandas(comandas.map(c => c.id === id ? { ...c, status: 'aberta', hora_fechamento: null } : c));
     });
   };
 
   const excluirComandaFechada = async (id) => {
-    mostrarConfirmacao("Excluir Comanda", "ATENÇÃO: Deseja excluir esta comanda definitivamente? O faturamento dela será perdido.", async () => {
+    mostrarConfirmacao("Excluir Permanente", "Esta ação não pode ser desfeita e afeta o faturamento. Continuar?", async () => {
       await supabase.from('comandas').delete().eq('id', id);
       setComandas(comandas.filter(c => c.id !== id));
     });
@@ -528,16 +535,11 @@ export default function Home() {
   const pagamentosFiltrados = comandasFiltradas.flatMap(c => c.pagamentos || []);
   const pagamentosAgrupados = pagamentosFiltrados.reduce((acc, p) => { 
       let forma = p.forma;
-      // Adicionando um fallback robusto para contornar dados antigos salvos errados
       if (Array.isArray(forma)) forma = forma[0]?.forma || 'Outro';
       else if (typeof forma === 'string' && forma.startsWith('[')) {
-          try {
-              const parsed = JSON.parse(forma);
-              forma = parsed[0]?.forma || 'Outro';
-          } catch(e) { forma = 'Outro'; }
+          try { const parsed = JSON.parse(forma); forma = parsed[0]?.forma || 'Outro'; } catch(e) { forma = 'Outro'; }
       }
       if(!forma) forma = 'Outro';
-      
       acc[forma] = (acc[forma] || 0) + p.valor; 
       return acc; 
   }, {});
@@ -553,11 +555,11 @@ export default function Home() {
       const nomeChave = nomeDisplay.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
 
       if (!contagemProdutos[nomeChave]) { 
-        contagemProdutos[nomeChave] = { nomeDisplay: nomeDisplay.toUpperCase(), faturamento: 0, custoTotal: 0, volume: 0, isPeso: isPeso }; 
+        contagemProdutos[nomeChave] = { nomeDisplay: nomeDisplay, faturamento: 0, custoTotal: 0, volume: 0, isPeso: isPeso }; 
       }
       
       contagemProdutos[nomeChave].faturamento += (p.preco || 0);
-      contagemProdutos[nomeChave].custoTotal += (p.custo || 0); // O custo está persistido
+      contagemProdutos[nomeChave].custoTotal += (p.custo || 0); 
       if (isPeso) {
         const matchGramas = nomeOriginal.match(/(\d+(?:\.\d+)?)\s*g/i);
         contagemProdutos[nomeChave].volume += matchGramas ? parseFloat(matchGramas[1]) : 0;
@@ -568,55 +570,47 @@ export default function Home() {
   });
   
   const rankingProdutos = Object.values(contagemProdutos).map(item => ({ 
-      nome: item.nomeDisplay, 
-      valor: item.faturamento, 
-      lucro: item.faturamento - item.custoTotal, 
-      volume: item.volume, 
-      isPeso: item.isPeso 
+      nome: item.nomeDisplay, valor: item.faturamento, lucro: item.faturamento - item.custoTotal, volume: item.volume, isPeso: item.isPeso 
   })).sort((a, b) => b.valor - a.valor);
   
   if (!sessao) return <Login getHoje={getHoje} setSessao={setSessao} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />; 
   if (sessao.role === 'super_admin') return <SuperAdminPainel fazerLogout={fazerLogout} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />;
 
-  // --- TELA DE CARREGAMENTO PREMIUM - SOFISTICADA E SÉRIA ---
   if (isLoading && comandas.length === 0) {
     return (
-      <div className={`min-h-screen flex flex-col items-center justify-center ${temaNoturno ? 'bg-[#0f172a]' : 'bg-[#f8fafc]'}`}>
+      <div className={`min-h-screen flex flex-col items-center justify-center ${temaNoturno ? 'bg-[#09090b]' : 'bg-zinc-50'}`}>
         <div className="flex flex-col items-center gap-8 animate-in fade-in duration-700 p-8">
-          
-          <div className="relative flex items-center justify-center w-24 h-24">
-            <svg className="absolute inset-0 w-full h-full animate-spin text-purple-600/20" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="48" fill="none" strokeWidth="4" stroke="currentColor" strokeDasharray="301.59" strokeDashoffset="0"></circle>
-            </svg>
-            <svg className="absolute inset-0 w-full h-full animate-spin text-purple-600" style={{ animationDuration: '1.5s' }} viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="48" fill="none" strokeWidth="4" stroke="currentColor" strokeDasharray="301.59" strokeDashoffset="226.19" strokeLinecap="round"></circle>
-            </svg>
-            <div className={`w-16 h-16 rounded-full overflow-hidden shadow-sm border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+          <div className="relative flex items-center justify-center w-20 h-20">
+            <div className={`w-14 h-14 rounded-full overflow-hidden shadow-sm border flex items-center justify-center ${temaNoturno ? 'bg-white/5 border-white/10' : 'bg-white border-zinc-200'}`}>
               <img src={logoEmpresa} alt="Logo" className="w-full h-full object-cover" />
             </div>
           </div>
-
-          <div className="flex flex-col items-center gap-2">
-            <h2 className={`text-xl font-bold tracking-tight ${temaNoturno ? 'text-gray-200' : 'text-gray-800'}`}>
-              Preparando ambiente
-            </h2>
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-purple-600"></span>
-              <span className={`text-xs font-medium uppercase tracking-widest ${temaNoturno ? 'text-gray-500' : 'text-gray-500'}`}>
-                {fraseCarregamento}...
-              </span>
+          <div className="flex flex-col items-center gap-3">
+            <div className={`flex items-center gap-2 ${temaNoturno ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              <span className="text-sm font-medium">{fraseCarregamento}</span>
+              <LoadingDots />
             </div>
           </div>
-          
         </div>
       </div>
     );
   }
 
   return (
-    <main className={`min-h-screen flex flex-col transition-colors duration-500 ${temaNoturno ? 'bg-[#0f172a] text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+    <main className={`flex h-screen w-full overflow-hidden transition-colors duration-500 selection:bg-zinc-200 selection:text-zinc-900 ${temaNoturno ? 'bg-[#09090b] text-zinc-100 selection:bg-white/20 selection:text-white' : 'bg-zinc-50 text-zinc-900'}`}>
       
-      <div className="w-full p-3 md:p-6 pb-0 md:pb-0 flex flex-col max-w-7xl mx-auto">
+      {/* SIDEBAR FIXA (DESKTOP) E DRAWER (MOBILE) */}
+      <Sidebar 
+        menuMobileAberto={menuMobileAberto} setMenuMobileAberto={setMenuMobileAberto} temaNoturno={temaNoturno}
+        logoEmpresa={logoEmpresa} sessao={sessao} nomeEmpresa={nomeEmpresa} abaAtiva={abaAtiva} setAbaAtiva={setAbaAtiva}
+        setMostrarConfigEmpresa={setMostrarConfigEmpresa} setMostrarAdminUsuarios={setMostrarAdminUsuarios}
+        setMostrarAdminProdutos={setMostrarAdminProdutos} setMostrarConfigTags={setMostrarConfigTags} fazerLogout={fazerLogout}
+        setMostrarAdminDelivery={setMostrarAdminDelivery}
+      />
+
+      {/* ÁREA DE CONTEÚDO PRINCIPAL */}
+      <div className="flex-1 flex flex-col min-w-0 h-full relative overflow-hidden bg-transparent">
+        
         <Header 
           comandaAtiva={comandaAtiva} setIdSelecionado={setIdSelecionado} setMenuMobileAberto={setMenuMobileAberto}
           temaNoturno={temaNoturno} caixaAtual={caixaAtual} abaAtiva={abaAtiva} setAbaAtiva={setAbaAtiva}
@@ -628,47 +622,44 @@ export default function Home() {
           fetchData={fetchApenasAtualizacoes} clientesFidelidade={clientesFidelidade} vincularClienteFidelidade={vincularClienteFidelidade}
         />
 
-        <div className="flex-1 w-full">
-          {comandaAtiva ? (
-            <PainelComanda 
-              temaNoturno={temaNoturno} comandaAtiva={comandaAtiva} abaDetalheMobile={abaDetalheMobile} setAbaDetalheMobile={setAbaDetalheMobile} filtroCategoriaCardapio={filtroCategoriaCardapio} setFiltroCategoriaCardapio={setFiltroCategoriaCardapio} menuCategorias={menuCategorias} adicionarProdutoNaComanda={adicionarProdutoNaComanda} excluirGrupoProdutos={excluirGrupoProdutos} setMostrarModalPeso={setMostrarModalPeso} tagsGlobais={tagsGlobais} toggleTag={toggleTag} editarProduto={editarProduto} excluirProduto={excluirProduto} setMostrarModalPagamento={setMostrarModalPagamento} encerrarMesa={encerrarMesa} 
-              setIdSelecionado={setIdSelecionado} 
-              alterarNomeComanda={alterarNomeComanda} 
-              adicionarClienteComanda={adicionarClienteComanda} 
-              alternarTipoComanda={alternarTipoComanda}
-              modalAberto={mostrarModalPeso || mostrarModalPagamento}
-            />
-          ) : abaAtiva === 'comandas' ? (
-            <TabComandas 
-              temaNoturno={temaNoturno} comandasAbertas={comandasAbertas} modoExclusao={modoExclusao} setModoExclusao={setModoExclusao} selecionadasExclusao={selecionadasExclusao} toggleSelecaoExclusao={toggleSelecaoExclusao} confirmarExclusaoEmMassa={confirmarExclusaoEmMassa} adicionarComanda={adicionarComanda} setIdSelecionado={setIdSelecionado} caixaAtual={caixaAtual} abrirCaixaManual={abrirCaixaManual}
-            />
-          ) : abaAtiva === 'fechadas' ? (
-            <TabFechadas 
-              temaNoturno={temaNoturno} comandasFechadas={comandas.filter(c => c.status === 'fechada')} reabrirComandaFechada={reabrirComandaFechada} excluirComandaFechada={excluirComandaFechada} getHoje={getHoje} 
-            />
-          ) : abaAtiva === 'faturamento' ? (
-            <TabFaturamento 
-              temaNoturno={temaNoturno} filtroTempo={filtroTempo} setFiltroTempo={setFiltroTempo} getHoje={getHoje} getMesAtual={getMesAtual} getAnoAtual={getAnoAtual} faturamentoTotal={faturamentoTotal} lucroEstimado={lucroEstimado} dadosPizza={dadosPizza} rankingProdutos={rankingProdutos} comandasFiltradas={comandasFiltradas} comandas={comandas} 
-            />
-          ) : abaAtiva === 'caixa' ? (
-            <TabFechamentoCaixa temaNoturno={temaNoturno} sessao={sessao} caixaAtual={caixaAtual} comandas={comandas} fetchData={fetchApenasAtualizacoes} mostrarAlerta={mostrarAlerta} mostrarConfirmacao={mostrarConfirmacao} />
-          ) : abaAtiva === 'fidelidade' ? (
-            <TabFidelidade 
-              temaNoturno={temaNoturno} sessao={sessao} mostrarAlerta={mostrarAlerta} mostrarConfirmacao={mostrarConfirmacao}
-              metaFidelidade={metaFidelidade} setMetaFidelidade={setMetaFidelidade}
-              clientesFidelidade={clientesFidelidade} setClientesFidelidade={setClientesFidelidade} comandas={comandas}
-            />
-          ) : null}
+        {/* CONTAINER DE SCROLL */}
+        <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8 pt-2 md:pt-6 z-10 flex flex-col relative">
+          <div className="w-full max-w-[1400px] mx-auto flex-1 flex flex-col">
+            {comandaAtiva ? (
+              <PainelComanda 
+                temaNoturno={temaNoturno} comandaAtiva={comandaAtiva} abaDetalheMobile={abaDetalheMobile} setAbaDetalheMobile={setAbaDetalheMobile} filtroCategoriaCardapio={filtroCategoriaCardapio} setFiltroCategoriaCardapio={setFiltroCategoriaCardapio} menuCategorias={menuCategorias} adicionarProdutoNaComanda={adicionarProdutoNaComanda} excluirGrupoProdutos={excluirGrupoProdutos} setMostrarModalPeso={setMostrarModalPeso} tagsGlobais={tagsGlobais} toggleTag={toggleTag} editarProduto={editarProduto} excluirProduto={excluirProduto} setMostrarModalPagamento={setMostrarModalPagamento} encerrarMesa={encerrarMesa} 
+                setIdSelecionado={setIdSelecionado} 
+                alterarNomeComanda={alterarNomeComanda} 
+                adicionarClienteComanda={adicionarClienteComanda} 
+                alternarTipoComanda={alternarTipoComanda}
+                modalAberto={mostrarModalPeso || mostrarModalPagamento}
+              />
+            ) : abaAtiva === 'comandas' ? (
+              <TabComandas 
+                temaNoturno={temaNoturno} comandasAbertas={comandasAbertas} modoExclusao={modoExclusao} setModoExclusao={setModoExclusao} selecionadasExclusao={selecionadasExclusao} toggleSelecaoExclusao={toggleSelecaoExclusao} confirmarExclusaoEmMassa={confirmarExclusaoEmMassa} adicionarComanda={adicionarComanda} setIdSelecionado={setIdSelecionado} caixaAtual={caixaAtual} abrirCaixaManual={abrirCaixaManual}
+              />
+            ) : abaAtiva === 'fechadas' ? (
+              <TabFechadas 
+                temaNoturno={temaNoturno} comandasFechadas={comandas.filter(c => c.status === 'fechada')} reabrirComandaFechada={reabrirComandaFechada} excluirComandaFechada={excluirComandaFechada} getHoje={getHoje} 
+              />
+            ) : abaAtiva === 'faturamento' ? (
+              <TabFaturamento 
+                temaNoturno={temaNoturno} filtroTempo={filtroTempo} setFiltroTempo={setFiltroTempo} getHoje={getHoje} getMesAtual={getMesAtual} getAnoAtual={getAnoAtual} faturamentoTotal={faturamentoTotal} lucroEstimado={lucroEstimado} dadosPizza={dadosPizza} rankingProdutos={rankingProdutos} comandasFiltradas={comandasFiltradas} comandas={comandas} 
+              />
+            ) : abaAtiva === 'caixa' ? (
+              <TabFechamentoCaixa temaNoturno={temaNoturno} sessao={sessao} caixaAtual={caixaAtual} comandas={comandas} fetchData={fetchApenasAtualizacoes} mostrarAlerta={mostrarAlerta} mostrarConfirmacao={mostrarConfirmacao} />
+            ) : abaAtiva === 'fidelidade' ? (
+              <TabFidelidade 
+                temaNoturno={temaNoturno} sessao={sessao} mostrarAlerta={mostrarAlerta} mostrarConfirmacao={mostrarConfirmacao}
+                metaFidelidade={metaFidelidade} setMetaFidelidade={setMetaFidelidade}
+                clientesFidelidade={clientesFidelidade} setClientesFidelidade={setClientesFidelidade} comandas={comandas}
+              />
+            ) : null}
+          </div>
         </div>
       </div>
 
-      <Sidebar 
-        menuMobileAberto={menuMobileAberto} setMenuMobileAberto={setMenuMobileAberto} temaNoturno={temaNoturno}
-        logoEmpresa={logoEmpresa} sessao={sessao} nomeEmpresa={nomeEmpresa} abaAtiva={abaAtiva} setAbaAtiva={setAbaAtiva}
-        setMostrarConfigEmpresa={setMostrarConfigEmpresa} setMostrarAdminUsuarios={setMostrarAdminUsuarios}
-        setMostrarAdminProdutos={setMostrarAdminProdutos} setMostrarConfigTags={setMostrarConfigTags} fazerLogout={fazerLogout}
-      />
-
+      {/* MODALS */}
       {mostrarAdminUsuarios && sessao && <AdminUsuarios empresaId={sessao.empresa_id} usuarioAtualId={sessao.id} temaNoturno={temaNoturno} onFechar={() => setMostrarAdminUsuarios(false)} />}
       {mostrarAdminProdutos && sessao && <AdminProdutos empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => { setMostrarAdminProdutos(false); fetchApenasAtualizacoes(); }} />}
       {mostrarAdminDelivery && sessao && <AdminDelivery empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => setMostrarAdminDelivery(false)} />}
@@ -694,18 +685,18 @@ export default function Home() {
 
       {modalGlobal.visivel && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in">
-          <div className={`rounded-3xl p-6 w-full max-sm shadow-2xl flex flex-col border text-center ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-            <h2 className={`text-xl font-black mb-2 ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>{modalGlobal.titulo}</h2>
-            <p className={`text-sm mb-6 ${temaNoturno ? 'text-gray-400' : 'text-gray-600'}`}>{modalGlobal.mensagem}</p>
+          <div className={`rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col border text-center ${temaNoturno ? 'bg-[#09090b] border-white/10' : 'bg-white border-zinc-200'}`}>
+            <h2 className={`text-lg font-semibold tracking-tight mb-2 ${temaNoturno ? 'text-white' : 'text-zinc-900'}`}>{modalGlobal.titulo}</h2>
+            <p className={`text-sm mb-6 font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>{modalGlobal.mensagem}</p>
             {modalGlobal.tipo === 'prompt' && (
-              <input type="text" autoFocus className={`w-full p-3 rounded-xl border mb-6 outline-none font-bold text-center ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white focus:border-purple-500' : 'bg-gray-50 border-gray-300 focus:border-purple-500'}`} value={modalGlobal.valorInput} onChange={e => setModalGlobal({...modalGlobal, valorInput: e.target.value})} onKeyDown={e => { if (e.key === 'Enter') { if (modalGlobal.acaoConfirmar) modalGlobal.acaoConfirmar(modalGlobal.valorInput); fecharModalGlobal(); } }} />
+              <input type="text" autoFocus className={`w-full p-3 rounded-lg border mb-6 outline-none font-medium text-sm transition-colors shadow-sm ${temaNoturno ? 'bg-white/5 border-white/10 text-white focus:border-white/20' : 'bg-white border-zinc-200 focus:border-zinc-400'}`} value={modalGlobal.valorInput} onChange={e => setModalGlobal({...modalGlobal, valorInput: e.target.value})} onKeyDown={e => { if (e.key === 'Enter') { if (modalGlobal.acaoConfirmar) modalGlobal.acaoConfirmar(modalGlobal.valorInput); fecharModalGlobal(); } }} />
             )}
             <div className="flex gap-3">
               {(modalGlobal.tipo === 'confirmacao' || modalGlobal.tipo === 'prompt') && (
-                <button onClick={fecharModalGlobal} className={`flex-1 p-3 rounded-xl font-bold transition ${temaNoturno ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Cancelar</button>
+                <button onClick={fecharModalGlobal} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${temaNoturno ? 'bg-white/5 text-zinc-300 hover:bg-white/10' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>Cancelar</button>
               )}
-              <button onClick={() => { if (modalGlobal.acaoConfirmar) { if (modalGlobal.tipo === 'prompt') modalGlobal.acaoConfirmar(modalGlobal.valorInput); else modalGlobal.acaoConfirmar(); } fecharModalGlobal(); }} className={`flex-1 p-3 rounded-xl font-bold text-white transition shadow-lg ${modalGlobal.titulo.toLowerCase().includes('excluir') || modalGlobal.titulo.toLowerCase().includes('atenção') ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700'}`}>
-                {modalGlobal.tipo === 'alerta' ? 'OK' : 'Confirmar'}
+              <button onClick={() => { if (modalGlobal.acaoConfirmar) { if (modalGlobal.tipo === 'prompt') modalGlobal.acaoConfirmar(modalGlobal.valorInput); else modalGlobal.acaoConfirmar(); } fecharModalGlobal(); }} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold text-white transition-all shadow-md active:scale-[0.98] ${modalGlobal.titulo.toLowerCase().includes('excluir') || modalGlobal.titulo.toLowerCase().includes('atenção') ? 'bg-rose-600 hover:bg-rose-700' : 'bg-zinc-900 hover:bg-zinc-800'}`}>
+                {modalGlobal.tipo === 'alerta' ? 'Entendido' : 'Confirmar'}
               </button>
             </div>
           </div>
