@@ -1,9 +1,7 @@
-// src/components/ModalConfigEmpresa.js
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
-// Base de cidades inteligente, focada em capitais, polos e o contexto do usuário
 const CIDADES_POPULARES = [
   "Rio Branco, AC, BR", "Maceió, AL, BR", "Macapá, AP, BR", "Manaus, AM, BR",
   "Salvador, BA, BR", "Feira de Santana, BA, BR", "Fortaleza, CE, BR",
@@ -30,11 +28,12 @@ export default function ModalConfigEmpresa({
   nomeUsuarioEdicao,
   setNomeUsuarioEdicao,
   planoUsuario,
-  salvarConfigEmpresa, // Função do componente pai
+  salvarConfigEmpresa,
   setMostrarConfigEmpresa,
-  alterarSenhaConta
+  alterarSenhaConta,
+  deletarWorkspace // Nova Prop via Backend-First
 }) {
-  const [abaMobile, setAbaMobile] = useState('identidade'); // 'identidade' | 'operacao' | 'seguranca'
+  const [abaMobile, setAbaMobile] = useState('identidade'); 
 
   // Estados Senha
   const [senhaAtual, setSenhaAtual] = useState('');
@@ -42,7 +41,10 @@ export default function ModalConfigEmpresa({
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [mostrarSenhas, setMostrarSenhas] = useState(false);
 
-  // Estados Operação (Atualizados)
+  // Estados Delecao (Danger Zone)
+  const [confirmacaoDelete, setConfirmacaoDelete] = useState('');
+
+  // Estados Operação
   const [localizacao, setLocalizacao] = useState('');
   const [sugestoesLocalizacao, setSugestoesLocalizacao] = useState([]);
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
@@ -50,7 +52,6 @@ export default function ModalConfigEmpresa({
   const [horarioFechamento, setHorarioFechamento] = useState('');
   const [isCarregandoOperacao, setIsCarregandoOperacao] = useState(true);
 
-  // Busca dados de operação no mount independentemente do pai
   useEffect(() => {
     const buscarOperacao = async () => {
       try {
@@ -79,7 +80,6 @@ export default function ModalConfigEmpresa({
     buscarOperacao();
   }, []);
 
-  // Inteligência de Autocomplete
   const handleLocalizacaoChange = (e) => {
     const val = e.target.value;
     setLocalizacao(val);
@@ -101,47 +101,40 @@ export default function ModalConfigEmpresa({
     setMostrarSugestoes(false);
   };
 
-  // Normalizador Silencioso (Trata texto solto "parnamirim rn" -> "Parnamirim, RN, BR")
   const normalizarLocalizacao = (str) => {
     if (!str) return '';
     let limpa = str.trim().replace(/\s+/g, ' ');
-
-    if (limpa.toUpperCase().endsWith(', BR')) return limpa; // Já no formato ideal
-
-    // Regex para pegar Padrão Livre: "Cidade uf", "Cidade - UF", "Cidade, UF"
+    if (limpa.toUpperCase().endsWith(', BR')) return limpa; 
     const match = limpa.match(/^(.+?)[-,\s]+([a-zA-Z]{2})$/);
     if (match) {
       const cidade = match[1].trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
       const uf = match[2].toUpperCase();
       return `${cidade}, ${uf}, BR`;
     }
-
     return limpa;
   };
 
-  // Handler que salva a aba Operação antes de chamar o salvar do pai
   const handleSalvarGeral = async () => {
     try {
       const sessionData = localStorage.getItem('bessa_session');
       if (sessionData) {
         const sessao = JSON.parse(sessionData);
         if (sessao?.empresa_id) {
-          
           const localizacaoFinal = normalizarLocalizacao(localizacao);
-          setLocalizacao(localizacaoFinal); // Atualiza UI para o usuário ver o ajuste elegante
-
+          setLocalizacao(localizacaoFinal); 
           await supabase.from('empresas').update({
-            localizacao: localizacaoFinal,
-            horario_abertura: horarioAbertura,
-            horario_fechamento: horarioFechamento
+            localizacao: localizacaoFinal, horario_abertura: horarioAbertura, horario_fechamento: horarioFechamento
           }).eq('id', sessao.empresa_id);
         }
       }
-    } catch (err) {
-      console.error("Falha ao salvar operação");
-    }
-    // Chama a função do pai para salvar nome/logo e fechar o modal
+    } catch (err) { }
     salvarConfigEmpresa(); 
+  };
+
+  const formatarData = (dataStr) => {
+    if (!dataStr) return 'Não registrada';
+    const d = new Date(dataStr);
+    return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
   };
 
   const regrasSenha = [
@@ -160,13 +153,11 @@ export default function ModalConfigEmpresa({
   const isPremium = nomePlano.includes('premium') || nomePlano.includes('pro') || nomePlano.includes('anual') || nomePlano.includes('mensal');
   const nomePlanoDisplay = planoUsuario?.nome ? (planoUsuario.nome.charAt(0).toUpperCase() + planoUsuario.nome.slice(1)) : 'Starter Plan';
 
+  const confirmarDeleteBloqueado = confirmacaoDelete !== 'DELETAR-AROX';
+
   return (
     <div className="fixed inset-0 flex flex-col sm:items-center justify-start sm:justify-center p-0 sm:p-6 z-[120] overflow-hidden">
-      
-      <div 
-        className="absolute inset-0 bg-black/60 sm:bg-black/50 backdrop-blur-sm sm:backdrop-blur-md transition-opacity duration-300"
-        onClick={() => setMostrarConfigEmpresa(false)}
-      ></div>
+      <div className="absolute inset-0 bg-black/60 sm:bg-black/50 backdrop-blur-sm sm:backdrop-blur-md transition-opacity duration-300" onClick={() => setMostrarConfigEmpresa(false)}></div>
 
       <div className={`relative w-full h-full sm:h-auto sm:max-h-[90vh] max-w-5xl flex flex-col sm:rounded-2xl shadow-2xl animate-in sm:zoom-in-95 slide-in-from-bottom-full sm:slide-in-from-bottom-0 duration-300 overflow-hidden z-10 transition-colors ${temaNoturno ? 'bg-[#111111] sm:border border-white/5' : 'bg-[#FAFAFA] sm:border border-zinc-200'}`}>
         
@@ -232,7 +223,7 @@ export default function ModalConfigEmpresa({
             </div>
           </div>
 
-          {/* COLUNA 2: OPERACIONAL E INTELIGÊNCIA */}
+          {/* COLUNA 2: OPERACIONAL */}
           <div className={`p-6 sm:p-8 flex-col gap-6 sm:w-1/3 sm:border-r ${abaMobile === 'operacao' ? 'flex' : 'hidden sm:flex'} ${temaNoturno ? 'border-white/[0.06] bg-[#111111]' : 'border-zinc-200 bg-white'}`}>
             <div className="space-y-1 mb-2">
               <h3 className={`text-[14px] font-semibold tracking-tight ${temaNoturno ? 'text-white' : 'text-zinc-900'}`}>Parâmetros Operacionais</h3>
@@ -243,36 +234,23 @@ export default function ModalConfigEmpresa({
               <div className={`animate-pulse h-10 w-full rounded-md ${temaNoturno ? 'bg-white/5' : 'bg-black/5'}`}></div>
             ) : (
               <div className="space-y-5">
-                
-                {/* CAMPO LOCALIZAÇÃO COM AUTOCOMPLETE */}
                 <div className="group relative">
                   <label className={`text-[11px] font-semibold tracking-wide mb-1.5 block uppercase ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Localização (Clima)</label>
                   <input 
-                    type="text" 
-                    placeholder="Ex: Parnamirim, RN, BR" 
-                    value={localizacao} 
-                    onChange={handleLocalizacaoChange}
-                    onFocus={() => { if(localizacao.trim().length > 1) setMostrarSugestoes(true); }}
-                    onBlur={() => setTimeout(() => setMostrarSugestoes(false), 200)}
+                    type="text" placeholder="Ex: Parnamirim, RN, BR" value={localizacao} onChange={handleLocalizacaoChange}
+                    onFocus={() => { if(localizacao.trim().length > 1) setMostrarSugestoes(true); }} onBlur={() => setTimeout(() => setMostrarSugestoes(false), 200)}
                     className={`w-full px-3.5 py-2.5 rounded-lg border outline-none text-[13px] font-semibold transition-all shadow-sm focus:ring-1 focus:ring-offset-0 ${temaNoturno ? 'bg-white/[0.02] border-white/10 focus:border-white/20 focus:ring-white/20 text-white placeholder-zinc-600' : 'bg-black/[0.02] border-zinc-200 focus:border-zinc-300 focus:ring-zinc-200 text-zinc-900 placeholder-zinc-400'}`} 
                   />
-                  
-                  {/* DROPDOWN DE SUGESTÕES */}
                   {mostrarSugestoes && sugestoesLocalizacao.length > 0 && (
                     <ul className={`absolute left-0 right-0 z-50 mt-1.5 py-1.5 rounded-xl border shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-48 overflow-y-auto scrollbar-hide ${temaNoturno ? 'bg-[#1A1A1A] border-white/10' : 'bg-white border-zinc-200'}`}>
                       {sugestoesLocalizacao.map((sugestao, idx) => (
-                        <li 
-                          key={idx}
-                          onClick={() => selecionarSugestao(sugestao)}
-                          className={`px-3.5 py-2 text-[13px] font-medium cursor-pointer transition-colors flex items-center gap-2 ${temaNoturno ? 'text-zinc-300 hover:bg-white/5 hover:text-white' : 'text-zinc-700 hover:bg-black/5 hover:text-zinc-900'}`}
-                        >
+                        <li key={idx} onClick={() => selecionarSugestao(sugestao)} className={`px-3.5 py-2 text-[13px] font-medium cursor-pointer transition-colors flex items-center gap-2 ${temaNoturno ? 'text-zinc-300 hover:bg-white/5 hover:text-white' : 'text-zinc-700 hover:bg-black/5 hover:text-zinc-900'}`}>
                           <svg className={`w-3.5 h-3.5 opacity-50 ${temaNoturno ? 'text-white' : 'text-black'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                           {sugestao}
                         </li>
                       ))}
                     </ul>
                   )}
-
                   <p className={`text-[10px] mt-1.5 leading-relaxed ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Selecione uma cidade para melhorar as métricas de previsão no Header.</p>
                 </div>
 
@@ -290,10 +268,9 @@ export default function ModalConfigEmpresa({
             )}
           </div>
 
-          {/* COLUNA 3: PLANO E SEGURANÇA */}
+          {/* COLUNA 3: PLANO E SEGURANÇA (COM ZONA DE PERIGO) */}
           <div className={`p-6 sm:p-8 flex-col gap-6 sm:w-1/3 ${abaMobile === 'seguranca' ? 'flex' : 'hidden sm:flex'} ${temaNoturno ? 'bg-[#0A0A0A]' : 'bg-[#FAFAFA]'}`}>
             
-            {/* Bloco do Plano Premium */}
             <div>
               <div className={`p-4 rounded-xl border flex flex-col gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${temaNoturno ? 'bg-gradient-to-br from-zinc-900 to-[#0A0A0A] border-white/[0.08]' : 'bg-gradient-to-br from-white to-zinc-50 border-zinc-200/80 shadow-sm'}`}>
                 <div className="flex items-start justify-between">
@@ -305,39 +282,54 @@ export default function ModalConfigEmpresa({
                     {isPremium ? 'Premium' : 'Básico'}
                   </div>
                 </div>
+                <div className={`pt-3 border-t mt-1 flex flex-col gap-0.5 ${temaNoturno ? 'border-white/5' : 'border-zinc-200'}`}>
+                   <span className={`text-[10px] font-bold uppercase tracking-widest ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Membro Desde</span>
+                   <span className={`text-[12px] font-mono font-medium ${temaNoturno ? 'text-zinc-300' : 'text-zinc-700'}`}>{formatarData(planoUsuario?.criado_em)}</span>
+                </div>
               </div>
             </div>
 
-            {/* Bloco de Segurança */}
-            <div className="mt-2 pb-6 sm:pb-0">
-              <div className="space-y-1 mb-3">
-                <h3 className={`text-[14px] font-semibold tracking-tight ${temaNoturno ? 'text-white' : 'text-zinc-900'}`}>Segurança</h3>
+            <div className="space-y-3">
+              <h3 className={`text-[14px] font-semibold tracking-tight mb-2 ${temaNoturno ? 'text-white' : 'text-zinc-900'}`}>Credenciais</h3>
+              <input type={mostrarSenhas ? "text" : "password"} placeholder="Senha Atual" value={senhaAtual} onChange={e => setSenhaAtual(e.target.value)} className={`w-full px-3.5 py-2.5 rounded-lg border outline-none text-[13px] font-semibold transition-all shadow-sm focus:ring-1 focus:ring-offset-0 ${temaNoturno ? 'bg-white/[0.02] border-white/10 focus:border-white/20 focus:ring-white/20 text-white placeholder-zinc-600' : 'bg-black/[0.02] border-zinc-200 focus:border-zinc-300 focus:ring-zinc-200 text-zinc-900 placeholder-zinc-400'}`} />
+              <div className="grid grid-cols-1 gap-3">
+                <input type={mostrarSenhas ? "text" : "password"} placeholder="Nova Senha" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} className={`w-full px-3.5 py-2.5 rounded-lg border outline-none text-[13px] font-semibold transition-all shadow-sm focus:ring-1 focus:ring-offset-0 ${temaNoturno ? 'bg-white/[0.02] border-white/10 focus:border-white/20 focus:ring-white/20 text-white placeholder-zinc-600' : 'bg-black/[0.02] border-zinc-200 focus:border-zinc-300 focus:ring-zinc-200 text-zinc-900 placeholder-zinc-400'}`} />
+                <input type={mostrarSenhas ? "text" : "password"} placeholder="Confirmar Nova" value={confirmarSenha} onChange={e => setConfirmarSenha(e.target.value)} className={`w-full px-3.5 py-2.5 rounded-lg border outline-none text-[13px] font-semibold transition-all shadow-sm focus:ring-1 focus:ring-offset-0 ${novaSenha && confirmarSenha && novaSenha !== confirmarSenha ? 'border-rose-500/50 focus:border-rose-500/50' : (temaNoturno ? 'border-white/10 focus:border-white/20' : 'border-zinc-200 focus:border-zinc-300')} ${temaNoturno ? 'bg-white/[0.02] text-white placeholder-zinc-600' : 'bg-black/[0.02] text-zinc-900 placeholder-zinc-400'}`} />
               </div>
               
-              <div className="space-y-3">
-                <input type={mostrarSenhas ? "text" : "password"} placeholder="Senha Atual" value={senhaAtual} onChange={e => setSenhaAtual(e.target.value)} className={`w-full px-3.5 py-2.5 rounded-lg border outline-none text-[13px] font-semibold transition-all shadow-sm focus:ring-1 focus:ring-offset-0 ${temaNoturno ? 'bg-white/[0.02] border-white/10 focus:border-white/20 focus:ring-white/20 text-white placeholder-zinc-600' : 'bg-black/[0.02] border-zinc-200 focus:border-zinc-300 focus:ring-zinc-200 text-zinc-900 placeholder-zinc-400'}`} />
-                <div className="grid grid-cols-1 gap-3">
-                  <input type={mostrarSenhas ? "text" : "password"} placeholder="Nova Senha" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} className={`w-full px-3.5 py-2.5 rounded-lg border outline-none text-[13px] font-semibold transition-all shadow-sm focus:ring-1 focus:ring-offset-0 ${temaNoturno ? 'bg-white/[0.02] border-white/10 focus:border-white/20 focus:ring-white/20 text-white placeholder-zinc-600' : 'bg-black/[0.02] border-zinc-200 focus:border-zinc-300 focus:ring-zinc-200 text-zinc-900 placeholder-zinc-400'}`} />
-                  <input type={mostrarSenhas ? "text" : "password"} placeholder="Confirmar Nova" value={confirmarSenha} onChange={e => setConfirmarSenha(e.target.value)} className={`w-full px-3.5 py-2.5 rounded-lg border outline-none text-[13px] font-semibold transition-all shadow-sm focus:ring-1 focus:ring-offset-0 ${novaSenha && confirmarSenha && novaSenha !== confirmarSenha ? 'border-rose-500/50 focus:border-rose-500/50' : (temaNoturno ? 'border-white/10 focus:border-white/20' : 'border-zinc-200 focus:border-zinc-300')} ${temaNoturno ? 'bg-white/[0.02] text-white placeholder-zinc-600' : 'bg-black/[0.02] text-zinc-900 placeholder-zinc-400'}`} />
-                </div>
-                
-                {novaSenha.length > 0 && (
-                  <div className="flex flex-col gap-2 pt-2 animate-in fade-in duration-300">
-                    <div className={`h-1 w-full rounded-full overflow-hidden ${temaNoturno ? 'bg-white/5' : 'bg-black/5'}`}>
-                       <div className={`h-full transition-all duration-500 ease-out ${corAtual}`} style={{ width: `${(forcaSenha / 4) * 100}%` }}></div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              <button disabled={!senhaValida || !senhaAtual} onClick={() => alterarSenhaConta(senhaAtual, novaSenha)} className={`w-full py-2.5 rounded-lg text-[13px] font-bold mt-4 transition-all shadow-sm outline-none flex items-center justify-center gap-2 ${senhaValida && senhaAtual ? (temaNoturno ? 'bg-white text-zinc-900 hover:bg-zinc-200 active:scale-[0.98]' : 'bg-zinc-900 text-white hover:bg-zinc-800 active:scale-[0.98]') : (temaNoturno ? 'bg-white/5 text-zinc-500 cursor-not-allowed' : 'bg-black/5 text-zinc-400 cursor-not-allowed')}`}>
+              <button disabled={!senhaValida || !senhaAtual} onClick={() => alterarSenhaConta(senhaAtual, novaSenha)} className={`w-full py-2.5 rounded-lg text-[13px] font-bold mt-2 transition-all shadow-sm outline-none flex items-center justify-center gap-2 ${senhaValida && senhaAtual ? (temaNoturno ? 'bg-white text-zinc-900 hover:bg-zinc-200 active:scale-[0.98]' : 'bg-zinc-900 text-white hover:bg-zinc-800 active:scale-[0.98]') : (temaNoturno ? 'bg-white/5 text-zinc-500 cursor-not-allowed' : 'bg-black/5 text-zinc-400 cursor-not-allowed')}`}>
                 Atualizar Senha
               </button>
             </div>
+
+            {/* ZONA DE PERIGO (Exclusão Real) */}
+            <div className={`mt-4 pt-6 border-t ${temaNoturno ? 'border-rose-900/30' : 'border-rose-200'}`}>
+              <h3 className="text-[14px] font-semibold tracking-tight text-rose-500 mb-1">Zona de Perigo</h3>
+              <p className={`text-[11px] leading-relaxed mb-4 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>A deleção apaga permanentemente todos os seus dados, usuários e histórico. Esta ação <span className="font-bold underline">não pode ser desfeita</span>.</p>
+              
+              <div className="flex flex-col gap-2">
+                <input 
+                  type="text" 
+                  placeholder="Digite DELETAR-AROX" 
+                  value={confirmacaoDelete} 
+                  onChange={e => setConfirmacaoDelete(e.target.value)} 
+                  className={`w-full px-3.5 py-2.5 rounded-lg border outline-none text-[12px] font-mono font-semibold transition-all focus:ring-1 focus:ring-offset-0 ${temaNoturno ? 'bg-rose-500/5 border-rose-500/20 focus:border-rose-500 text-rose-300 placeholder-rose-900' : 'bg-rose-50 border-rose-200 focus:border-rose-400 text-rose-900 placeholder-rose-300'}`} 
+                />
+                <button 
+                  disabled={confirmarDeleteBloqueado} 
+                  onClick={deletarWorkspace} 
+                  className={`w-full py-2.5 rounded-lg text-[13px] font-bold transition-all shadow-sm outline-none flex items-center justify-center gap-2 ${confirmarDeleteBloqueado ? (temaNoturno ? 'bg-white/5 text-zinc-600 cursor-not-allowed' : 'bg-black/5 text-zinc-400 cursor-not-allowed') : 'bg-rose-600 hover:bg-rose-700 text-white active:scale-[0.98]'}`}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  Deletar Permanentemente
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
 
-        {/* FOOTER FIXO (Ações Principais) */}
+        {/* FOOTER FIXO */}
         <div className={`p-5 sm:p-6 border-t shrink-0 flex justify-end ${temaNoturno ? 'border-white/[0.06] bg-[#0A0A0A]/80' : 'border-zinc-200 bg-white/80'} backdrop-blur-xl`}>
           <button onClick={handleSalvarGeral} className={`w-full sm:w-auto px-8 py-2.5 rounded-lg text-[13px] font-bold transition-all active:scale-[0.98] shadow-sm flex items-center justify-center gap-2 outline-none ${temaNoturno ? 'bg-white text-zinc-900 hover:bg-zinc-200 shadow-[0_0_15px_rgba(255,255,255,0.1)]' : 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-md'}`}>
             Salvar Workspace

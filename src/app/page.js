@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 import Login from '@/components/Login';
@@ -19,9 +20,7 @@ import ModalConfigTags from '@/components/ModalConfigTags';
 import ModalPeso from '@/components/ModalPeso';
 import ModalPagamento from '@/components/ModalPagamento';
 import AdminProdutos from '@/components/AdminProdutos';
-import AdminUsuarios from '@/components/AdminUsuarios';
 import AdminDelivery from '@/components/AdminDelivery'; 
-import SuperAdminPainel from '@/components/SuperAdminPainel';
 
 const LoadingDots = () => (
   <div className="flex items-center gap-1.5">
@@ -32,9 +31,10 @@ const LoadingDots = () => (
 );
 
 export default function Home() {
+  const router = useRouter();
 
   useEffect(() => {
-    const VERSAO_ATUAL = '1.1.5'; 
+    const VERSAO_ATUAL = '1.2.0'; 
     const versaoNoNavegador = localStorage.getItem('arox_versao_sistema');
     if (versaoNoNavegador !== VERSAO_ATUAL) {
       localStorage.setItem('arox_versao_sistema', VERSAO_ATUAL);
@@ -51,13 +51,24 @@ export default function Home() {
   const getMesAtual = () => getHoje().substring(0, 7);
   const getAnoAtual = () => getHoje().substring(0, 4);
 
-  const fraseCarregamento = useMemo(() => {
-    const frases = ["Iniciando ambiente", "Carregando módulos", "Sincronizando dados", "Autenticando sessão", "Preparando workspace"];
-    return frases[Math.floor(Math.random() * frases.length)];
-  }, []);
+  // CORREÇÃO DE HIDRATAÇÃO: Render inicial estático e seguro para o SSR
+  const frasesLoading = useMemo(() => [
+    "Iniciando ambiente", 
+    "Carregando módulos", 
+    "Sincronizando dados", 
+    "Autenticando sessão", 
+    "Preparando workspace"
+  ], []);
+
+  const [fraseCarregamento, setFraseCarregamento] = useState(frasesLoading[0]);
+
+  // Sorteio aleatório acontece SOMENTE no client-side, após o componente montar
+  useEffect(() => {
+    const fraseAleatoria = frasesLoading[Math.floor(Math.random() * frasesLoading.length)];
+    setFraseCarregamento(fraseAleatoria);
+  }, [frasesLoading]);
 
   const [sessao, setSessao] = useState(null); 
-  const [credenciais, setCredenciais] = useState({ email: '', senha: '' });
   const [nomeEmpresa, setNomeEmpresa] = useState('AROX'); 
   const [temaNoturno, setTemaNoturno] = useState(true);
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
@@ -68,9 +79,8 @@ export default function Home() {
   const [logoEmpresaEdicao, setLogoEmpresaEdicao] = useState('');
   const [nomeUsuarioEdicao, setNomeUsuarioEdicao] = useState('');
   
-  const [dadosPlano, setDadosPlano] = useState({ nome: 'Free', validade: null });
+  const [dadosPlano, setDadosPlano] = useState({ nome: 'Free', validade: null, criado_em: null });
 
-  const [ignorarAvisoAntigas, setIgnorarAvisoAntigas] = useState(false);
   const [caixaAtual, setCaixaAtual] = useState(null); 
   const [comandas, setComandas] = useState([]);
   const [menuCategorias, setMenuCategorias] = useState([]);
@@ -113,18 +123,30 @@ export default function Home() {
   const mostrarPrompt = (titulo, mensagem, valorInicial, acaoConfirmar) => setModalGlobal({ visivel: true, tipo: 'prompt', titulo, mensagem, valorInput: valorInicial || '', acaoConfirmar });
   const fecharModalGlobal = () => setModalGlobal({ visivel: false, tipo: 'alerta', titulo: '', mensagem: '', valorInput: '', acaoConfirmar: null });
 
-  useEffect(() => {
-    const verificarHorario = () => {
-       const agora = new Date();
-       const horas = agora.getHours();
-       const minutos = agora.getMinutes();
-       if ((horas === 22 && minutos >= 50) || horas >= 23 || horas < 4) setAvisoFechamento(true);
-       else setAvisoFechamento(false);
-    };
-    verificarHorario();
-    const intervalo = setInterval(verificarHorario, 60000); 
-    return () => clearInterval(intervalo);
-  }, []);
+  // DEFESA CLIENT-SIDE: LOGOUT AUTOMÁTICO ÀS 5H
+  const isSessionExpired = () => {
+    const sessionStart = localStorage.getItem('arox_session_start');
+    
+    // CORREÇÃO: Se não existir marcação, é login novo, não deve expirar imediatamente.
+    if (!sessionStart) return false; 
+    
+    const now = new Date();
+    const sessionDate = new Date(sessionStart);
+    
+    // Configura limite como 05:00:00 de hoje
+    const limit = new Date(now);
+    limit.setHours(5, 0, 0, 0);
+    
+    // Se agora for depois das 5h, e a sessão iniciou ANTES das 5h de hoje = expirou
+    if (now >= limit && sessionDate < limit) return true;
+    
+    // Se agora for antes das 5h, e a sessão iniciou ANTES das 5h de ontem = expirou
+    const limitYesterday = new Date(limit);
+    limitYesterday.setDate(limitYesterday.getDate() - 1);
+    if (now < limit && sessionDate < limitYesterday) return true;
+    
+    return false;
+  };
 
   useEffect(() => {
     if (appMode === 'takeover') return; 
@@ -133,19 +155,62 @@ export default function Home() {
     if (temaSalvo !== null) setTemaNoturno(JSON.parse(temaSalvo));
     const logoSalva = localStorage.getItem('arox_logo_empresa');
     if (logoSalva) setLogoEmpresa(logoSalva);
+    
     const sessionData = localStorage.getItem('bessa_session');
     if (sessionData) {
       try {
         const parsed = JSON.parse(sessionData);
-        if (parsed.empresa_id) setSessao(parsed);
-        else localStorage.removeItem('bessa_session');
-      } catch(e) { localStorage.removeItem('bessa_session'); }
+        
+        // CORREÇÃO CRÍTICA: Se for super admin, redireciona AGORA e PARA A EXECUÇÃO.
+        // Não exige empresa_id para super_admin.
+        if (parsed.role === 'super_admin') {
+          router.push('/admin');
+          return;
+        }
+
+        if (isSessionExpired()) {
+          fazerLogout(true); // Força silent logout
+          return;
+        }
+
+        // Se for lojista normal, exige empresa_id
+        if (parsed.empresa_id) {
+          setSessao(parsed);
+          // Marca timestamp da sessão em memória se não existir
+          if (!localStorage.getItem('arox_session_start')) {
+            localStorage.setItem('arox_session_start', new Date().toISOString());
+          }
+        } else {
+          localStorage.removeItem('bessa_session');
+          setAppMode('login');
+        }
+      } catch(e) { 
+        localStorage.removeItem('bessa_session'); 
+        setAppMode('login');
+      }
+    } else {
+      setAppMode('login'); // Necessário forçar estado final se não houver login
     }
-  }, [appMode]);
+  }, [appMode, router]);
 
   useEffect(() => {
-    if (appMode === 'takeover') return; 
-    
+    const verificarHorario = () => {
+       const agora = new Date();
+       const horas = agora.getHours();
+       const minutos = agora.getMinutes();
+       if ((horas === 22 && minutos >= 50) || horas >= 23 || horas < 4) setAvisoFechamento(true);
+       else setAvisoFechamento(false);
+
+       // Check continuo de cutoff 5AM em background
+       if (sessao && isSessionExpired()) fazerLogout(true);
+    };
+    verificarHorario();
+    const intervalo = setInterval(verificarHorario, 60000); 
+    return () => clearInterval(intervalo);
+  }, [sessao]);
+
+  useEffect(() => {
+    if (appMode === 'takeover' || !sessao) return; 
     localStorage.setItem('arox_tema_noturno', JSON.stringify(temaNoturno));
     document.body.style.backgroundColor = temaNoturno ? '#09090b' : '#fafafa'; 
     let metaThemeColor = document.querySelector('meta[name="theme-color"]');
@@ -155,13 +220,44 @@ export default function Home() {
       document.head.appendChild(metaThemeColor);
     }
     metaThemeColor.setAttribute('content', temaNoturno ? '#09090b' : '#ffffff');
-  }, [temaNoturno, appMode]);
+  }, [temaNoturno, appMode, sessao]);
 
-  const fazerLogout = () => {
+  // SISTEMA DE HEARTBEAT DE SESSÃO
+  useEffect(() => {
+    if (!sessao || sessao.role === 'super_admin') return;
+    
+    const realizarHeartbeat = async () => {
+      const sessionId = localStorage.getItem('arox_session_id');
+      const now = new Date().toISOString();
+      
+      if (sessionId) {
+        await supabase.from('sessoes_acesso').update({ ultimo_heartbeat: now }).eq('id', sessionId);
+      }
+      await supabase.from('usuarios').update({ ultimo_ping_at: now, status_presenca: 'online' }).eq('id', sessao.id);
+    };
+
+    realizarHeartbeat(); 
+    const heartbeatInterval = setInterval(realizarHeartbeat, 60000); 
+    return () => clearInterval(heartbeatInterval);
+  }, [sessao]);
+
+  const fazerLogout = async (silent = false) => {
+    const sessionId = localStorage.getItem('arox_session_id');
+    const now = new Date().toISOString();
+    
+    if (sessionId) {
+      await supabase.from('sessoes_acesso').update({ fim_sessao: now }).eq('id', sessionId);
+    }
+    if (sessao?.id) {
+      await supabase.from('usuarios').update({ status_presenca: 'offline' }).eq('id', sessao.id);
+    }
+
     localStorage.removeItem('bessa_session');
     localStorage.removeItem('arox_logo_empresa');
+    localStorage.removeItem('arox_session_id');
+    localStorage.removeItem('arox_session_start');
+    
     setSessao(null); 
-    setCredenciais({ email: '', senha: '' }); 
     setMostrarMenuPerfil(false); 
     setMenuMobileAberto(false); 
     setAbaAtiva('comandas'); 
@@ -169,6 +265,8 @@ export default function Home() {
     setLogoEmpresa('https://cdn-icons-png.flaticon.com/512/3135/3135715.png');
     preComandaDispensada.current = false; 
     setAppMode('loading');
+
+    if (silent) window.location.reload();
   };
 
   const fetchDadosEstaticos = async () => {
@@ -178,7 +276,7 @@ export default function Home() {
       if (empData) {
         setNomeEmpresa(empData.nome || "AROX");
         setNomeEmpresaEdicao(empData.nome || "");
-        setDadosPlano({ nome: empData.plano || 'Starter', validade: empData.validade_plano || null });
+        setDadosPlano({ nome: empData.plano || 'Starter', validade: empData.validade_plano || null, criado_em: empData.created_at });
         const urlLogo = empData.logo || empData.logo_url;
         if (urlLogo) { setLogoEmpresa(urlLogo); setLogoEmpresaEdicao(urlLogo); localStorage.setItem('arox_logo_empresa', urlLogo); }
       }
@@ -270,8 +368,13 @@ export default function Home() {
   useEffect(() => {
     if (!sessao?.empresa_id) return;
     setNomeUsuarioEdicao(sessao.nome_usuario || '');
-    fetchDadosEstaticos();
-    fetchHistoricoCompleto(); 
+    
+    const initializeSession = async () => {
+      await fetchDadosEstaticos();
+      await fetchHistoricoCompleto(); 
+    };
+    
+    initializeSession();
     const intervaloPolling = setInterval(() => { fetchApenasAtualizacoes(); }, 30000); 
     return () => clearInterval(intervaloPolling);
   }, [sessao]);
@@ -332,6 +435,18 @@ export default function Home() {
       if (errorAuth) throw errorAuth;
       mostrarAlerta("Segurança", "Senha atualizada com sucesso.");
     } catch (err) { mostrarAlerta("Erro", "Não foi possível atualizar a senha. " + err.message); }
+  };
+
+  const deletarWorkspace = async () => {
+    try {
+      const { error } = await supabase.rpc('delete_workspace_secure', { target_empresa_id: sessao.empresa_id });
+      if (error) throw error;
+      
+      localStorage.removeItem('bessa_session');
+      window.location.href = '/';
+    } catch (err) {
+      mostrarAlerta("Erro Crítico", "Falha ao apagar infraestrutura. Contate o suporte.");
+    }
   };
 
   const adicionarComanda = async (tipo) => {
@@ -573,16 +688,14 @@ export default function Home() {
   
   const rankingProdutos = Object.values(contagemProdutos).map(item => ({ nome: item.nomeDisplay, valor: item.faturamento, lucro: item.faturamento - item.custoTotal, volume: item.volume, isPeso: item.isPeso })).sort((a, b) => b.valor - a.valor);
   
-  if (!sessao) return <Login getHoje={getHoje} setSessao={setSessao} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />; 
-  if (sessao.role === 'super_admin') return <SuperAdminPainel fazerLogout={fazerLogout} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />;
-
-  if (appMode === 'loading' && comandas.length === 0) {
+  if (appMode === 'loading' || !sessao) {
+    if (!sessao && appMode !== 'loading') return <Login getHoje={getHoje} setSessao={setSessao} temaNoturno={temaNoturno} setTemaNoturno={setTemaNoturno} />;
     return (
       <div className={`min-h-screen flex flex-col items-center justify-center ${temaNoturno ? 'bg-[#09090b]' : 'bg-zinc-50'}`}>
         <div className="flex flex-col items-center gap-8 animate-in fade-in duration-700 p-8">
           <div className="relative flex items-center justify-center w-20 h-20">
             <div className={`w-14 h-14 rounded-full overflow-hidden shadow-sm border flex items-center justify-center ${temaNoturno ? 'bg-white/5 border-white/10' : 'bg-white border-zinc-200'}`}>
-              <img src={logoEmpresa} alt="Logo" className="w-full h-full object-cover" />
+              <img src={logoEmpresa} alt="Logo" className="w-full h-full object-cover" onError={(e) => e.currentTarget.style.display = 'none'} />
             </div>
           </div>
           <div className="flex flex-col items-center gap-3">
@@ -612,7 +725,6 @@ export default function Home() {
 
   return (
     <>
-      {/* Overlay global caso haja necessidade extra de escurecer entre transições */}
       {isShellEntering && (
         <div className={`fixed inset-0 z-[9999999] pointer-events-none shell-enter-overlay ${temaNoturno ? 'bg-[#09090b]' : 'bg-[#fafafa]'}`}></div>
       )}
@@ -625,8 +737,6 @@ export default function Home() {
         .shell-enter-overlay {
           animation: fadeOutOverlay 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
-
-        /* Coreografia Premium do Shell */
         @keyframes shellEnterMain {
           0% { opacity: 0; transform: scale(0.98); }
           100% { opacity: 1; transform: scale(1); }
@@ -639,7 +749,6 @@ export default function Home() {
           0% { opacity: 0; transform: translateY(-20px); }
           100% { opacity: 1; transform: translateY(0); }
         }
-
         .shell-root-enter {
           animation: shellEnterMain 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         }
@@ -714,7 +823,7 @@ export default function Home() {
         {mostrarAdminDelivery && sessao && <AdminDelivery empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => setMostrarAdminDelivery(false)} />}
         {mostrarModalPeso && <ModalPeso opcoesPeso={configPeso} temaNoturno={temaNoturno} onAdicionar={adicionarProdutoNaComanda} onCancelar={() => setMostrarModalPeso(false)} />}
         {mostrarModalPagamento && <ModalPagamento comanda={comandaAtiva} temaNoturno={temaNoturno} onConfirmar={processarPagamento} onCancelar={() => setMostrarModalPagamento(false)} clientesFidelidade={clientesFidelidade} metaFidelidade={metaFidelidade} />}
-        {mostrarConfigEmpresa && <ModalConfigEmpresa temaNoturno={temaNoturno} nomeEmpresaEdicao={nomeEmpresaEdicao} setNomeEmpresaEdicao={setNomeEmpresaEdicao} logoEmpresaEdicao={logoEmpresaEdicao} setLogoEmpresaEdicao={setLogoEmpresaEdicao} nomeUsuarioEdicao={nomeUsuarioEdicao} setNomeUsuarioEdicao={setNomeUsuarioEdicao} planoUsuario={dadosPlano} salvarConfigEmpresa={salvarConfigEmpresa} setMostrarConfigEmpresa={setMostrarConfigEmpresa} alterarSenhaConta={alterarSenhaConta} />}
+        {mostrarConfigEmpresa && <ModalConfigEmpresa temaNoturno={temaNoturno} nomeEmpresaEdicao={nomeEmpresaEdicao} setNomeEmpresaEdicao={setNomeEmpresaEdicao} logoEmpresaEdicao={logoEmpresaEdicao} setLogoEmpresaEdicao={setLogoEmpresaEdicao} nomeUsuarioEdicao={nomeUsuarioEdicao} setNomeUsuarioEdicao={setNomeUsuarioEdicao} planoUsuario={dadosPlano} salvarConfigEmpresa={salvarConfigEmpresa} setMostrarConfigEmpresa={setMostrarConfigEmpresa} alterarSenhaConta={alterarSenhaConta} deletarWorkspace={deletarWorkspace} />}
         {mostrarConfigTags && <ModalConfigTags temaNoturno={temaNoturno} tagsGlobais={tagsGlobais} setTagsGlobais={setTagsGlobais} sessao={sessao} setMostrarConfigTags={setMostrarConfigTags} />}
 
         {modalGlobal.visivel && (

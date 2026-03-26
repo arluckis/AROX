@@ -37,7 +37,6 @@ export default function Sidebar({
   const iconeConfig = <svg className="w-full h-full" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
   const iconeLogout = <svg className="w-full h-full" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>;
 
-  // MenuItem com texto escondido no desktop (até o hover do painel) e visível no mobile
   const MenuItem = ({ id, titulo, icone, onClick, isAtivo }) => (
     <button 
       onClick={onClick} 
@@ -71,23 +70,20 @@ export default function Sidebar({
         onClick={() => setMenuMobileAberto(false)}
       />
       
-      {/* Container invisível reservando espaço estrito no layout Desktop (sempre recolhido) */}
+      {/* Container invisível reservando espaço estrito no layout Desktop */}
       <div className="hidden xl:block shrink-0 w-[72px]" />
 
-      {/* Sidebar Real (Drawer nativo no mobile / Floating panel expansível via hover no desktop) */}
+      {/* Sidebar Real */}
       <aside className={`group/sidebar fixed top-0 left-0 h-full flex flex-col z-[101] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden
-        /* Mobile: Drawer compacto 80vw, sem regras de hover */
         ${menuMobileAberto ? 'translate-x-0 shadow-2xl' : '-translate-x-full xl:translate-x-0'}
         w-[80vw] max-w-[280px] 
-        /* Desktop: Sempre em 72px de repouso, expande fluidamente no hover */
         xl:w-[72px] hover:xl:w-[260px] xl:border-r hover:xl:shadow-2xl
-        ${temaNoturno ? 'bg-[#0A0A0A] border-white/[0.06]' : 'bg-[#FAFAFA] border-black/[0.06]'}
+        ${temaNoturno ? 'bg-[#09090B] border-white/[0.06]' : 'bg-[#FAFAFA] border-black/[0.06]'}
       `}>
          
-         <div className={`h-[72px] xl:h-[64px] px-5 flex items-center shrink-0 justify-between
+         <div className={`h-[68px] xl:h-[68px] px-5 flex items-center shrink-0 justify-between
            xl:justify-center group-hover/sidebar:xl:justify-start
          `}>
-            {/* O Logo visual no desktop colapsado e o texto no expandido/mobile */}
             <div className={`flex items-center shrink-0 overflow-hidden ${temaNoturno ? 'text-white' : 'text-zinc-900'}`}>
               <span className={`font-black tracking-tighter text-[24px] xl:text-[20px] leading-none whitespace-nowrap ml-3
                 xl:opacity-0 xl:w-0 group-hover/sidebar:xl:w-auto group-hover/sidebar:xl:opacity-100 transition-opacity duration-200 delay-75
@@ -102,7 +98,6 @@ export default function Sidebar({
                 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}
                 xl:opacity-0 xl:h-0 group-hover/sidebar:xl:h-auto group-hover/sidebar:xl:opacity-100 transition-all duration-200
               `}>Operação</p>
-              {/* Divisor invisível que aparece como traço no modo colapsado */}
               <div className="hidden xl:block h-px w-5 mx-auto bg-current opacity-10 mb-1.5 mt-0.5 group-hover/sidebar:xl:hidden transition-opacity"></div>
               
               <MenuItem id="comandas" titulo="Terminal" icone={iconeComandas} isAtivo={abaAtiva === 'comandas'} onClick={() => { setAbaAtiva('comandas'); setMenuMobileAberto(false); }} />
@@ -119,7 +114,7 @@ export default function Sidebar({
               `}>Gestão</p>
               <div className="hidden xl:block h-px w-5 mx-auto bg-current opacity-10 mb-1.5 mt-0.5 group-hover/sidebar:xl:hidden transition-opacity"></div>
 
-              <MenuItem id="caixa" titulo="Caixa" icone={iconeCaixa} isAtivo={abaAtiva === 'caixa'} onClick={() => { setAbaAtiva('caixa'); setMenuMobileAberto(false); }} />
+              <MenuItem id="caixa" titulo="Caixa Central" icone={iconeCaixa} isAtivo={abaAtiva === 'caixa'} onClick={() => { setAbaAtiva('caixa'); setMenuMobileAberto(false); }} />
               {(sessao?.role === 'dono' || sessao?.perm_fidelidade || sessao?.perm_estudo) && (
                 <MenuItem id="fidelidade" titulo="Clientes" icone={iconeClientes} isAtivo={abaAtiva === 'fidelidade'} onClick={() => { setAbaAtiva('fidelidade'); setMenuMobileAberto(false); }} />
               )}
@@ -144,14 +139,14 @@ export default function Sidebar({
             </div>
          </div>
 
-         {/* Bloco Inferior Compacto e Elegante */}
-         <div className={`mt-auto shrink-0 overflow-hidden transition-colors duration-300 pb-4 xl:pb-3 ${temaNoturno ? 'bg-[#0A0A0A]' : 'bg-[#FAFAFA]'}`}>
+         {/* Bloco Inferior */}
+         <div className={`mt-auto shrink-0 overflow-hidden transition-colors duration-300 pb-4 xl:pb-3 ${temaNoturno ? 'bg-[#09090B]' : 'bg-[#FAFAFA]'}`}>
             
             <div className="px-4 xl:px-3 pt-3 flex flex-col gap-1">
                <div className={`flex items-center px-3 py-2.5 rounded-[10px] xl:rounded-lg mb-2 xl:justify-center group-hover/sidebar:xl:justify-start ${temaNoturno ? 'bg-white/[0.02] border border-white/[0.05]' : 'bg-black/[0.02] border border-black/[0.05]'}`}>
                  <div className="relative shrink-0 flex items-center justify-center w-[20px] h-[20px] xl:w-[18px] xl:h-[18px]">
                    <img src={logoEmpresa || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'} alt="Logo" className="w-full h-full object-cover rounded-full" />
-                   <span className={`absolute -bottom-0.5 -right-0.5 block h-2 w-2 rounded-full bg-emerald-500 ring-2 ${temaNoturno ? 'ring-[#0A0A0A]' : 'ring-[#FAFAFA]'}`}></span>
+                   <span className={`absolute -bottom-0.5 -right-0.5 block h-2 w-2 rounded-full bg-emerald-500 ring-2 ${temaNoturno ? 'ring-[#09090B]' : 'ring-[#FAFAFA]'}`}></span>
                  </div>
                  <div className={`flex flex-col min-w-0 ml-3 xl:opacity-0 xl:w-0 group-hover/sidebar:xl:w-auto group-hover/sidebar:xl:opacity-100 transition-opacity duration-200 delay-75`}>
                     <span className={`text-[12px] font-semibold truncate leading-none tracking-tight ${temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}`}>
@@ -167,7 +162,7 @@ export default function Sidebar({
                </div>
 
                {sessao?.role === 'dono' && (
-                 <MenuItem titulo="Ajustes do Workspace" icone={iconeConfig} onClick={() => { setMostrarConfigEmpresa(true); setMenuMobileAberto(false); }} />
+                 <MenuItem titulo="Configurações Locais" icone={iconeConfig} onClick={() => { setMostrarConfigEmpresa(true); setMenuMobileAberto(false); }} />
                )}
                <MenuItem titulo={temaNoturno ? 'Modo Claro' : 'Modo Escuro'} icone={
                  temaNoturno ? (
@@ -187,7 +182,7 @@ export default function Sidebar({
                  <span className="shrink-0 transition-transform duration-300 w-[20px] h-[20px] xl:w-[18px] xl:h-[18px] opacity-70 group-hover:opacity-100 flex items-center justify-center">{iconeLogout}</span>
                  <span className={`truncate whitespace-nowrap min-w-0 tracking-tight block
                     xl:opacity-0 xl:w-0 group-hover/sidebar:xl:w-auto group-hover/sidebar:xl:opacity-100 xl:transition-opacity xl:duration-200 xl:delay-75
-                 `}>Encerrar Sessão</span>
+                 `}>Sair da Plataforma</span>
                </button>
 
             </div>
