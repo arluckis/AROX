@@ -30,7 +30,7 @@ export default function TabFechadas({
   });
 
   return (
-    <div className="w-full animate-in fade-in duration-500 pb-20">
+    <div className="w-full max-w-full animate-in fade-in duration-500 pb-20">
       
       {/* HEADER OPERACIONAL PREMIUM */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10 w-full pb-5 border-b transition-colors duration-300 border-zinc-200/60 dark:border-white/[0.08]">
@@ -96,14 +96,14 @@ export default function TabFechadas({
 
         ) : (
           
-          /* GRID PRINCIPAL */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          /* GRID PRINCIPAL (Expansivo) */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
             {comandasOrdenadas.map(c => {
               const valorTotalComanda = c.pagamentos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
               const isDelivery = c.tipo === 'Delivery';
               
               return (
-                <div key={c.id} className={`relative flex flex-col rounded-2xl border p-5 transition-all duration-300 ease-out group overflow-hidden animate-in fade-in zoom-in-95 ${temaNoturno ? 'bg-[#0A0A0A] border-white/[0.08] hover:border-white/[0.15] hover:-translate-y-0.5 hover:shadow-lg' : 'bg-white border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:border-zinc-300/80 hover:shadow-[0_8px_24px_-4px_rgba(0,0,0,0.06)] hover:-translate-y-0.5'}`}>
+                <div key={c.id} className={`relative flex flex-col rounded-2xl border p-5 transition-all duration-300 ease-out group overflow-hidden animate-in fade-in zoom-in-95 w-full ${temaNoturno ? 'bg-[#0A0A0A] border-white/[0.08] hover:border-white/[0.15] hover:-translate-y-0.5 hover:shadow-lg' : 'bg-white border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:border-zinc-300/80 hover:shadow-[0_8px_24px_-4px_rgba(0,0,0,0.06)] hover:-translate-y-0.5'}`}>
                   
                   {/* IDENTIDADE LOGÍSTICA SUTIL (Side strip indicator) */}
                   {isDelivery && (
@@ -112,8 +112,8 @@ export default function TabFechadas({
 
                   {/* HEADER DO CARD */}
                   <div className={`flex justify-between items-start gap-3 w-full relative z-10 ${isDelivery ? 'pl-1' : ''}`}>
-                    <div className="flex flex-col min-w-0 gap-1.5">
-                      <h3 className={`font-semibold text-base truncate tracking-tight ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                    <div className="flex flex-col min-w-0 gap-1.5 w-full">
+                      <h3 className={`font-semibold text-base truncate tracking-tight w-full ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
                         {c.nome}
                       </h3>
                       <div className="flex items-center gap-2">
@@ -146,7 +146,7 @@ export default function TabFechadas({
 
                   {/* ZONA DE PAGAMENTO E VALOR */}
                   <div className={`mt-5 pt-4 border-t flex justify-between items-end relative z-10 ${temaNoturno ? 'border-white/5' : 'border-zinc-100'} ${isDelivery ? 'pl-1' : ''}`}>
-                    <div className="flex flex-col gap-1.5 mb-0.5">
+                    <div className="flex flex-col gap-1.5 mb-0.5 w-full">
                       <span className={`text-[10px] font-bold uppercase tracking-wider ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>
                         Pagamento
                       </span>
@@ -163,7 +163,7 @@ export default function TabFechadas({
                       </div>
                     </div>
 
-                    <div className="flex items-baseline gap-1 leading-none text-right">
+                    <div className="flex items-baseline gap-1 leading-none text-right flex-shrink-0">
                       <span className={`text-sm font-medium ${temaNoturno ? 'text-emerald-500/60' : 'text-emerald-600/60'}`}>R$</span>
                       <span className={`font-bold text-2xl tabular-nums tracking-tighter ${temaNoturno ? 'text-emerald-400' : 'text-emerald-600'}`}>
                         {valorTotalComanda.toFixed(2)}
@@ -175,13 +175,13 @@ export default function TabFechadas({
                   <div className={`flex gap-2 mt-5 pt-3 border-t relative z-10 ${temaNoturno ? 'border-white/[0.04]' : 'border-zinc-100'} ${isDelivery ? 'pl-1' : ''}`}>
                     <button 
                       onClick={() => reabrirComandaFechada(c.id)} 
-                      className={`flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${temaNoturno ? 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'}`}
+                      className={`flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all w-full ${temaNoturno ? 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5' : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100'}`}
                     >
                       Reabrir
                     </button>
                     <button 
                       onClick={() => excluirComandaFechada(c.id)} 
-                      className={`flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${temaNoturno ? 'text-red-400/60 hover:text-red-400 hover:bg-red-500/10' : 'text-red-500/70 hover:text-red-600 hover:bg-red-50'}`}
+                      className={`flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all w-full ${temaNoturno ? 'text-red-400/60 hover:text-red-400 hover:bg-red-500/10' : 'text-red-500/70 hover:text-red-600 hover:bg-red-50'}`}
                     >
                       Apagar
                     </button>

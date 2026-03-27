@@ -1,23 +1,25 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ResponsiveContainer, Cell, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, PieChart, Pie, Legend } from 'recharts';
 
-const CORES_VIBRANTES = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#0ea5e9', '#f97316', '#14b8a6', '#84cc16'];
-
-export default function TabFidelidade({ temaNoturno, sessao, mostrarAlerta, mostrarConfirmacao, dadosTags, clientesFidelidade, setClientesFidelidade, comandas }) {
-  
+export default function TabFidelidade({ temaNoturno, sessao, mostrarAlerta, clientesFidelidade, setClientesFidelidade, comandas }) {
   const [abaInterna, setAbaInterna] = useState('clientes'); 
   const [busca, setBusca] = useState('');
-  
+  const [filtroCategoria, setFiltroCategoria] = useState('todos');
+  const [ordenacao, setOrdenacao] = useState('pontos');
   const [meta, setMeta] = useState({ pontos_necessarios: 10, premio: '1 Açaí de 500ml', valor_minimo: 0 });
   const [mostrarModalNovo, setMostrarModalNovo] = useState(false);
-  const [mostrarModalImportacao, setMostrarModalImportacao] = useState(false);
   const [clienteEditando, setClienteEditando] = useState(null); 
   const [clientePerfil, setClientePerfil] = useState(null); 
-  
+  const [clienteResgate, setClienteResgate] = useState(null); 
+  const [mostrarModalTexto, setMostrarModalTexto] = useState(false);
+  const [textoColado, setTextoColado] = useState('');
   const [novoCliente, setNovoCliente] = useState({ nome: '', telefone: '', aniversario: '', pontos: 0 });
-  const [textoImportacao, setTextoImportacao] = useState('');
+  const [copiado, setCopiado] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const [diaClienteHover, setDiaClienteHover] = useState(null);
+  const [diaGlobalSelect, setDiaGlobalSelect] = useState(new Date().getDay()); 
 
   useEffect(() => {
     const fetchMeta = async () => {
@@ -28,520 +30,573 @@ export default function TabFidelidade({ temaNoturno, sessao, mostrarAlerta, most
   }, [sessao]);
 
   const atualizarMeta = async () => {
-    const { error } = await supabase.from('config_fidelidade').upsert({
-       empresa_id: sessao.empresa_id, 
-       pontos_necessarios: meta.pontos_necessarios, 
-       premio: meta.premio,
-       valor_minimo: parseFloat(meta.valor_minimo) || 0
-    }, { onConflict: 'empresa_id' });
-    
-    if (!error) mostrarAlerta("Sucesso", "Regras de Fidelidade atualizadas!");
+    const { error } = await supabase.from('config_fidelidade').upsert({ empresa_id: sessao.empresa_id, pontos_necessarios: meta.pontos_necessarios, premio: meta.premio, valor_minimo: parseFloat(meta.valor_minimo) || 0 }, { onConflict: 'empresa_id' });
+    if (!error) mostrarAlerta("Sucesso", "Regras atualizadas e ativas no sistema.");
   };
 
-  const clientesFiltrados = clientesFidelidade
-    .filter(c => c.nome.toLowerCase().includes(busca.toLowerCase()) || (c.telefone && c.telefone.includes(busca)))
-    .sort((a, b) => a.nome.localeCompare(b.nome)); 
+  const clientesFiltrados = useMemo(() => {
+    let filtrados = clientesFidelidade.filter(c => c.nome.toLowerCase().includes(busca.toLowerCase()) || (c.telefone && c.telefone.includes(busca)));
+    if (filtroCategoria === 'resgate') filtrados = filtrados.filter(c => c.pontos >= meta.pontos_necessarios);
+    else if (filtroCategoria === 'quase') filtrados = filtrados.filter(c => c.pontos >= meta.pontos_necessarios * 0.7 && c.pontos < meta.pontos_necessarios);
+    else if (filtroCategoria === 'inativos') filtrados = filtrados.filter(c => c.pontos === 0);
+    return filtrados.sort((a, b) => {
+      if (ordenacao === 'pontos') return b.pontos - a.pontos;
+      if (ordenacao === 'recentes') return new Date(b.created_at || 0) > new Date(a.created_at || 0) ? -1 : 1;
+      return a.nome.localeCompare(b.nome);
+    });
+  }, [clientesFidelidade, busca, filtroCategoria, ordenacao, meta.pontos_necessarios]);
 
   const ranking = [...clientesFidelidade].sort((a, b) => (b.pontos_totais || b.pontos) - (a.pontos_totais || a.pontos)).slice(0, 10);
 
   const salvarNovoCliente = async () => {
-    if (!novoCliente.nome) return mostrarAlerta("Erro", "O nome é obrigatório.");
-    
+    if (!novoCliente.nome) return mostrarAlerta("Aviso", "O nome do cliente é obrigatório.");
     if (clienteEditando) {
-       const { error } = await supabase.from('clientes_fidelidade').update({
-         nome: novoCliente.nome, telefone: novoCliente.telefone, aniversario: novoCliente.aniversario || null, pontos: novoCliente.pontos
-       }).eq('id', clienteEditando.id);
-       
-       if (!error) {
-         setClientesFidelidade(clientesFidelidade.map(c => c.id === clienteEditando.id ? { ...c, ...novoCliente } : c));
-         mostrarAlerta("Sucesso", "Cliente atualizado com sucesso!");
-       }
+       const { error } = await supabase.from('clientes_fidelidade').update({nome: novoCliente.nome, telefone: novoCliente.telefone, aniversario: novoCliente.aniversario || null, pontos: novoCliente.pontos}).eq('id', clienteEditando.id);
+       if (!error) { setClientesFidelidade(clientesFidelidade.map(c => c.id === clienteEditando.id ? { ...c, ...novoCliente } : c)); mostrarAlerta("Sucesso", "Dados atualizados."); }
     } else {
        const payload = { ...novoCliente, aniversario: novoCliente.aniversario || null, empresa_id: sessao.empresa_id, pontos_totais: novoCliente.pontos };
        const { data, error } = await supabase.from('clientes_fidelidade').insert([payload]).select().single();
-       if (data && !error) {
-         setClientesFidelidade([...clientesFidelidade, data]);
-         mostrarAlerta("Sucesso", "Cliente cadastrado com sucesso!");
-       }
+       if (data && !error) { setClientesFidelidade([...clientesFidelidade, data]); mostrarAlerta("Sucesso", "Cliente integrado."); }
     }
-    
-    setMostrarModalNovo(false);
-    setClienteEditando(null);
-    setNovoCliente({ nome: '', telefone: '', aniversario: '', pontos: 0 });
+    setMostrarModalNovo(false); setClienteEditando(null); setNovoCliente({ nome: '', telefone: '', aniversario: '', pontos: 0 });
   };
 
   const abrirEdicao = (cliente) => {
-    setClienteEditando(cliente);
-    setNovoCliente({ nome: cliente.nome, telefone: cliente.telefone || '', aniversario: cliente.aniversario || '', pontos: cliente.pontos });
-    setMostrarModalNovo(true);
+    setClienteEditando(cliente); setNovoCliente({ nome: cliente.nome, telefone: cliente.telefone || '', aniversario: cliente.aniversario || '', pontos: cliente.pontos }); setMostrarModalNovo(true);
   };
 
-  const resgatarPremio = (cliente) => {
-    if (cliente.pontos < meta.pontos_necessarios) return mostrarAlerta("Aviso", "O cliente não tem pontos suficientes ainda.");
-    
-    mostrarConfirmacao("Confirmar Resgate", `Deseja debitar ${meta.pontos_necessarios} pontos de ${cliente.nome} pelo prêmio: ${meta.premio}?`, async () => {
-       const novosPontos = cliente.pontos - meta.pontos_necessarios;
-       const { error } = await supabase.from('clientes_fidelidade').update({ pontos: novosPontos }).eq('id', cliente.id);
-       
-       if (!error) {
-         setClientesFidelidade(clientesFidelidade.map(c => c.id === cliente.id ? { ...c, pontos: novosPontos } : c));
-         mostrarAlerta("Sucesso", "Prêmio resgatado e pontos descontados da carteira!");
-       }
-    });
+  const confirmarResgatePremio = async () => {
+    if (!clienteResgate) return;
+    const novosPontos = clienteResgate.pontos - meta.pontos_necessarios;
+    const { error } = await supabase.from('clientes_fidelidade').update({ pontos: novosPontos }).eq('id', clienteResgate.id);
+    if (!error) {
+      setClientesFidelidade(clientesFidelidade.map(c => c.id === clienteResgate.id ? { ...c, pontos: novosPontos } : c));
+      setClienteResgate(null); mostrarAlerta("Resgate Aprovado", "Ciclo renovado e prêmio entregue.");
+    }
   };
 
-  const processarImportacao = async () => {
-    if(!textoImportacao.trim()) return;
+  const acionarImportacao = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = async (evento) => { await processarTextoImportacao(evento.target.result); if (fileInputRef.current) fileInputRef.current.value = ''; };
+      reader.readAsText(file);
+    }
+  };
+
+  const processarTextoImportacao = async (textoImportacao) => {
+    if (!textoImportacao.trim()) return;
     try {
       const linhas = textoImportacao.trim().split('\n');
-      const novos = linhas.map((l) => {
+      if (linhas.length === 0) return;
+      const primeiraLinha = linhas[0].toLowerCase();
+      const separador = primeiraLinha.includes(';') ? ';' : (primeiraLinha.includes('\t') ? '\t' : (primeiraLinha.includes('|') ? '|' : ','));
+      const headers = primeiraLinha.split(separador).map(h => h.trim().replace(/["']/g, ''));
+      let idxNome = headers.indexOf('nome'); let idxTel = headers.indexOf('telefone'); let idxNasc = headers.findIndex(h => h.includes('aniversario') || h.includes('data')); let idxPontos = headers.indexOf('pontos');
+      if (idxNome === -1) { idxNome = 0; idxTel = 1; idxNasc = 2; idxPontos = 3; }
+      
+      const novos = (idxNome !== -1 ? linhas.slice(1) : linhas).map((l) => {
         let cleanLine = l.replace(/^\|/, '').replace(/\|$/, '').trim(); 
-        if (cleanLine.startsWith('---') || cleanLine.includes('---')) return null;
-
-        const cols = cleanLine.includes('\t') ? cleanLine.split('\t') : (cleanLine.includes('|') ? cleanLine.split('|') : cleanLine.split(','));
-        
-        if(cols.length >= 1 && cols[0].trim()) {
-          let nomeStr = cols[0].trim().replace(/\*\*/g, ''); 
-          if (nomeStr.toLowerCase().includes('nome') || nomeStr.toLowerCase().includes('cliente')) return null;
-          
-          let dataNasc = cols[2] ? cols[2].trim() : null;
-          if (dataNasc && dataNasc.toLowerCase().includes('anivers')) return null; 
-
-          let ptsStr = cols[3] ? cols[3].replace(/[^\d]/g, '') : '0'; 
-          const pt = parseInt(ptsStr) || 0;
-
-          if (dataNasc) {
-             if (dataNasc.includes('/')) {
-               const partes = dataNasc.split('/');
-               if (partes.length === 3) {
-                 dataNasc = `${partes[2]}-${partes[1]}-${partes[0]}`;
-               } else { dataNasc = null; }
-             } else if (/[a-zA-Z]/.test(dataNasc)) {
-               dataNasc = null;
-             }
-             if (dataNasc && !/^\d{4}-\d{2}-\d{2}$/.test(dataNasc)) {
-                 dataNasc = null;
-             }
-          }
-
-          return { 
-            nome: nomeStr, 
-            telefone: cols[1] ? cols[1].trim() : null, 
-            aniversario: dataNasc || null, 
-            pontos: pt, 
-            pontos_totais: pt, 
-            empresa_id: sessao.empresa_id 
-          };
+        if (!cleanLine || cleanLine.startsWith('---') || cleanLine.includes('---')) return null;
+        const cols = cleanLine.split(separador);
+        let nomeStr = (cols[idxNome] || '').trim().replace(/\*\*/g, '').replace(/["']/g, ''); 
+        if (!nomeStr || nomeStr.toLowerCase().includes('nome') || nomeStr.toLowerCase().includes('cliente')) return null;
+        let dataNasc = (cols[idxNasc] || '').trim().replace(/["']/g, '');
+        if (dataNasc && dataNasc.toLowerCase().includes('anivers')) return null; 
+        const pt = parseInt((cols[idxPontos] || '').replace(/[^\d]/g, '')) || 0;
+        if (dataNasc) {
+           if (dataNasc.includes('/')) { const p = dataNasc.split('/'); if (p.length === 3) dataNasc = `${p[2]}-${p[1]}-${p[0]}`; else dataNasc = null; }
+           else if (/[a-zA-Z]/.test(dataNasc) || !/^\d{4}-\d{2}-\d{2}$/.test(dataNasc)) dataNasc = null;
         }
-        return null;
+        return { nome: nomeStr, telefone: (cols[idxTel] || '').trim().replace(/["']/g, '') || null, aniversario: dataNasc || null, pontos: pt, pontos_totais: pt, empresa_id: sessao.empresa_id };
       }).filter(Boolean);
 
       if (novos.length > 0) {
         const { data, error } = await supabase.from('clientes_fidelidade').insert(novos).select();
-        if (data && !error) {
-          setClientesFidelidade([...clientesFidelidade, ...data]);
-          setMostrarModalImportacao(false);
-          setTextoImportacao('');
-          mostrarAlerta("Sucesso", `${data.length} clientes importados com sucesso!`);
-        } else {
-          mostrarAlerta("Erro", "Erro ao salvar no banco.");
-        }
-      } else { mostrarAlerta("Aviso", "Nenhum cliente válido encontrado. Verifique a formatação."); }
-    } catch(e) { mostrarAlerta("Erro", "Ocorreu um erro ao processar sua tabela."); }
+        if (data && !error) { setClientesFidelidade([...clientesFidelidade, ...data]); setMostrarModalTexto(false); setTextoColado(''); mostrarAlerta("Sucesso", `${data.length} clientes importados!`); } 
+        else mostrarAlerta("Erro", "Falha de comunicação com o banco.");
+      } else mostrarAlerta("Aviso", "Verifique o formato, nenhum cliente válido."); 
+    } catch(e) { mostrarAlerta("Erro", "Ocorreu um erro ao decodificar sua tabela."); }
   };
 
-  const dadosReceita = [];
-  if (abaInterna === 'publico') {
-    let receitaFiel = 0; let receitaAvulsa = 0;
-    (comandas || []).forEach(c => {
-       const valor = (c.produtos || []).reduce((acc, p) => acc + (p.preco || 0), 0);
-       if (c.tags && c.tags.includes('Fidelidade')) { receitaFiel += valor; } else { receitaAvulsa += valor; }
-    });
-    if (receitaFiel > 0) dadosReceita.push({ name: 'Clientes Fiéis', value: receitaFiel });
-    if (receitaAvulsa > 0) dadosReceita.push({ name: 'Clientes Avulsos', value: receitaAvulsa });
-  }
+  const copiarRegrasWhatsApp = async () => {
+    const texto = `*COMO VAI FUNCIONAR:*\n• A cada compra maior que R$ ${meta.valor_minimo}, você ganha 1 ponto.\n• Quando acumular ${meta.pontos_necessarios} pontos, você estará pronto para o resgate.\n• O sistema indicará que você ganhou: ${meta.premio}.`;
+    try {
+      if (navigator?.clipboard?.writeText) await navigator.clipboard.writeText(texto);
+      else {
+        const t = document.createElement("textarea"); t.value = texto; t.style.position = "fixed"; t.style.left = "-999999px";
+        document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove();
+      }
+      setCopiado(true); setTimeout(() => setCopiado(false), 2000);
+    } catch (err) { mostrarAlerta("Aviso", "O navegador bloqueou a cópia automática. Selecione o texto manualmente."); }
+  };
 
-  let produtosDoCliente = [];
+  const formatarData = (dataStr) => !dataStr ? '—' : new Date(dataStr).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+  let produtosDoCliente = []; let diasFrequencia = Array.from({length: 7}, () => ({ count: 0, produtos: {} })); let ticketMedio = 0;
   if (clientePerfil) {
-     const comandasDele = (comandas || []).filter(c => c.nome.toLowerCase() === clientePerfil.nome.toLowerCase());
-     const contagem = {};
+     const comandasDele = (comandas || []).filter(c => c.nome?.toLowerCase() === clientePerfil.nome?.toLowerCase());
+     const contagemGlobal = {}; let totalGasto = 0;
      comandasDele.forEach(c => {
+        totalGasto += (c.produtos || []).reduce((acc, p) => acc + (p.preco || 0), 0);
+        const dia = (c.created_at || c.data_hora || c.data) ? new Date(c.created_at || c.data_hora || c.data).getDay() : -1;
+        if(dia >= 0 && dia <= 6) diasFrequencia[dia].count++;
         (c.produtos || []).forEach(p => {
            const n = p.nome.replace(/\s*\(\d+(?:\.\d+)?\s*g\)/i, '').trim().toUpperCase();
-           contagem[n] = (contagem[n] || 0) + 1;
+           contagemGlobal[n] = (contagemGlobal[n] || 0) + 1;
+           if(dia >= 0 && dia <= 6) diasFrequencia[dia].produtos[n] = (diasFrequencia[dia].produtos[n] || 0) + 1;
         });
      });
-     produtosDoCliente = Object.entries(contagem).map(([nome, qtd]) => ({ nome, qtd })).sort((a,b) => b.qtd - a.qtd).slice(0, 5);
+     ticketMedio = comandasDele.length ? (totalGasto / comandasDele.length) : 0;
+     produtosDoCliente = Object.entries(contagemGlobal).map(([nome, qtd]) => ({ nome, qtd })).sort((a,b) => b.qtd - a.qtd);
   }
+  
+  const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const maxDias = Math.max(...diasFrequencia.map(d => d.count), 1);
 
-  const formatarData = (dataStr) => {
-    if (!dataStr) return '---';
-    const data = new Date(dataStr);
-    return data.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const analiseGlobal = useMemo(() => {
+    let faturamentoTotal = 0; let faturamentoFiel = 0; let cmdsFieis = 0;
+    let diasFaturados = [0, 0, 0, 0, 0, 0, 0]; let diasVolume = [0, 0, 0, 0, 0, 0, 0]; let produtosPorDiaGlobal = Array.from({length: 7}, () => ({}));
+    (comandas || []).forEach(c => {
+      if(c.status === 'aberta') return; 
+      const isFiel = c.tags && c.tags.includes('Fidelidade');
+      const ticket = (c.produtos || []).reduce((acc, p) => acc + (p.preco || 0), 0);
+      const dia = (c.created_at || c.data_hora || c.data) ? new Date(c.created_at || c.data_hora || c.data).getDay() : -1;
+      faturamentoTotal += ticket;
+      if (isFiel) { faturamentoFiel += ticket; cmdsFieis++; }
+      if(dia >= 0 && dia <= 6) {
+        diasFaturados[dia] += ticket; diasVolume[dia] += 1;
+        (c.produtos || []).forEach(p => { const n = p.nome.replace(/\s*\(\d+(?:\.\d+)?\s*g\)/i, '').trim().toUpperCase(); produtosPorDiaGlobal[dia][n] = (produtosPorDiaGlobal[dia][n] || 0) + 1; });
+      }
+    });
+    return { diasFaturados, diasVolume, produtosPorDiaGlobal, taxaFidelidade: faturamentoTotal > 0 ? ((faturamentoFiel / faturamentoTotal) * 100).toFixed(1) : 0, ticketGeral: comandas.length ? (faturamentoTotal / comandas.length) : 0, ticketFiel: cmdsFieis ? (faturamentoFiel / cmdsFieis) : 0 };
+  }, [comandas]);
+
+  const maxVolumeGlobal = Math.max(...analiseGlobal.diasVolume, 1);
+  const top5DiaSelecionado = useMemo(() => Object.entries(analiseGlobal.produtosPorDiaGlobal[diaGlobalSelect] || {}).sort((a, b) => b[1] - a[1]).slice(0, 5), [analiseGlobal, diaGlobalSelect]);
+
+  const obterDiagnostico = (c) => {
+    const percent = (c.pontos / meta.pontos_necessarios) * 100;
+    if (c.pontos >= meta.pontos_necessarios) return { label: 'Pronto para Resgate', color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
+    if (percent >= 75) return { label: 'Muito Ativo', color: 'text-amber-500', bg: 'bg-amber-500/10' };
+    if (c.pontos_totais > meta.pontos_necessarios * 3) return { label: 'Cliente Fiel', color: 'text-blue-500', bg: 'bg-blue-500/10' };
+    if (c.pontos === 0) return { label: 'Inativo', color: 'text-zinc-500', bg: 'bg-zinc-500/10' };
+    return { label: 'Acumulando', color: temaNoturno ? 'text-zinc-300' : 'text-zinc-600', bg: temaNoturno ? 'bg-white/5' : 'bg-black/5' };
   };
 
+  const tabs = [{ id: 'clientes', label: 'Radar de Clientes' }, { id: 'ranking', label: 'Top Engajamento' }, { id: 'insights', label: 'Inteligência' }, { id: 'config', label: 'Regras do Jogo' }];
+
+  const bgPrincipal = temaNoturno ? 'bg-[#050505]' : 'bg-[#FAFAFA]';
+  const surfaceBase = temaNoturno ? 'bg-[#0A0A0A]' : 'bg-white';
+  const surfaceModal = temaNoturno ? 'bg-[#0A0A0A]' : 'bg-white'; 
+  const surfaceHover = temaNoturno ? 'hover:bg-white/[0.02]' : 'hover:bg-black/[0.02]';
+  const textPrincipal = temaNoturno ? 'text-zinc-100' : 'text-zinc-900';
+  const textSecundario = temaNoturno ? 'text-zinc-500' : 'text-zinc-500'; 
+  const bordaBase = temaNoturno ? 'border-white/[0.04]' : 'border-black/[0.04]';
+  const bordaDestaque = temaNoturno ? 'border-white/[0.08]' : 'border-black/[0.08]';
+  const btnArox = temaNoturno ? 'bg-zinc-100 text-zinc-950 hover:bg-white shadow-[0_0_15px_rgba(255,255,255,0.05)]' : 'bg-zinc-900 text-white hover:bg-black shadow-[0_2px_10px_rgba(0,0,0,0.1)]';
+  const modalBackdrop = temaNoturno ? 'bg-black/60' : 'bg-black/10';
+
   return (
-    <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
-      
-      {/* TÍTULO FUNDIDO AO HEADER */}
-      <div className={`p-5 lg:p-6 pt-4 lg:pt-5 rounded-b-3xl shadow-sm border-x border-b border-t-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative transition-colors duration-500 mb-6 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-          <div className={`absolute top-0 left-6 right-6 border-t border-dashed ${temaNoturno ? 'border-gray-700' : 'border-gray-200'}`}></div>
-          <div className="mt-2 md:mt-0">
-             <h2 className={`text-xl font-black flex items-center gap-2 uppercase tracking-wide ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>
-               Gestão de Clientes
-             </h2>
-             <p className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>
-               Controle de Retenção e Relacionamento
-             </p>
-          </div>
-
-          {abaInterna === 'clientes' && (
-            <div className="flex flex-wrap gap-2 w-full md:w-auto animate-in fade-in zoom-in-95 duration-300">
-              <button 
-                onClick={() => setMostrarModalImportacao(true)} 
-                className={`flex-1 md:flex-none px-4 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-sm border ${temaNoturno ? 'bg-gray-900 border-gray-700 text-gray-300 hover:bg-gray-700' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'}`}
-              >
-                Importar Excel
-              </button>
-              <button 
-                onClick={() => { setClienteEditando(null); setNovoCliente({nome:'', telefone:'', aniversario:'', pontos:0}); setMostrarModalNovo(true); }} 
-                className="flex-1 md:flex-none px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest bg-purple-600 hover:bg-purple-700 text-white shadow-md transition-all active:scale-95"
-              >
-                + Cadastrar
-              </button>
-            </div>
-          )}
+    <div className={`w-full h-full flex flex-col font-sans overflow-hidden ${bgPrincipal} ${textPrincipal}`}>
+      <div className={`flex flex-wrap items-center gap-4 md:gap-6 pb-2 shrink-0 border-b mb-6 px-4 md:px-6 ${bordaDestaque}`}>
+        {tabs.map(tab => (
+          <button key={tab.id} onClick={() => setAbaInterna(tab.id)} className={`relative py-2.5 text-[11px] font-bold tracking-[0.05em] uppercase transition-colors duration-300 ${abaInterna === tab.id ? (temaNoturno ? 'text-white' : 'text-black') : `${textSecundario} hover:${textPrincipal}`}`}>
+            {tab.label}
+            {abaInterna === tab.id && <div className="absolute bottom-[-1px] left-0 right-0 h-[1px] bg-emerald-500 shadow-[0_-1px_8px_rgba(16,185,129,0.4)]" />}
+          </button>
+        ))}
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
-        
-        {/* BARRA LATERAL (HORIZONTAL MOBILE / VERTICAL DESKTOP) */}
-        <div className="shrink-0 lg:w-48 flex flex-col gap-4">
-           <div className={`p-2 rounded-3xl shadow-sm border h-fit flex flex-row overflow-x-auto lg:flex-col gap-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
-              <button 
-                onClick={() => setAbaInterna('clientes')} 
-                className={`flex-1 whitespace-nowrap text-left px-4 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95 ${abaInterna === 'clientes' ? (temaNoturno ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-50 text-purple-700') : (temaNoturno ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-50')}`}
-              >
-                Clientes
-              </button>
-              <button 
-                onClick={() => setAbaInterna('ranking')} 
-                className={`flex-1 whitespace-nowrap text-left px-4 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95 ${abaInterna === 'ranking' ? (temaNoturno ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-50 text-purple-700') : (temaNoturno ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-50')}`}
-              >
-                Ranking
-              </button>
-              <button 
-                onClick={() => setAbaInterna('config')} 
-                className={`flex-1 whitespace-nowrap text-left px-4 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95 ${abaInterna === 'config' ? (temaNoturno ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-50 text-purple-700') : (temaNoturno ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-50')}`}
-              >
-                Regras
-              </button>
-              {(sessao?.role === 'dono' || sessao?.perm_estudo) && (
-                <button 
-                  onClick={() => setAbaInterna('publico')} 
-                  className={`flex-1 whitespace-nowrap text-left px-4 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95 ${abaInterna === 'publico' ? (temaNoturno ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-50 text-purple-700') : (temaNoturno ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-50')}`}
-                >
-                  Público-Alvo
-                </button>
-              )}
-           </div>
-        </div>
-
-        {/* MAIN CONTENT */}
-        <div className="flex-1 flex flex-col min-w-0">
-
-          {abaInterna === 'clientes' && (
-            <div className={`p-6 rounded-3xl border shadow-sm flex flex-col min-h-[400px] animate-in fade-in slide-in-from-bottom-4 duration-500 delay-75 ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-              <div className="mb-6 relative">
-                <svg className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                <input 
-                  type="text" 
-                  placeholder="Pesquisar registro de cliente..." 
-                  value={busca} 
-                  onChange={e => setBusca(e.target.value)} 
-                  className={`w-full pl-12 pr-4 py-3 rounded-xl border outline-none font-bold text-sm transition-colors focus:border-purple-500 ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' : 'bg-gray-50 border-gray-200 placeholder-gray-400'}`} 
-                />
-              </div>
-              
-              <div className="overflow-x-auto flex-1">
-                {clientesFiltrados.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-10 opacity-50">
-                    <svg className="w-16 h-16 mb-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                    <p className="font-bold uppercase tracking-widest text-[10px]">Registro Vazio</p>
-                    <p className="text-[10px] font-bold mt-1">Nenhum cliente cadastrado ou localizado na pesquisa.</p>
-                  </div>
-                ) : (
-                  <table className="w-full text-left border-collapse min-w-[700px]">
-                    <thead>
-                      <tr className={`border-b text-[10px] font-black uppercase tracking-widest ${temaNoturno ? 'border-gray-800 text-gray-500' : 'border-gray-200 text-gray-400'}`}>
-                        <th className="p-4 rounded-tl-xl">Nome do Cliente</th>
-                        <th className="p-4">Dados de Contato</th>
-                        <th className="p-4">Registrado em</th>
-                        <th className="p-4">Carteira de Pontos</th>
-                        <th className="p-4 text-right rounded-tr-xl">Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {clientesFiltrados.map(c => {
-                        const progresso = Math.min((c.pontos / meta.pontos_necessarios) * 100, 100);
-                        const acimaDeDez = c.pontos > 10;
-                        const atingiuMeta = c.pontos === parseInt(meta.pontos_necessarios);
-                        
-                        const colorClass = acimaDeDez ? 'bg-red-500' : (atingiuMeta ? 'bg-green-500' : 'bg-purple-500');
-                        const textClass = acimaDeDez ? 'text-red-500' : (atingiuMeta ? 'text-green-500' : 'text-purple-500');
-
-                        return (
-                          <tr key={c.id} className={`border-b last:border-0 transition-colors ${temaNoturno ? 'border-gray-800 hover:bg-gray-800/50 text-gray-300' : 'border-gray-50 hover:bg-purple-50/50 text-gray-700'}`}>
-                            <td className="p-4">
-                              <p onClick={() => setClientePerfil(c)} title="Ver Histórico do Cliente" className={`font-black text-sm uppercase cursor-pointer hover:text-purple-500 transition-colors ${temaNoturno ? 'text-gray-200' : 'text-gray-900'}`}>{c.nome}</p>
-                              {(atingiuMeta || acimaDeDez) && <p className={`text-[10px] font-bold mt-0.5 uppercase tracking-widest animate-pulse ${textClass}`}>Apto a Prêmio</p>}
-                            </td>
-                            <td className="p-4 text-xs font-bold opacity-80">
-                              {c.telefone ? <p>Tel: {c.telefone}</p> : <p className="text-gray-400">Sem telefone</p>}
-                              {c.aniversario && <p className="mt-0.5">Nasc: {c.aniversario.split('-').reverse().join('/')}</p>}
-                            </td>
-                            <td className="p-4 text-xs font-bold opacity-80">
-                               {formatarData(c.created_at)}
-                            </td>
-                            <td className="p-4">
-                              <div className="w-full max-w-[150px]">
-                                <div className={`w-full rounded-full h-1.5 mb-1.5 overflow-hidden ${temaNoturno ? 'bg-gray-800' : 'bg-gray-200'}`}>
-                                  <div className={`h-1.5 rounded-full transition-all duration-1000 ${colorClass}`} style={{ width: `${progresso}%` }}></div>
-                                </div>
-                                <div className="flex justify-between items-center text-[10px] font-bold">
-                                  <span className={temaNoturno ? 'text-gray-400' : 'text-gray-500'}>{c.pontos} / {meta.pontos_necessarios} Pts</span>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4 text-right">
-                              <div className="flex justify-end gap-2">
-                                 <button onClick={() => resgatarPremio(c)} title="Descontar pontos da carteira" className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-widest active:scale-95 ${c.pontos >= meta.pontos_necessarios ? 'bg-green-500 text-white hover:bg-green-600 shadow-sm' : (temaNoturno ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed')}`} disabled={c.pontos < meta.pontos_necessarios}>Resgatar</button>
-                                 <button onClick={() => abrirEdicao(c)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all uppercase tracking-widest border active:scale-95 ${temaNoturno ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>Editar</button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          )}
-
-          {abaInterna === 'ranking' && (
-            <div className="max-w-lg animate-in fade-in slide-in-from-bottom-4 duration-500 delay-75">
-              <div className={`p-6 rounded-3xl border shadow-sm ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-                <h3 className={`font-black text-[10px] mb-2 uppercase tracking-widest flex items-center gap-2 ${temaNoturno ? 'text-white' : 'text-gray-800'}`}>
-                  <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-                  Ranking (Pontuação Histórica)
-                </h3>
-                <p className={`text-[10px] font-bold uppercase tracking-widest mb-6 ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Baseado no total de pontos conquistados em toda a vida útil do cliente.</p>
-                
-                {ranking.length === 0 ? (
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Sem dados suficientes para ranking.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {ranking.map((c, idx) => {
-                      const ptsTotais = c.pontos_totais || c.pontos;
-                      return (
-                        <div key={c.id} className={`flex justify-between items-center p-3 rounded-xl border transition-all hover:-translate-y-1 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-100'}`}>
-                          <div className="flex items-center gap-4">
-                            <div className={`text-sm font-black w-6 text-center ${idx < 3 ? 'text-purple-500' : (temaNoturno ? 'text-gray-500' : 'text-gray-400')}`}>#{idx + 1}</div>
-                            <span className={`font-black text-xs uppercase ${temaNoturno ? 'text-gray-200' : 'text-gray-800'}`}>{c.nome}</span>
-                          </div>
-                          <span className={`font-black px-3 py-1 rounded-md text-[10px] uppercase tracking-wider ${temaNoturno ? 'bg-gray-900 text-gray-400' : 'bg-white text-gray-600 border border-gray-200'}`}>
-                            {ptsTotais} Pts
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {abaInterna === 'config' && (
-            <div className={`p-6 rounded-3xl border shadow-sm max-w-lg animate-in fade-in slide-in-from-bottom-4 duration-500 delay-75 ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-              <h3 className={`font-black text-[10px] mb-6 uppercase tracking-widest ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>Diretrizes de Retenção</h3>
-              <div className="space-y-5">
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2 block">Pontos necessários para o prêmio</label>
-                  <input type="number" value={meta.pontos_necessarios} onChange={e => setMeta({...meta, pontos_necessarios: e.target.value})} className={`w-full p-3 rounded-xl border outline-none font-bold text-sm transition-colors focus:border-purple-500 ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'}`} />
+      <div className="flex-1 overflow-y-auto pb-16 scrollbar-hide px-4 md:px-6 relative z-10 w-full">
+        {abaInterna === 'clientes' && (
+          <div className="flex flex-col h-full w-full animate-in fade-in duration-500">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 arox-cinematic w-full" style={{animationDelay: '0ms'}}>
+              <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1">
+                <div className={`relative w-full sm:w-80 flex items-center rounded-xl border transition-all duration-300 focus-within:border-emerald-500/40 shadow-sm ${surfaceBase} ${bordaDestaque}`}>
+                  <div className="pl-3 opacity-40"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg></div>
+                  <input type="text" placeholder="Buscar cliente ou telefone..." value={busca} onChange={e => setBusca(e.target.value)} className="w-full bg-transparent border-none outline-none py-2.5 px-3 text-[13px] font-medium placeholder:text-zinc-500" />
                 </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2 block">Valor Mínimo p/ Pontuar (R$)</label>
-                  <input type="number" value={meta.valor_minimo} onChange={e => setMeta({...meta, valor_minimo: e.target.value})} className={`w-full p-3 rounded-xl border outline-none font-bold text-sm transition-colors focus:border-purple-500 ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'}`} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2 block">Prêmio Oferecido</label>
-                  <input type="text" value={meta.premio} onChange={e => setMeta({...meta, premio: e.target.value})} className={`w-full p-3 rounded-xl border outline-none font-bold text-sm transition-colors focus:border-purple-500 ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'}`} />
-                </div>
-                <button onClick={atualizarMeta} className="w-full py-4 mt-4 rounded-xl font-black uppercase text-[10px] tracking-widest bg-purple-600 hover:bg-purple-700 text-white shadow-md active:scale-95 transition-all">
-                  Salvar Diretrizes
-                </button>
-              </div>
-            </div>
-          )}
-
-          {abaInterna === 'publico' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-75">
-              <div className={`p-6 rounded-3xl shadow-sm border flex flex-col h-[400px] ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
-                <h3 className={`text-[10px] font-black uppercase tracking-widest mb-2 text-center ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>Receita: Fiéis x Avulsos</h3>
-                <p className={`text-[10px] font-bold text-center mb-4 ${temaNoturno ? 'text-gray-500' : 'text-gray-400'}`}>Comparativo de faturamento baseado na Tag Fidelidade.</p>
-                {dadosReceita.length > 0 ? (
-                  <div className="flex-1 w-full relative">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={dadosReceita} innerRadius={60} outerRadius={90} paddingAngle={4} dataKey="value" stroke="none">
-                          {dadosReceita.map((e, i) => <Cell key={i} fill={CORES_VIBRANTES[i % CORES_VIBRANTES.length]} />)}
-                        </Pie>
-                        <RechartsTooltip formatter={(val) => `R$ ${val.toFixed(2)}`} contentStyle={{ borderRadius: '12px', border: 'none', backgroundColor: temaNoturno ? '#1f2937' : '#ffffff', color: temaNoturno ? '#ffffff' : '#000000', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }} />
-                        <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', color: temaNoturno ? '#e5e7eb' : '#374151' }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : <div className={`flex-1 flex items-center justify-center text-[10px] font-bold uppercase tracking-widest ${temaNoturno ? 'text-gray-600' : 'text-gray-400'}`}>Nenhuma comanda processada.</div>}
-              </div>
-
-              <div className={`p-6 rounded-3xl shadow-sm border flex flex-col h-[400px] ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
-                <h3 className={`text-[10px] font-black uppercase tracking-widest mb-4 text-center ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>Inteligência de Tags</h3>
-                {dadosTags && dadosTags.length > 0 ? (
-                  <div className="flex-1 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={dadosTags} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
-                        <XAxis type="number" hide />
-                        <YAxis dataKey="nome" type="category" axisLine={false} tickLine={false} tick={{fill: temaNoturno ? '#9ca3af' : '#6b7280', fontSize: 10, fontWeight: 'bold'}} width={120} />
-                        <RechartsTooltip cursor={{fill: temaNoturno ? '#374151' : '#f3f4f6'}} content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const data = payload[0].payload;
-                              return (
-                                <div className={`p-3 shadow-xl rounded-xl border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
-                                  <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${temaNoturno ? 'text-gray-300' : 'text-gray-600'}`}>{data.nome}</p>
-                                  <p className="text-sm font-bold text-purple-500">{data.qtd} comandas</p>
-                                </div>
-                              );
-                            } return null;
-                          }} 
-                        />
-                        <Bar dataKey="qtd" radius={[0, 4, 4, 0]} barSize={20} label={{ position: 'right', formatter: (val) => `${val} cmds`, fill: temaNoturno ? '#9ca3af' : '#6b7280', fontSize: 10, fontWeight: 'bold' }}>
-                          {dadosTags.map((entry, index) => <Cell key={`cell-${index}`} fill={CORES_VIBRANTES[index % CORES_VIBRANTES.length]} />)}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : <div className={`flex-1 flex items-center justify-center text-[10px] font-bold uppercase tracking-widest ${temaNoturno ? 'text-gray-600' : 'text-gray-400'}`}>As comandas não receberam tags.</div>}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* MODAL CADASTRO / EDIÇÃO DE CLIENTE */}
-      {mostrarModalNovo && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className={`w-full max-w-md p-8 rounded-3xl border shadow-2xl animate-in zoom-in-95 duration-300 ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-            <h2 className={`text-xl font-black mb-6 uppercase tracking-widest ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>{clienteEditando ? 'Editar Registro' : 'Cadastrar Registro'}</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest ml-1 mb-1 block">Nome do Cliente</label>
-                <input type="text" placeholder="Ex: Carlos Oliveira" value={novoCliente.nome} onChange={e => setNovoCliente({...novoCliente, nome: e.target.value})} className={`w-full p-3 rounded-xl border outline-none font-bold text-sm transition-colors focus:border-purple-500 ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-200'}`} />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest ml-1 mb-1 block">Contato (WhatsApp)</label>
-                <input type="text" placeholder="Ex: 84999999999" value={novoCliente.telefone} onChange={e => setNovoCliente({...novoCliente, telefone: e.target.value})} className={`w-full p-3 rounded-xl border outline-none font-bold text-sm transition-colors focus:border-purple-500 ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-200'}`} />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest ml-1 mb-1 block">Data de Nascimento</label>
-                <input type="date" value={novoCliente.aniversario} onChange={e => setNovoCliente({...novoCliente, aniversario: e.target.value})} className={`w-full p-3 rounded-xl border outline-none font-bold text-sm transition-colors focus:border-purple-500 color-scheme-dark ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-200'}`} />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest ml-1 mb-1 block">Saldo de Pontos Atual</label>
-                <input type="number" placeholder="Ex: 0" value={novoCliente.pontos} onChange={e => setNovoCliente({...novoCliente, pontos: parseInt(e.target.value) || 0})} className={`w-full p-3 rounded-xl border outline-none font-bold text-sm transition-colors focus:border-purple-500 ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-200'}`} />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-8">
-              <button onClick={() => { setMostrarModalNovo(false); setClienteEditando(null); }} className={`flex-1 py-3 rounded-xl font-bold uppercase text-[10px] tracking-widest transition-all active:scale-95 ${temaNoturno ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Cancelar</button>
-              <button onClick={salvarNovoCliente} className="flex-1 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest bg-purple-600 text-white shadow-md hover:bg-purple-700 active:scale-95 transition-all">{clienteEditando ? 'Atualizar' : 'Salvar'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL IMPORTAÇÃO EM MASSA */}
-      {mostrarModalImportacao && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className={`w-full max-w-lg p-8 rounded-3xl border shadow-2xl animate-in zoom-in-95 duration-300 ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-            <h2 className={`text-xl font-black mb-2 uppercase tracking-widest ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>Importar Base de Dados</h2>
-            <p className={`text-[10px] font-bold mb-6 leading-relaxed uppercase tracking-widest ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>
-              Cole direto do Excel ou peça para uma IA formatar. <br/><br/>
-              <span className="text-purple-500">Padrão esperado: Nome, Telefone, Data (AAAA-MM-DD), Pontos</span>
-            </p>
-            
-            <textarea 
-              rows="6"
-              placeholder="Ex: Carlos Oliveira, 84999999999, 1999-05-10, 5&#10;Hanilton, 84988888888, 1995-12-25, 2" 
-              value={textoImportacao} 
-              onChange={e => setTextoImportacao(e.target.value)} 
-              className={`w-full p-4 rounded-xl border outline-none font-mono text-xs transition-colors focus:border-purple-500 ${temaNoturno ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-600' : 'bg-gray-50 border-gray-200 placeholder-gray-400'}`} 
-            />
-            
-            <div className="flex gap-3 mt-8">
-              <button onClick={() => setMostrarModalImportacao(false)} className={`flex-1 py-3 rounded-xl font-bold uppercase text-[10px] tracking-widest transition-all active:scale-95 ${temaNoturno ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Cancelar</button>
-              <button onClick={processarImportacao} className="flex-1 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest bg-purple-600 text-white shadow-md hover:bg-purple-700 active:scale-95 transition-all">Processar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL PERFIL DO CLIENTE (Histórico de Consumo) */}
-      {clientePerfil && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className={`w-full max-w-md p-8 rounded-3xl border shadow-2xl animate-in zoom-in-95 duration-300 ${temaNoturno ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-            <div className="flex justify-between items-start mb-6">
-               <div>
-                 <h2 className={`text-xl font-black uppercase tracking-widest ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>Perfil do Cliente</h2>
-                 <p className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${temaNoturno ? 'text-purple-400' : 'text-purple-600'}`}>{clientePerfil.nome}</p>
-               </div>
-               <button onClick={() => setClientePerfil(null)} className={`p-2 rounded-full transition-all active:scale-95 ${temaNoturno ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>✕</button>
-            </div>
-            
-            <div className="mb-6 flex gap-4">
-               <div className={`flex-1 p-4 rounded-xl border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>Saldo Atual</p>
-                  <p className={`text-xl font-black ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>{clientePerfil.pontos} <span className="text-xs text-purple-500">pts</span></p>
-               </div>
-               <div className={`flex-1 p-4 rounded-xl border ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${temaNoturno ? 'text-gray-400' : 'text-gray-500'}`}>Histórico (Total)</p>
-                  <p className={`text-xl font-black ${temaNoturno ? 'text-white' : 'text-gray-900'}`}>{clientePerfil.pontos_totais || clientePerfil.pontos} <span className="text-xs text-purple-500">pts</span></p>
-               </div>
-            </div>
-
-            <h3 className={`text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2 ${temaNoturno ? 'text-gray-300' : 'text-gray-800'}`}>
-              <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
-              Preferências de Consumo
-            </h3>
-
-            {produtosDoCliente.length === 0 ? (
-               <p className={`text-[10px] font-bold uppercase tracking-widest text-center p-6 rounded-xl border border-dashed ${temaNoturno ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-300'}`}>Nenhuma comanda vinculada a este nome encontrada no histórico.</p>
-            ) : (
-               <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2">
-                  {produtosDoCliente.map((p, idx) => (
-                     <div key={idx} className={`p-3 rounded-xl border flex justify-between items-center transition-all hover:-translate-y-1 ${temaNoturno ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200 shadow-sm'}`}>
-                        <div className="flex items-center gap-3">
-                           <div className={`w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-black ${idx === 0 ? 'bg-yellow-100 text-yellow-600' : (temaNoturno ? 'bg-gray-900 text-gray-500' : 'bg-gray-100 text-gray-500')}`}>#{idx + 1}</div>
-                           <span className={`text-[10px] font-black uppercase tracking-widest ${temaNoturno ? 'text-gray-200' : 'text-gray-800'}`}>{p.nome}</span>
-                        </div>
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${temaNoturno ? 'bg-gray-900 text-purple-400' : 'bg-purple-50 text-purple-600'}`}>{p.qtd}x pedidos</span>
-                     </div>
+                <div className={`flex items-center p-1 rounded-xl border shadow-sm overflow-x-auto scrollbar-hide w-full sm:w-auto ${surfaceBase} ${bordaDestaque}`}>
+                  {[{id:'todos', l:'Todos'}, {id:'resgate', l:'Prontos'}, {id:'quase', l:'Aquecidos'}, {id:'inativos', l:'Inativos'}].map(f => (
+                    <button key={f.id} onClick={() => setFiltroCategoria(f.id)} className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all duration-300 shrink-0 ${filtroCategoria === f.id ? (temaNoturno ? 'bg-zinc-800 text-white shadow-sm' : 'bg-white text-black shadow-sm border border-zinc-200') : `bg-transparent ${textSecundario} hover:${textPrincipal}`}`}>{f.l}</button>
                   ))}
-               </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
+                <input type="file" accept=".xlsx, .xls, .csv" className="hidden" ref={fileInputRef} onChange={acionarImportacao} />
+                <div className="flex bg-transparent rounded-xl border border-dashed overflow-hidden shadow-sm" style={{borderColor: temaNoturno ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}}>
+                   <button onClick={() => fileInputRef.current?.click()} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 active:bg-zinc-500/10 ${temaNoturno ? 'text-zinc-300 hover:text-white border-r border-white/10' : 'text-zinc-600 hover:text-black border-r border-black/10'}`}>Excel / CSV</button>
+                   <button onClick={() => setMostrarModalTexto(true)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 active:bg-zinc-500/10 ${temaNoturno ? 'text-zinc-300 hover:text-white' : 'text-zinc-600 hover:text-black'}`}>Colar Lista</button>
+                </div>
+                <button onClick={() => { setClienteEditando(null); setNovoCliente({nome:'', telefone:'', aniversario:'', pontos:0}); setMostrarModalNovo(true); }} className={`flex-1 sm:flex-none px-5 py-2 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all duration-300 active:scale-95 ${btnArox}`}>+ Integrar Cliente</button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2.5 w-full">
+              {clientesFiltrados.length === 0 ? (
+                <div className={`py-24 text-center rounded-2xl border border-dashed ${bordaDestaque} arox-cinematic`} style={{animationDelay: '50ms'}}><p className="text-[14px] font-medium mb-1">Radar Limpo</p><p className={`text-[12px] ${textSecundario}`}>Nenhum cliente atende aos filtros atuais.</p></div>
+              ) : (
+                clientesFiltrados.map((c, idx) => {
+                  const atingiu = c.pontos >= meta.pontos_necessarios; const percent = Math.min((c.pontos / meta.pontos_necessarios) * 100, 100); const inativo = c.pontos === 0; const quaseLa = percent >= 75 && !atingiu; const superVIP = c.pontos_totais > meta.pontos_necessarios * 3;
+                  let cardStyle = `${surfaceBase} ${bordaBase}`;
+                  if (atingiu) cardStyle = temaNoturno ? 'bg-[#06120D] border-emerald-500/20' : 'bg-emerald-50/50 border-emerald-500/30';
+                  else if (quaseLa) cardStyle = temaNoturno ? 'bg-[#120D06] border-amber-500/20' : 'bg-amber-50/50 border-amber-500/30';
+                  else if (inativo) cardStyle = `${surfaceBase} ${bordaBase} opacity-70 hover:opacity-100 transition-all duration-500`;
+
+                  return (
+                    <div key={c.id} className={`group relative flex flex-col md:flex-row md:items-center justify-between p-3.5 rounded-2xl border transition-all duration-300 ease-out w-full ${cardStyle} ${!inativo && surfaceHover} hover:shadow-md active:scale-[0.99] arox-cinematic cursor-pointer`} style={{ animationDelay: `${(idx * 20) + 50}ms` }} onClick={() => setClientePerfil(c)}>
+                      <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                        <div className={`relative w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0 transition-transform duration-500 group-hover:scale-105 ${atingiu ? 'bg-emerald-500 text-white' : quaseLa ? 'bg-amber-500 text-white' : (temaNoturno ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-200 text-zinc-700')}`}>
+                          {c.nome.charAt(0).toUpperCase()}
+                          {atingiu && <div className="absolute inset-0 rounded-full border border-emerald-400 animate-ping opacity-20" />}
+                        </div>
+                        <div className="min-w-0 pr-4">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <p className="text-[14px] font-semibold truncate group-hover:text-emerald-500 transition-colors duration-300">{c.nome}</p>
+                            {superVIP && !atingiu && <div className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-blue-500/10 text-blue-500 border border-blue-500/20">Fiel</div>}
+                            {quaseLa && <div className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Próximo do resgate" />}
+                            {atingiu && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Pronto" />}
+                          </div>
+                          <p className={`text-[12px] truncate ${textSecundario}`}>{c.telefone || 'Nenhum telefone'}</p>
+                        </div>
+                      </div>
+                      <div className="hidden md:flex flex-col justify-center w-56 lg:w-72 mr-8 mt-4 md:mt-0">
+                        <div className="flex justify-between items-end mb-1.5">
+                          <span className={`text-[9px] font-bold uppercase tracking-widest ${atingiu ? 'text-emerald-500' : textSecundario}`}>Pontos Acumulados</span>
+                          <div className="flex items-baseline gap-1"><span className={`text-[13px] font-bold ${atingiu ? 'text-emerald-500' : textPrincipal}`}>{c.pontos}</span><span className={`text-[11px] font-medium ${textSecundario}`}>/ {meta.pontos_necessarios}</span></div>
+                        </div>
+                        <div className={`w-full h-1.5 rounded-full overflow-hidden ${temaNoturno ? 'bg-white/5' : 'bg-black/10'}`}><div className={`h-full rounded-full transition-all duration-1000 ease-out relative ${atingiu ? 'bg-emerald-500' : quaseLa ? 'bg-amber-500' : (temaNoturno ? 'bg-zinc-500' : 'bg-zinc-500')}`} style={{ width: `${percent}%` }} /></div>
+                      </div>
+                      <div className="flex items-center justify-end gap-3 shrink-0 mt-4 md:mt-0" onClick={e => e.stopPropagation()}>
+                        {atingiu ? (
+                          <button onClick={() => setClienteResgate(c)} className="relative group/btn px-4 py-2 rounded-lg overflow-hidden active:scale-95 transition-transform">
+                            <div className="absolute inset-0 bg-emerald-500 transition-opacity duration-300 hover:opacity-90" /><span className="relative text-[10px] font-bold uppercase tracking-wider text-white">Resgatar</span>
+                          </button>
+                        ) : (<div className="w-16" />)}
+                        <button onClick={() => abrirEdicao(c)} className={`p-2 rounded-lg transition-colors opacity-100 md:opacity-0 group-hover:opacity-100 ${temaNoturno ? 'hover:bg-white/10 text-zinc-400 hover:text-white' : 'hover:bg-black/5 text-zinc-500 hover:text-black'}`}>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {abaInterna === 'ranking' && (
+          <div className="animate-in fade-in duration-500 w-full mx-auto pt-4 md:pt-6">
+            {ranking.length === 0 ? (
+              <div className={`py-16 text-center rounded-2xl border border-dashed ${bordaDestaque} arox-cinematic`}><p className={`text-[13px] ${textSecundario}`}>Sem histórico de clientes para gerar o ranking.</p></div>
+            ) : (
+              <div className="flex flex-col gap-6 md:gap-10 w-full">
+                <div className="flex flex-col items-center justify-center relative arox-cinematic w-full" style={{animationDelay: '50ms'}}>
+                  <div onClick={() => setClientePerfil(ranking[0])} className={`relative z-10 flex flex-col items-center p-6 md:p-8 rounded-[2rem] border transition-all duration-500 cursor-pointer hover:scale-[1.02] ${temaNoturno ? 'bg-gradient-to-b from-[#14120C] to-[#0A0A0A] border-amber-500/20 shadow-[0_10px_40px_rgba(245,158,11,0.05)]' : 'bg-gradient-to-b from-amber-50 to-white border-amber-200 shadow-[0_10px_40px_rgba(245,158,11,0.08)]'} w-full max-w-sm text-center`}>
+                    <div className="absolute -top-3 px-3 py-1 bg-black dark:bg-white text-white dark:text-black text-[9px] font-bold uppercase tracking-[0.2em] rounded-full shadow-md">Líder de Engajamento</div>
+                    <div className="w-12 h-12 mb-3 rounded-full flex items-center justify-center text-xl font-bold bg-gradient-to-br from-amber-300 to-amber-600 text-black shadow-sm">{ranking[0].nome.charAt(0).toUpperCase()}</div>
+                    <h2 className={`text-xl md:text-2xl font-bold tracking-tight mb-1 truncate w-full px-4 ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>{ranking[0].nome}</h2>
+                    <div className="mt-2 flex items-baseline gap-1.5"><span className="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-amber-500 to-amber-700 dark:from-amber-400 dark:to-amber-600">{ranking[0].pontos_totais || ranking[0].pontos}</span><span className={`text-[10px] font-bold uppercase tracking-widest ${textSecundario}`}>Pontos Totais</span></div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4 w-full">
+                  {ranking.slice(1).map((c, idx) => (
+                    <div key={c.id} onClick={() => setClientePerfil(c)} className={`group flex flex-col p-4 md:p-5 rounded-2xl border transition-all duration-300 cursor-pointer ${surfaceBase} ${bordaBase} hover:border-zinc-500/20 hover:-translate-y-0.5 hover:shadow-sm arox-cinematic w-full`} style={{ animationDelay: `${(idx * 30) + 100}ms` }}>
+                      <div className="flex justify-between items-start mb-3 md:mb-4">
+                        <div className={`text-base font-bold ${idx === 0 ? 'text-zinc-400' : idx === 1 ? 'text-amber-800/60' : textSecundario}`}>#{idx + 2}</div>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold ${temaNoturno ? 'bg-white/5 text-white' : 'bg-black/5 text-black'}`}>{c.nome.charAt(0).toUpperCase()}</div>
+                      </div>
+                      <p className="text-[13px] md:text-[14px] font-semibold tracking-tight mb-1 truncate group-hover:text-emerald-500 transition-colors">{c.nome}</p>
+                      <div className="mt-auto pt-3 flex items-baseline gap-1 border-t border-dashed border-zinc-500/20">
+                        <p className="text-lg md:text-xl font-bold">{c.pontos_totais || c.pontos}</p><p className={`text-[8px] md:text-[9px] font-bold uppercase tracking-widest ${textSecundario}`}>LTV Acumulado</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
+        )}
+
+        {abaInterna === 'insights' && (
+          <div className="animate-in fade-in duration-500 w-full mx-auto pt-4 md:pt-6">
+            <div className="mb-8 arox-cinematic" style={{animationDelay: '0ms'}}>
+              <h2 className="text-2xl font-bold tracking-tight mb-2">Estratégia de Base</h2>
+              <p className={`text-[13px] ${textSecundario}`}>Transforme dados dos seus clientes em decisões operacionais e de marketing.</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 w-full">
+              <div className={`p-6 rounded-3xl border flex flex-col justify-between arox-cinematic w-full ${temaNoturno ? 'bg-gradient-to-br from-[#06120D] to-[#0A0A0A] border-emerald-500/20' : 'bg-gradient-to-br from-emerald-50 to-white border-emerald-200'}`} style={{animationDelay: '100ms'}}>
+                <div>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-emerald-500/10 text-emerald-500 mb-4 border border-emerald-500/20"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg></div>
+                  <h3 className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${textSecundario}`}>Fatia de Clientes Mapeados</h3>
+                  <div className="flex items-baseline gap-1 mb-2"><p className="text-3xl font-bold tracking-tight">{analiseGlobal.taxaFidelidade}</p><span className="text-lg font-bold text-emerald-500">% da Receita</span></div>
+                  <p className={`text-[12px] font-medium leading-relaxed ${temaNoturno ? 'text-emerald-100/70' : 'text-emerald-900/70'}`}>
+                    O cadastro não é apenas um registro, é um <strong>ativo financeiro</strong>. Uma base estruturada reduz o Custo de Aquisição de Clientes (CAC), permitindo campanhas diretas de WhatsApp, ofertas personalizadas e maior retorno sobre o investimento em marketing.
+                  </p>
+                </div>
+              </div>
+
+              <div className={`p-6 rounded-3xl border flex flex-col justify-between arox-cinematic w-full ${temaNoturno ? 'bg-gradient-to-br from-[#0A0F1A] to-[#0A0A0A] border-blue-500/20' : 'bg-gradient-to-br from-blue-50 to-white border-blue-200'}`} style={{animationDelay: '200ms'}}>
+                <div>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-500/10 text-blue-500 mb-4 border border-blue-500/20"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+                  <h3 className={`text-[10px] font-bold uppercase tracking-wider mb-4 ${textSecundario}`}>Comportamento de Gasto</h3>
+                  <div className="space-y-4">
+                    <div className="flex flex-col">
+                      <div className="flex justify-between items-end mb-1"><span className={`text-[12px] font-bold ${temaNoturno ? 'text-blue-400' : 'text-blue-700'}`}>Ticket Médio do Cliente Fiel</span><span className="text-xl font-bold">R$ {analiseGlobal.ticketFiel.toFixed(2).replace('.', ',')}</span></div>
+                      <div className={`w-full h-1.5 rounded-full overflow-hidden ${temaNoturno ? 'bg-black/40' : 'bg-blue-100'}`}><div className="h-full rounded-full bg-blue-500 transition-all duration-1000 w-[100%]" /></div>
+                    </div>
+                    <div className="flex flex-col opacity-60">
+                      <div className="flex justify-between items-end mb-1"><span className={`text-[12px] font-bold ${textPrincipal}`}>Ticket Médio Global (Avulsos)</span><span className="text-lg font-bold">R$ {analiseGlobal.ticketGeral.toFixed(2).replace('.', ',')}</span></div>
+                      <div className={`w-full h-1.5 rounded-full overflow-hidden ${temaNoturno ? 'bg-black/40' : 'bg-zinc-200'}`}><div className="h-full rounded-full bg-zinc-500 transition-all duration-1000" style={{ width: `${analiseGlobal.ticketGeral > 0 && analiseGlobal.ticketFiel > 0 ? (analiseGlobal.ticketGeral / analiseGlobal.ticketFiel) * 100 : 0}%`}} /></div>
+                    </div>
+                  </div>
+                  <p className={`text-[11px] mt-4 font-medium leading-relaxed ${textSecundario}`}>
+                    Analisar a diferença de consumo permite mensurar o valor da retenção. Clientes engajados fornecem dados cruciais para otimizar campanhas de tráfego pago (públicos Lookalike) e escalar receitas com maior previsibilidade.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className={`p-6 md:p-8 rounded-3xl border flex flex-col lg:flex-row gap-8 arox-cinematic w-full ${surfaceBase} ${bordaDestaque}`} style={{animationDelay: '300ms'}}>
+               <div className="flex-1 w-full">
+                 <h3 className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${textSecundario}`}>Mapa de Tráfego Diário</h3>
+                 <p className={`text-[12px] mb-6 ${textSecundario}`}>Passe o mouse nos dias para analisar a demanda base e organizar compras/estoque.</p>
+                 <div className="flex items-end justify-between h-40 gap-1.5 md:gap-3 px-2 w-full">
+                   {diasSemana.map((d, i) => {
+                      const isSelected = diaGlobalSelect === i;
+                      return (
+                        <div key={d} onMouseEnter={() => setDiaGlobalSelect(i)} className="flex flex-col items-center gap-2 w-full h-full cursor-crosshair group">
+                           <div className={`relative w-full h-full flex flex-col justify-end rounded-md overflow-hidden transition-colors ${isSelected ? (temaNoturno ? 'bg-white/10' : 'bg-black/10') : (temaNoturno ? 'bg-white/5 group-hover:bg-white/10' : 'bg-black/5 group-hover:bg-black/10')}`}>
+                              {analiseGlobal.diasVolume[i] > 0 && (
+                                 <span className={`absolute -top-1 left-0 right-0 text-center text-[9px] font-bold transition-opacity -translate-y-full pb-1 z-10 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                   {analiseGlobal.diasVolume[i]}<span className="text-[7px]"> cmds</span>
+                                 </span>
+                              )}
+                              <div className={`w-full rounded-sm transition-all duration-300 ${isSelected ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]' : (analiseGlobal.diasVolume[i] === maxVolumeGlobal && maxVolumeGlobal > 0 ? (temaNoturno ? 'bg-zinc-400' : 'bg-zinc-600') : (temaNoturno ? 'bg-zinc-700' : 'bg-zinc-300'))}`} style={{ height: `${maxVolumeGlobal === 0 ? 0 : (analiseGlobal.diasVolume[i] / maxVolumeGlobal) * 100}%` }} />
+                           </div>
+                           <span className={`text-[9px] font-bold uppercase transition-colors ${isSelected ? (temaNoturno ? 'text-amber-400' : 'text-amber-600') : textSecundario}`}>{d}</span>
+                        </div>
+                      )
+                   })}
+                 </div>
+               </div>
+
+               <div className="lg:w-72 xl:w-96 shrink-0 border-t lg:border-t-0 lg:border-l pt-6 lg:pt-0 lg:pl-8 border-dashed border-zinc-500/20 flex flex-col">
+                 <div className="mb-4">
+                   <h3 className={`text-[10px] font-bold uppercase tracking-wider ${textSecundario}`}>Top 5 - {diasSemana[diaGlobalSelect]}</h3>
+                   <p className={`text-[11px] font-medium ${textPrincipal}`}>Produtos mais consumidos neste dia</p>
+                 </div>
+                 {top5DiaSelecionado.length === 0 ? (
+                    <div className={`flex-1 flex items-center justify-center rounded-xl border border-dashed text-center p-4 ${bordaDestaque}`}><p className={`text-[10px] uppercase font-bold tracking-widest ${textSecundario}`}>Aguardando Dados</p></div>
+                 ) : (
+                    <div className="flex flex-col gap-2.5 flex-1 justify-center w-full">
+                       {top5DiaSelecionado.map(([nome, qtd], idx) => (
+                         <div key={idx} className={`flex items-center gap-3 p-2.5 rounded-xl border transition-colors w-full ${temaNoturno ? 'bg-[#0F0F0F] border-white/5' : 'bg-zinc-50 border-black/5'}`}>
+                            <div className={`w-5 h-5 flex items-center justify-center rounded-md text-[10px] font-black shrink-0 ${idx === 0 ? 'bg-amber-500/10 text-amber-500' : (temaNoturno ? 'bg-white/5 text-zinc-400' : 'bg-black/5 text-zinc-600')}`}>{idx + 1}</div>
+                            <span className="text-[12px] font-medium flex-1 truncate">{nome}</span>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${temaNoturno ? 'bg-white/10 text-white' : 'bg-black/10 text-black'}`}>{qtd}x</span>
+                         </div>
+                       ))}
+                    </div>
+                 )}
+               </div>
+            </div>
+          </div>
+        )}
+
+        {abaInterna === 'config' && (
+          <div className="animate-in fade-in duration-500 w-full mx-auto pt-4 md:pt-6 relative">
+            <div className={`relative z-10 p-6 md:p-8 rounded-[2rem] border shadow-sm w-full ${surfaceBase} ${bordaDestaque} arox-cinematic`}>
+              <div className="mb-6">
+                <h2 className="text-xl font-bold tracking-tight mb-1">Regras de Fidelidade</h2>
+                <p className={`text-[12px] md:text-[13px] ${textSecundario}`}>Ajuste a mecânica de pontos e veja como a mensagem chega para o cliente.</p>
+              </div>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 w-full">
+                <div className="flex flex-col gap-5 w-full">
+                  <div className="grid grid-cols-2 gap-4 w-full">
+                    <div className="group relative w-full">
+                      <label className={`block text-[10px] font-bold uppercase tracking-[0.1em] mb-2 transition-colors ${textSecundario} group-focus-within:text-emerald-500`}>Pontos Necessários</label>
+                      <input type="number" value={meta.pontos_necessarios} onChange={e => setMeta({...meta, pontos_necessarios: e.target.value})} className={`w-full px-4 py-2.5 text-[14px] font-semibold rounded-xl border bg-transparent outline-none transition-all duration-300 focus:border-emerald-500/50 ${bordaBase}`} />
+                    </div>
+                    <div className="group relative w-full">
+                      <label className={`block text-[10px] font-bold uppercase tracking-[0.1em] mb-2 transition-colors ${textSecundario} group-focus-within:text-emerald-500`}>Valor Mínimo (R$)</label>
+                      <input type="number" value={meta.valor_minimo} onChange={e => setMeta({...meta, valor_minimo: e.target.value})} className={`w-full px-4 py-2.5 text-[14px] font-semibold rounded-xl border bg-transparent outline-none transition-all duration-300 focus:border-emerald-500/50 ${bordaBase}`} />
+                    </div>
+                  </div>
+                  <div className="group relative w-full">
+                    <label className={`block text-[10px] font-bold uppercase tracking-[0.1em] mb-2 transition-colors ${textSecundario} group-focus-within:text-emerald-500`}>Prêmio do Resgate</label>
+                    <input type="text" value={meta.premio} onChange={e => setMeta({...meta, premio: e.target.value})} className={`w-full px-4 py-2.5 text-[14px] font-semibold rounded-xl border bg-transparent outline-none transition-all duration-300 focus:border-emerald-500/50 ${bordaBase}`} />
+                  </div>
+                  <div className="pt-2 w-full">
+                    <button onClick={atualizarMeta} className={`w-full md:w-auto px-8 py-3 text-[11px] font-bold uppercase tracking-widest rounded-xl active:scale-95 transition-transform ${btnArox}`}>Salvar Regras</button>
+                  </div>
+                </div>
+
+                <div className={`rounded-3xl border relative flex flex-col justify-center overflow-hidden transition-all duration-500 w-full ${temaNoturno ? 'bg-[#0b141a] border-[#202c33]' : 'bg-[#efeae2] border-[#d1d7db]'}`}>
+                  <div className="absolute inset-0 pointer-events-none opacity-[0.20] dark:opacity-[0.10]" style={{ backgroundImage: `url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")`, backgroundSize: '400px' }} />
+                  <div className="relative z-10 px-4 py-8 flex flex-col h-full w-full">
+                    <div className="flex justify-between items-start mb-6 z-20 w-full">
+                      <div className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider backdrop-blur-sm ${temaNoturno ? 'bg-white/10 text-zinc-300' : 'bg-black/10 text-zinc-600'}`}>Visão do Cliente</div>
+                      <button onClick={copiarRegrasWhatsApp} className={`px-4 py-2 rounded-full transition-all active:scale-95 shadow-sm backdrop-blur-md flex items-center gap-2 ${copiado ? 'bg-emerald-500 text-white' : (temaNoturno ? 'bg-[#202c33] text-white hover:bg-[#2a3942]' : 'bg-white text-black hover:bg-zinc-50')}`}>
+                        {copiado ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"/></svg> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>}
+                        <span className="text-[10px] font-bold uppercase tracking-wider">{copiado ? 'Copiado!' : 'Copiar Texto'}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-start justify-end w-full relative">
+                       <div className={`relative max-w-[85%] px-3 py-2 rounded-[12px] rounded-tr-none shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] ${temaNoturno ? 'bg-[#005c4b] text-[#e9edef]' : 'bg-[#d9fdd3] text-[#111b21]'}`}>
+                          <div className={`absolute top-0 -right-[8px] w-0 h-0 border-t-[0px] border-t-transparent border-l-[10px] ${temaNoturno ? 'border-l-[#005c4b]' : 'border-l-[#d9fdd3]'} border-b-[12px] border-b-transparent`} />
+                          <p className="text-[13px] font-bold mb-1">*COMO VAI FUNCIONAR:*</p>
+                          <ul className="text-[13px] space-y-1 leading-snug mb-1">
+                             <li>• A cada compra maior que *R$ {meta.valor_minimo}*, você ganha 1 ponto.</li>
+                             <li>• Quando acumular *{meta.pontos_necessarios} pontos*, você estará pronto para o resgate.</li>
+                             <li>• O sistema indicará que você ganhou: *{meta.premio}*.</li>
+                          </ul>
+                          <div className="flex justify-end items-center gap-1 opacity-70 mt-0.5">
+                            <span className="text-[10px]">{new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</span>
+                            <svg viewBox="0 0 16 11" width="16" height="11" className={`${temaNoturno ? 'text-[#53bdeb]' : 'text-[#53bdeb]'}`}><path fill="currentColor" d="M11.8 1.1l-6.8 7.3L1.5 5 0 6.6l5 5.3L13.3 2.7l-1.5-1.6zm3.9-.1L10.5 6.4 9 4.9l5.2-5.5 1.5 1.6z"/></svg>
+                          </div>
+                       </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {mostrarModalTexto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className={`absolute inset-0 ${modalBackdrop} backdrop-blur-md transition-opacity`} onClick={() => setMostrarModalTexto(false)} />
+          <div className={`relative w-full max-w-xl p-8 rounded-[2rem] shadow-2xl flex flex-col gap-4 arox-scale-in border ${surfaceModal} ${bordaDestaque}`}>
+            <h2 className="text-xl font-bold tracking-tight">Importação Rápida</h2>
+            <p className={`text-[12px] leading-relaxed ${textSecundario}`}>Cole os dados dos clientes de uma planilha, texto ou IA.<br/>Padrão reconhecido: <strong className={textPrincipal}>NOME | TELEFONE | ANIVERSARIO | PONTOS</strong>.</p>
+            <textarea rows="6" placeholder="Ex:\nJoão Silva | 84999999999 | 10/05/1990 | 5\nMaria Souza | 84988888888 | 20/08/1985 | 12" value={textoColado} onChange={e => setTextoColado(e.target.value)} className={`w-full p-4 rounded-xl border bg-transparent outline-none text-[13px] font-mono leading-relaxed transition-colors focus:border-emerald-500/50 resize-none ${bordaBase}`} />
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => setMostrarModalTexto(false)} className={`px-4 py-2.5 text-[11px] font-bold uppercase rounded-xl transition-colors ${temaNoturno ? 'hover:bg-white/5 text-zinc-400' : 'hover:bg-black/5 text-zinc-600'}`}>Cancelar</button>
+              <button onClick={() => processarTextoImportacao(textoColado)} className={`px-6 py-2.5 text-[11px] font-bold uppercase rounded-xl ${btnArox}`}>Processar Lista</button>
+            </div>
+          </div>
         </div>
       )}
 
+      {mostrarModalNovo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className={`absolute inset-0 ${modalBackdrop} backdrop-blur-md transition-opacity`} onClick={() => setMostrarModalNovo(false)} />
+          <div className={`relative w-full max-w-md p-8 rounded-[2rem] shadow-2xl flex flex-col gap-6 arox-scale-in border ${surfaceModal} ${bordaDestaque}`}>
+            <h2 className="text-xl font-bold tracking-tight">{clienteEditando ? 'Editar Cliente' : 'Integrar Novo Cliente'}</h2>
+            <div className="flex flex-col gap-4">
+              <div><label className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${textSecundario}`}>Nome do Cliente *</label><input type="text" value={novoCliente.nome} onChange={e => setNovoCliente({...novoCliente, nome: e.target.value})} className={`w-full px-4 py-2.5 text-[14px] rounded-xl border bg-transparent outline-none focus:border-emerald-500/50 ${bordaBase}`} placeholder="Ex: João Silva" /></div>
+              <div><label className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${textSecundario}`}>Telefone (Whats)</label><input type="text" value={novoCliente.telefone} onChange={e => setNovoCliente({...novoCliente, telefone: e.target.value})} className={`w-full px-4 py-2.5 text-[14px] rounded-xl border bg-transparent outline-none focus:border-emerald-500/50 ${bordaBase}`} placeholder="(00) 00000-0000" /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${textSecundario}`}>Aniversário</label><input type="date" value={novoCliente.aniversario} onChange={e => setNovoCliente({...novoCliente, aniversario: e.target.value})} className={`w-full px-4 py-2.5 text-[14px] rounded-xl border bg-transparent outline-none focus:border-emerald-500/50 ${bordaBase} ${temaNoturno ? '[color-scheme:dark]' : ''}`} /></div>
+                <div><label className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${textSecundario}`}>Pontos Iniciais</label><input type="number" value={novoCliente.pontos} onChange={e => setNovoCliente({...novoCliente, pontos: parseInt(e.target.value) || 0})} className={`w-full px-4 py-2.5 text-[14px] rounded-xl border bg-transparent outline-none focus:border-emerald-500/50 ${bordaBase}`} /></div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-2">
+              <button onClick={() => setMostrarModalNovo(false)} className={`px-4 py-2.5 text-[11px] font-bold uppercase rounded-xl transition-colors ${temaNoturno ? 'hover:bg-white/5 text-zinc-400' : 'hover:bg-black/5 text-zinc-600'}`}>Cancelar</button>
+              <button onClick={salvarNovoCliente} className={`px-6 py-2.5 text-[11px] font-bold uppercase rounded-xl ${btnArox}`}>Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {clientePerfil && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className={`absolute inset-0 ${modalBackdrop} backdrop-blur-md transition-opacity`} onClick={() => setClientePerfil(null)} />
+          <div className={`relative w-full max-w-3xl p-6 md:p-8 rounded-[2rem] shadow-2xl flex flex-col gap-6 md:gap-8 arox-scale-in border max-h-[95vh] overflow-y-auto scrollbar-hide ${surfaceModal} ${bordaDestaque}`}>
+            <button onClick={() => setClientePerfil(null)} className={`absolute top-6 right-6 p-2 rounded-full transition-colors z-20 ${temaNoturno ? 'hover:bg-white/10 text-zinc-400' : 'hover:bg-black/5 text-zinc-500'}`}><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-5 mt-4 md:mt-0">
+              <div className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center text-xl md:text-2xl font-bold shrink-0 shadow-sm ${temaNoturno ? 'bg-zinc-800 text-white' : 'bg-zinc-200 text-zinc-800'}`}>{clientePerfil.nome.charAt(0).toUpperCase()}</div>
+              <div className="flex-1 min-w-0 pr-6">
+                <div className={`inline-block mb-1.5 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider border ${obterDiagnostico(clientePerfil).bg} ${obterDiagnostico(clientePerfil).color} ${temaNoturno ? 'border-white/5' : 'border-black/5'}`}>{obterDiagnostico(clientePerfil).label}</div>
+                <h2 className="text-xl md:text-2xl font-bold tracking-tight truncate">{clientePerfil.nome}</h2>
+                <p className={`text-[12px] ${textSecundario}`}>{clientePerfil.telefone || 'Sem contato'} • Integrado em {formatarData(clientePerfil.created_at)}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+              <div className={`p-4 md:p-5 rounded-2xl border relative overflow-hidden ${temaNoturno ? 'bg-[#0F0F0F] border-white/5' : 'bg-zinc-50 border-black/5'}`}>
+                {clientePerfil.pontos >= meta.pontos_necessarios && <div className="absolute inset-0 bg-emerald-500/5" />}
+                <p className={`relative z-10 text-[9px] md:text-[10px] font-bold uppercase tracking-wider mb-2 ${textSecundario}`}>Pontos Atuais</p>
+                <div className="relative z-10 flex items-baseline gap-1.5"><p className="text-2xl md:text-3xl font-bold tracking-tight">{clientePerfil.pontos}</p><span className={`text-[9px] md:text-[10px] font-medium uppercase ${textSecundario}`}>/ {meta.pontos_necessarios}</span></div>
+              </div>
+              <div className={`p-4 md:p-5 rounded-2xl border relative overflow-hidden ${temaNoturno ? 'bg-[#0F0F0F] border-white/5' : 'bg-zinc-50 border-black/5'}`}>
+                <p className={`relative z-10 text-[9px] md:text-[10px] font-bold uppercase tracking-wider mb-2 ${textSecundario}`}>Histórico (LTV)</p>
+                <div className="relative z-10 flex items-baseline gap-1.5"><p className="text-2xl md:text-3xl font-bold tracking-tight">{clientePerfil.pontos_totais || clientePerfil.pontos}</p></div>
+              </div>
+              <div className={`col-span-2 p-4 md:p-5 rounded-2xl border relative overflow-hidden flex flex-col justify-center ${temaNoturno ? 'bg-gradient-to-r from-emerald-900/10 to-transparent border-emerald-500/20' : 'bg-gradient-to-r from-emerald-50 to-transparent border-emerald-200'}`}>
+                <p className={`relative z-10 text-[9px] md:text-[10px] font-bold uppercase tracking-wider mb-1 ${textSecundario}`}>Ticket Médio Gasto</p>
+                <div className="relative z-10 flex items-baseline gap-1.5"><span className={`text-[14px] font-bold ${textSecundario}`}>R$</span><p className={`text-2xl md:text-3xl font-bold tracking-tight ${temaNoturno ? 'text-emerald-400' : 'text-emerald-600'}`}>{ticketMedio.toFixed(2).replace('.', ',')}</p></div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+               <div className="flex flex-col h-full">
+                 <h3 className={`text-[10px] font-bold uppercase tracking-wider mb-4 ${textSecundario}`}>Mapa de Visitas (Dias mais idos)</h3>
+                 <div className="flex items-end justify-between h-28 gap-1.5 md:gap-2 px-2 border-b border-dashed border-zinc-500/20 pb-2">
+                   {diasSemana.map((d, i) => (
+                      <div key={d} onMouseEnter={() => setDiaClienteHover(i)} onMouseLeave={() => setDiaClienteHover(null)} className="flex flex-col items-center gap-2 w-full h-full cursor-crosshair group">
+                         <div className={`relative w-full h-full flex flex-col justify-end rounded-md overflow-hidden transition-colors ${diaClienteHover === i ? (temaNoturno ? 'bg-white/10' : 'bg-black/10') : (temaNoturno ? 'bg-white/5' : 'bg-black/5')}`}>
+                            {diasFrequencia[i].count > 0 && <span className={`absolute -top-1 left-0 right-0 text-center text-[9px] font-bold transition-opacity -translate-y-full pb-1 z-10 ${diaClienteHover === i ? 'opacity-100' : 'opacity-0'}`}>{diasFrequencia[i].count}</span>}
+                            <div className={`w-full rounded-sm transition-all duration-700 ${diasFrequencia[i].count === maxDias && maxDias > 0 ? 'bg-emerald-500' : (temaNoturno ? 'bg-zinc-600' : 'bg-zinc-400')}`} style={{ height: `${maxDias === 0 ? 0 : (diasFrequencia[i].count/maxDias)*100}%` }} />
+                         </div>
+                         <span className={`text-[8px] md:text-[9px] font-bold uppercase transition-colors ${diaClienteHover === i ? (temaNoturno ? 'text-white' : 'text-black') : (diasFrequencia[i].count === maxDias && maxDias > 0 ? (temaNoturno ? 'text-emerald-400' : 'text-emerald-600') : textSecundario)}`}>{d}</span>
+                      </div>
+                   ))}
+                 </div>
+                 <div className={`mt-3 p-3 rounded-xl min-h-[4.5rem] transition-all flex flex-col justify-center ${temaNoturno ? 'bg-[#141414] border border-white/5' : 'bg-zinc-50 border border-black/5'}`}>
+                    {diaClienteHover !== null && diasFrequencia[diaClienteHover].count > 0 ? (
+                       <div>
+                         <p className={`text-[9px] font-bold uppercase tracking-wider mb-1 ${temaNoturno ? 'text-emerald-400' : 'text-emerald-600'}`}>{diasSemana[diaClienteHover]}: {diasFrequencia[diaClienteHover].count} Visitas</p>
+                         <div className="flex flex-wrap gap-2">
+                           {Object.entries(diasFrequencia[diaClienteHover].produtos).sort((a,b)=>b[1]-a[1]).slice(0, 3).map(([nome, qtd], idx) => <span key={idx} className={`text-[10px] font-medium px-2 py-0.5 rounded border ${temaNoturno ? 'bg-black/50 border-white/10 text-zinc-300' : 'bg-white border-black/10 text-zinc-700'}`}>{qtd}x {nome}</span>)}
+                         </div>
+                       </div>
+                    ) : (<p className={`text-[10px] font-bold uppercase tracking-widest text-center opacity-50 ${textSecundario}`}>Passe o mouse nas barras para detalhar</p>)}
+                 </div>
+               </div>
+               <div>
+                 <h3 className={`text-[10px] font-bold uppercase tracking-wider mb-4 ${textSecundario}`}>Top Preferências (DNA de Consumo)</h3>
+                 {produtosDoCliente.length === 0 ? (
+                   <div className={`py-8 px-4 h-32 flex items-center justify-center text-center rounded-xl border border-dashed ${bordaDestaque}`}><p className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">Aguardando compras p/ análise</p></div>
+                 ) : (
+                   <div className="flex flex-wrap gap-2.5">
+                     {produtosDoCliente.slice(0, 5).map((p, idx) => (
+                       <div key={idx} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors ${temaNoturno ? 'bg-[#0F0F0F] border-white/10 hover:border-white/20' : 'bg-white border-black/10 hover:border-black/20 shadow-sm'}`}>
+                         <span className="text-[11px] font-bold tracking-tight max-w-[140px] truncate">{p.nome}</span><div className={`w-1 h-1 rounded-full ${temaNoturno ? 'bg-zinc-700' : 'bg-zinc-300'}`} /><span className={`text-[10px] font-black ${temaNoturno ? 'text-emerald-400' : 'text-emerald-600'}`}>{p.qtd}x</span>
+                       </div>
+                     ))}
+                     {produtosDoCliente.length > 5 && <div className={`flex items-center justify-center px-3 py-1.5 rounded-full border border-dashed ${bordaDestaque}`}><span className={`text-[10px] font-bold ${textSecundario}`}>+{produtosDoCliente.length - 5} itens</span></div>}
+                   </div>
+                 )}
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {clienteResgate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className={`absolute inset-0 ${modalBackdrop} backdrop-blur-md`} onClick={() => setClienteResgate(null)} />
+          <div className={`relative w-full max-w-sm p-8 rounded-[2rem] shadow-2xl border arox-scale-in flex flex-col items-center text-center ${surfaceModal} ${temaNoturno ? 'border-emerald-500/20' : 'border-emerald-500/40'}`}>
+            <div className="relative w-14 h-14 rounded-full flex items-center justify-center mb-5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg></div>
+            <h2 className="text-xl font-bold tracking-tight mb-2">Liberar Prêmio</h2>
+            <p className={`text-[13px] mb-8 leading-relaxed ${textSecundario}`}>Confirmar o resgate de <strong className={textPrincipal}>{meta.premio}</strong> para {clienteResgate.nome}? Os pontos serão deduzidos do saldo atual.</p>
+            <div className="flex flex-col gap-2.5 w-full relative z-10">
+              <button onClick={confirmarResgatePremio} className="w-full py-3 text-[11px] font-bold uppercase tracking-wider rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 active:scale-95 transition-all">Confirmar e Descontar</button>
+              <button onClick={() => setClienteResgate(null)} className={`w-full py-3 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors ${temaNoturno ? 'hover:bg-white/5 text-zinc-400' : 'hover:bg-black/5 text-zinc-600'}`}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style dangerouslySetInnerHTML={{__html: `.arox-cinematic { animation: arox-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(10px); } .arox-scale-in { animation: arox-zoom 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; } @keyframes arox-fade-up { 100% { opacity: 1; transform: translateY(0); } } @keyframes arox-zoom { 0% { transform: scale(0.97); opacity: 0; } 100% { transform: scale(1); opacity: 1; } } .scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }`}} />
     </div>
   );
 }

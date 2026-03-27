@@ -36,7 +36,7 @@ const SortableItem = ({ id, children, temaNoturno, isOverlay }) => {
 
   let colSpanClass = 'col-span-1';
   if (id === 'linhaTemporal' || id === 'produtos') {
-    colSpanClass = 'col-span-1 md:col-span-2 xl:col-span-2';
+    colSpanClass = 'col-span-1 md:col-span-2 xl:col-span-2 2xl:col-span-3'; // Ampliado para 2XL
   }
 
   return (
@@ -480,7 +480,7 @@ export default function TabFaturamento({
     switch(id) {
       case 'termometro': 
         return (
-          <div className={`flex flex-col justify-between p-5 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md h-full min-h-[200px] ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
+          <div className={`flex flex-col justify-between p-5 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md h-full min-h-[200px] w-full ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
             <div>
               <h3 className={`text-xs font-semibold uppercase tracking-widest flex items-center gap-2 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>
                 <Activity className="w-3.5 h-3.5" /> Performance vs Histórico
@@ -493,7 +493,7 @@ export default function TabFaturamento({
                 <p className={`text-sm font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Sem base de comparação</p>
               </div>
             ) : (
-              <div className="mt-2 flex flex-col flex-1 justify-end">
+              <div className="mt-2 flex flex-col flex-1 justify-end w-full">
                  <div className="flex items-baseline gap-2 mb-3">
                    <span className={`text-4xl font-semibold tracking-tighter tabular-nums ${diferenca >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                       {(percentualReal || 0).toFixed(0)}<span className="text-2xl opacity-50 ml-1">%</span>
@@ -503,8 +503,8 @@ export default function TabFaturamento({
                     <motion.div initial={{ width: 0 }} animate={{ width: `${percentualBarra || 0}%` }} transition={{ duration: 1, ease: "easeOut" }} 
                       className={`h-full rounded-full ${diferenca >= 0 ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                  </div>
-                 <div className="flex justify-between items-end border-t pt-3 border-zinc-200 dark:border-zinc-800">
-                    <div className="flex flex-col gap-1">
+                 <div className="flex justify-between items-end border-t pt-3 border-zinc-200 dark:border-zinc-800 w-full">
+                    <div className="flex flex-col gap-1 w-full">
                         <span className={`text-[10px] font-semibold uppercase tracking-wider ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Delta (Histórico)</span>
                         <span className={`text-sm font-medium tabular-nums ${bateuMeta ? 'text-emerald-500' : 'text-rose-500'}`}>
                             {bateuMeta ? '+' : '-'} R$ {(diffAbsoluta || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
@@ -518,10 +518,10 @@ export default function TabFaturamento({
 
       case 'linhaTemporal': 
         return (
-          <div className={`flex flex-col justify-between p-5 rounded-2xl border shadow-sm transition-all duration-500 hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 h-full min-h-[200px] relative overflow-hidden group ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
+          <div className={`flex flex-col justify-between p-5 rounded-2xl border shadow-sm transition-all duration-500 hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 h-full min-h-[200px] w-full relative overflow-hidden group ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
             <div className={`absolute -top-32 -right-32 w-64 h-64 rounded-full blur-[80px] opacity-0 group-hover:opacity-40 transition-opacity duration-1000 pointer-events-none ${temaNoturno ? 'bg-emerald-500/20' : 'bg-emerald-500/10'}`}></div>
 
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 relative z-10">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 relative z-10 w-full">
               <div>
                 <h3 className={`text-xs font-semibold uppercase tracking-widest flex items-center gap-2 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>
                   <TrendingUp className="w-3.5 h-3.5" /> Linha Temporal de Receita
@@ -634,7 +634,7 @@ export default function TabFaturamento({
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center mt-2 relative z-10">
+              <div className="flex-1 flex flex-col items-center justify-center mt-2 relative z-10 w-full">
                 <p className={`text-sm font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Aguardando volume de vendas</p>
               </div>
             )}
@@ -644,18 +644,18 @@ export default function TabFaturamento({
       case 'pagamentos':
         const totalPags = (dadosPizza || []).reduce((a, b) => a + (b?.value || 0), 0);
         return (
-          <div className={`flex flex-col p-5 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md h-full min-h-[180px] ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
+          <div className={`flex flex-col p-5 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md h-full min-h-[180px] w-full ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
             <h3 className={`text-xs font-semibold uppercase tracking-widest mb-3 flex items-center gap-2 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>
               <DollarSign className="w-3.5 h-3.5" /> Pagamentos
             </h3>
             {dadosPizza && dadosPizza.length > 0 ? (
-              <div className="flex-1 flex flex-col justify-center gap-3">
+              <div className="flex-1 flex flex-col justify-center gap-3 w-full">
                 {[...dadosPizza].sort((a,b) => (b?.value || 0) - (a?.value || 0)).map((item, idx) => {
                   const val = item?.value || 0;
                   const pct = totalPags > 0 ? ((val / totalPags) * 100).toFixed(1) : "0.0";
                   return (
-                    <div key={idx} className="flex flex-col group/item">
-                      <div className="flex justify-between items-end mb-1 pr-4">
+                    <div key={idx} className="flex flex-col group/item w-full">
+                      <div className="flex justify-between items-end mb-1 pr-4 w-full">
                         <span className={`text-sm font-medium ${temaNoturno ? 'text-zinc-300' : 'text-zinc-700'}`}>{item?.name || 'Outros'}</span>
                         <div className="flex items-baseline gap-2">
                             <span className={`text-sm font-semibold tabular-nums ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>R$ {val.toLocaleString('pt-BR')}</span>
@@ -671,14 +671,14 @@ export default function TabFaturamento({
                 })}
               </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center"><p className={`text-sm font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Sem transações</p></div>
+              <div className="flex-1 flex items-center justify-center w-full"><p className={`text-sm font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Sem transações</p></div>
             )}
           </div>
         );
 
       case 'mapaCalor':
         return (
-          <div className={`flex flex-col p-5 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md h-full min-h-[200px] ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
+          <div className={`flex flex-col p-5 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md h-full min-h-[200px] w-full ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
             <h3 className={`text-xs font-semibold uppercase tracking-widest mb-3 flex items-center gap-2 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>
               <Clock className="w-3.5 h-3.5" /> Densidade Operacional
             </h3>
@@ -704,7 +704,7 @@ export default function TabFaturamento({
                             whileHover={{ scale: 1.1 }} 
                             key={`${dia}-${h}`} 
                             title={`${qtd} comandas em média`}
-                            className={`h-6 sm:h-7 rounded-sm transition-colors cursor-crosshair border border-black/5 dark:border-white/5 flex items-center justify-center text-[10px] font-bold ${corDoTexto}`}
+                            className={`h-6 sm:h-7 rounded-sm transition-colors cursor-crosshair border border-black/5 dark:border-white/5 flex items-center justify-center text-[10px] font-bold w-full ${corDoTexto}`}
                             style={{ backgroundColor: getHeatmapColor(intensidade) }}
                           >
                             {qtd > 0 ? qtd : ''}
@@ -716,15 +716,15 @@ export default function TabFaturamento({
                 </div>
               </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center"><p className={`text-sm font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Sem dados suficientes</p></div>
+              <div className="flex-1 flex items-center justify-center w-full"><p className={`text-sm font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Sem dados suficientes</p></div>
             )}
           </div>
         );
 
       case 'produtos':
         return (
-          <div className={`flex flex-col p-5 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md h-full min-h-[220px] ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
-            <div className="flex justify-between items-center mb-3 pr-6">
+          <div className={`flex flex-col p-5 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md h-full min-h-[220px] w-full ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
+            <div className="flex justify-between items-center mb-3 pr-6 w-full">
               <h3 className={`text-xs font-semibold uppercase tracking-widest flex items-center gap-2 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>
                 <BarChart2 className="w-3.5 h-3.5" /> Rentabilidade (Lucro vs Custo)
               </h3>
@@ -761,25 +761,25 @@ export default function TabFaturamento({
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center"><p className={`text-sm font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Sem movimentação</p></div>
+              <div className="flex-1 flex items-center justify-center w-full"><p className={`text-sm font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Sem movimentação</p></div>
             )}
           </div>
         );
 
       case 'combo':
         return (
-          <div className={`flex flex-col p-5 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md h-full min-h-[180px] ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
+          <div className={`flex flex-col p-5 rounded-2xl border shadow-sm transition-all duration-300 hover:shadow-md h-full min-h-[180px] w-full ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
             <h3 className={`text-xs font-semibold uppercase tracking-widest mb-3 flex items-center gap-2 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>
               <Zap className="w-3.5 h-3.5" /> Cesta Inteligente
             </h3>
             {topCombos && topCombos.length > 0 ? (
-              <div className="flex flex-col gap-2 pr-2">
+              <div className="flex flex-col gap-2 pr-2 w-full">
                 {topCombos.map((combo, idx) => {
                   const comboNome = combo?.nome || '';
                   const [p1, p2] = comboNome.includes(' + ') ? comboNome.split(' + ') : [comboNome, ''];
                   return (
-                    <motion.div whileHover={{ scale: 1.01 }} key={idx} className={`p-2.5 rounded-xl border flex items-center justify-between ${temaNoturno ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
-                      <div className="flex flex-col pr-2">
+                    <motion.div whileHover={{ scale: 1.01 }} key={idx} className={`p-2.5 rounded-xl border flex items-center justify-between w-full ${temaNoturno ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-50 border-zinc-200'}`}>
+                      <div className="flex flex-col pr-2 min-w-0">
                         <span className={`text-xs font-semibold line-clamp-1 ${temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}`}>{p1}</span>
                         {p2 && (
                           <span className={`text-[10px] font-medium flex items-center gap-1 mt-0.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>
@@ -787,7 +787,7 @@ export default function TabFaturamento({
                           </span>
                         )}
                       </div>
-                      <div className={`px-2 py-1 rounded-md border text-[10px] font-semibold ${temaNoturno ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-white border-zinc-200 text-zinc-600'}`}>
+                      <div className={`px-2 py-1 flex-shrink-0 rounded-md border text-[10px] font-semibold ${temaNoturno ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-white border-zinc-200 text-zinc-600'}`}>
                         {combo?.qtd || 0}x
                       </div>
                     </motion.div>
@@ -795,7 +795,7 @@ export default function TabFaturamento({
                 })}
               </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center"><p className={`text-sm font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Sem padrões consistentes</p></div>
+              <div className="flex-1 flex items-center justify-center w-full"><p className={`text-sm font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Sem padrões consistentes</p></div>
             )}
           </div>
         );
@@ -839,12 +839,12 @@ export default function TabFaturamento({
   };
 
   return (
-    <div className={`max-w-[1400px] mx-auto w-full pb-8 mt-4 font-sans ${temaNoturno ? 'text-zinc-100 selection:bg-zinc-800' : 'text-zinc-900 selection:bg-zinc-200'}`}>
+    <div className={`w-full max-w-full pb-8 mt-4 font-sans ${temaNoturno ? 'text-zinc-100 selection:bg-zinc-800' : 'text-zinc-900 selection:bg-zinc-200'}`}>
       
       {/* HEADER DE CONTROLES */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full mb-5 px-4 md:px-0">
          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-            <div className={`flex p-1 rounded-lg border shadow-sm ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
+            <div className={`flex p-1 rounded-lg border shadow-sm w-full sm:w-auto ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
               {['dia', '7 dias', 'mes', 'ano', 'periodo'].map(t => (
                  <button key={t} onClick={() => setFiltroTempo({...filtroTempo, tipo: t, valor: t==='dia'||t==='7 dias'?getHoje():t==='mes'?getMesAtual():getAnoAtual()})} 
                  className={`flex-1 px-4 py-1.5 rounded-md text-xs font-semibold capitalize transition-all duration-300 ease-out ${filtroTempo?.tipo === t ? (temaNoturno ? 'bg-zinc-800 text-white shadow-sm' : 'bg-zinc-100 text-zinc-900 shadow-sm') : (temaNoturno ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-500 hover:text-zinc-700')}`}>
@@ -856,20 +856,20 @@ export default function TabFaturamento({
             <div className="flex items-center gap-2 w-full sm:w-auto">
               {(filtroTempo?.tipo === 'dia' || filtroTempo?.tipo === 'mes') && (
                 <>
-                  <button onClick={() => mudarTempo(-1)} className={`p-1.5 rounded-lg border transition-all duration-300 hover:scale-105 active:scale-95 ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800 text-zinc-400' : 'bg-white border-zinc-200 text-zinc-500'}`}>
+                  <button onClick={() => mudarTempo(-1)} className={`p-1.5 rounded-lg border transition-all duration-300 hover:scale-105 active:scale-95 flex-shrink-0 ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800 text-zinc-400' : 'bg-white border-zinc-200 text-zinc-500'}`}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
                   </button>
                   <input type={filtroTempo?.tipo === 'dia' ? 'date' : 'month'} value={filtroTempo?.valor || ''} max={filtroTempo?.tipo === 'dia' ? getHoje() : getMesAtual()} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} 
                     className={`px-3 py-1.5 text-center border rounded-lg outline-none text-xs font-semibold transition-all w-full sm:w-32 focus:ring-2 focus:ring-offset-2 focus:ring-zinc-400 ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800 focus:ring-offset-[#0a0a0b] [color-scheme:dark]' : 'bg-white border-zinc-200'}`} />
                   {podeAvancar() ? (
-                    <button onClick={() => mudarTempo(1)} className={`p-1.5 rounded-lg border transition-all duration-300 hover:scale-105 active:scale-95 ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800 text-zinc-400' : 'bg-white border-zinc-200 text-zinc-500'}`}>
+                    <button onClick={() => mudarTempo(1)} className={`p-1.5 rounded-lg border transition-all duration-300 hover:scale-105 active:scale-95 flex-shrink-0 ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800 text-zinc-400' : 'bg-white border-zinc-200 text-zinc-500'}`}>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
                     </button>
                   ) : <div className="w-[30px]" />}
                 </>
               )}
               {filtroTempo?.tipo === 'periodo' && (
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border w-full ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
                   <input type="date" value={filtroTempo?.inicio || ''} onChange={e => setFiltroTempo({...filtroTempo, inicio: e.target.value})} className={`bg-transparent outline-none text-xs font-semibold w-full ${temaNoturno ? '[color-scheme:dark]' : ''}`} />
                   <span className={`text-xs font-medium opacity-50`}>/</span>
                   <input type="date" value={filtroTempo?.fim || ''} onChange={e => setFiltroTempo({...filtroTempo, fim: e.target.value})} className={`bg-transparent outline-none text-xs font-semibold w-full ${temaNoturno ? '[color-scheme:dark]' : ''}`} />
@@ -879,7 +879,7 @@ export default function TabFaturamento({
          </div>
 
          <button onClick={() => setMostrarMenuPersonalizar(!mostrarMenuPersonalizar)} 
-            className={`px-4 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-300 active:scale-95 flex items-center gap-2 ${temaNoturno ? (mostrarMenuPersonalizar ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-[#0a0a0b] border-zinc-800 text-zinc-400 hover:text-zinc-200') : (mostrarMenuPersonalizar ? 'bg-zinc-100 border-zinc-200 text-zinc-900' : 'bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900')}`}>
+            className={`px-4 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 w-full sm:w-auto ${temaNoturno ? (mostrarMenuPersonalizar ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-[#0a0a0b] border-zinc-800 text-zinc-400 hover:text-zinc-200') : (mostrarMenuPersonalizar ? 'bg-zinc-100 border-zinc-200 text-zinc-900' : 'bg-white border-zinc-200 text-zinc-600 hover:text-zinc-900')}`}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
             Personalizar Dashboard
          </button>
@@ -888,15 +888,15 @@ export default function TabFaturamento({
       {/* PAINEL DE PERSONALIZAÇÃO */}
       <AnimatePresence>
         {mostrarMenuPersonalizar && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <div className={`p-4 rounded-xl border mb-5 flex flex-wrap gap-2 px-4 md:px-5 mx-4 md:mx-0 ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden w-full">
+            <div className={`p-4 rounded-xl border mb-5 flex flex-wrap gap-2 px-4 md:px-5 mx-4 md:mx-0 w-full ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
               {[
                 { id: 'insights', label: 'IA Storytelling' }, { id: 'bruto', label: 'Bruto' }, { id: 'lucro', label: 'Lucro' }, { id: 'ticket', label: 'Ticket' },
                 { id: 'termometro', label: 'Crescimento' }, { id: 'linhaTemporal', label: 'Linha Temporal' }, { id: 'pagamentos', label: 'Pagamentos' }, { id: 'produtos', label: 'Rentabilidade' }, { id: 'mapaCalor', label: 'Calor' }, { id: 'combo', label: 'Combos' }
               ].map(item => (
                 <label key={item.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors text-xs font-semibold ${widgets?.[item.id] ? (temaNoturno ? 'bg-zinc-800 border-zinc-700 text-zinc-100' : 'bg-zinc-100 border-zinc-200 text-zinc-900') : (temaNoturno ? 'bg-transparent border-zinc-800 text-zinc-500 hover:text-zinc-300' : 'bg-transparent border-zinc-200 text-zinc-500 hover:text-zinc-700')}`}>
                   <input type="checkbox" checked={!!widgets?.[item.id]} onChange={() => toggleWidget(item.id)} className="hidden" />
-                  <div className={`w-3.5 h-3.5 rounded-[4px] border flex items-center justify-center transition-colors ${widgets?.[item.id] ? (temaNoturno ? 'border-transparent bg-zinc-200 text-zinc-900' : 'border-transparent bg-zinc-800 text-white') : (temaNoturno ? 'border-zinc-700' : 'border-zinc-300')}`}>
+                  <div className={`w-3.5 h-3.5 rounded-[4px] border flex items-center justify-center transition-colors flex-shrink-0 ${widgets?.[item.id] ? (temaNoturno ? 'border-transparent bg-zinc-200 text-zinc-900' : 'border-transparent bg-zinc-800 text-white') : (temaNoturno ? 'border-zinc-700' : 'border-zinc-300')}`}>
                     {widgets?.[item.id] && <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>}
                   </div>
                   {item.label}
@@ -907,7 +907,7 @@ export default function TabFaturamento({
         )}
       </AnimatePresence>
 
-      <div className="flex flex-col gap-4 px-4 md:px-0">
+      <div className="flex flex-col gap-4 px-4 md:px-0 w-full">
         
         {/* NARRATIVA DE DADOS */}
         {widgets?.insights && insightsDinamicos && insightsDinamicos.length > 0 && (
@@ -915,19 +915,19 @@ export default function TabFaturamento({
              <div className="flex-shrink-0 ml-2">
                 {insightsDinamicos[insightAtivo]?.icone}
              </div>
-             <div className="flex-1 relative h-10 flex flex-col justify-center">
+             <div className="flex-1 relative h-10 flex flex-col justify-center w-full min-w-0">
                 <AnimatePresence mode="wait">
-                  <motion.div key={insightAtivo} initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -10, opacity: 0 }} transition={{ duration: 0.3 }} className="absolute inset-0 flex flex-col justify-center">
-                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>
+                  <motion.div key={insightAtivo} initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -10, opacity: 0 }} transition={{ duration: 0.3 }} className="absolute inset-0 flex flex-col justify-center w-full">
+                    <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 truncate w-full ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>
                       {insightsDinamicos[insightAtivo]?.titulo || ''}
                     </p>
-                    <p className={`text-sm font-medium ${temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}`}>
+                    <p className={`text-sm font-medium truncate w-full ${temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}`}>
                       {insightsDinamicos[insightAtivo]?.texto || ''}
                     </p>
                   </motion.div>
                 </AnimatePresence>
              </div>
-             <div className="hidden sm:flex gap-1.5 ml-4 pr-2">
+             <div className="hidden sm:flex gap-1.5 ml-4 pr-2 flex-shrink-0">
                 {insightsDinamicos.map((_, i) => (
                   <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${i === insightAtivo ? (temaNoturno ? 'bg-zinc-300 w-3' : 'bg-zinc-600 w-3') : (temaNoturno ? 'bg-zinc-800' : 'bg-zinc-200')}`} />
                 ))}
@@ -937,9 +937,9 @@ export default function TabFaturamento({
 
         {/* MÉTRICAS PRINCIPAIS */}
         {([widgets?.bruto, widgets?.lucro, widgets?.ticket].filter(Boolean).length > 0) && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
             {widgets?.bruto && (
-              <motion.div whileHover={{ scale: 1.01 }} className={`p-5 rounded-2xl border shadow-sm flex flex-col justify-between min-h-[110px] ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
+              <motion.div whileHover={{ scale: 1.01 }} className={`p-5 rounded-2xl border shadow-sm flex flex-col justify-between min-h-[110px] w-full ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
                 <h3 className={`text-xs font-semibold uppercase tracking-widest mb-1 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Volume Bruto</h3>
                 <p className={`text-3xl font-semibold tracking-tight tabular-nums mt-1 ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
                   <span className="text-lg opacity-50 font-normal mr-1">R$</span>{fatTotalSafe.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
@@ -947,7 +947,7 @@ export default function TabFaturamento({
               </motion.div>
             )}
             {widgets?.lucro && (
-              <motion.div whileHover={{ scale: 1.01 }} className={`p-5 rounded-2xl border shadow-sm flex flex-col justify-between min-h-[110px] ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
+              <motion.div whileHover={{ scale: 1.01 }} className={`p-5 rounded-2xl border shadow-sm flex flex-col justify-between min-h-[110px] w-full ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
                 <h3 className={`text-xs font-semibold uppercase tracking-widest mb-1 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Lucro Estimado</h3>
                 <p className={`text-3xl font-semibold tracking-tight tabular-nums mt-1 ${temaNoturno ? 'text-emerald-400' : 'text-emerald-600'}`}>
                   <span className="text-lg opacity-50 font-normal mr-1">R$</span>{lucroSafe.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
@@ -955,10 +955,10 @@ export default function TabFaturamento({
               </motion.div>
             )}
             {widgets?.ticket && (
-              <motion.div whileHover={{ scale: 1.01 }} className={`p-5 rounded-2xl border shadow-sm flex flex-col justify-between min-h-[110px] ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
-                <div className="flex justify-between items-start mb-1">
+              <motion.div whileHover={{ scale: 1.01 }} className={`p-5 rounded-2xl border shadow-sm flex flex-col justify-between min-h-[110px] w-full ${temaNoturno ? 'bg-[#0a0a0b] border-zinc-800' : 'bg-white border-zinc-200'}`}>
+                <div className="flex justify-between items-start mb-1 w-full">
                   <h3 className={`text-xs font-semibold uppercase tracking-widest ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Ticket Médio</h3>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${temaNoturno ? 'bg-zinc-900 border-zinc-800 text-zinc-400' : 'bg-zinc-50 border-zinc-200 text-zinc-500'}`}>{totalComandas} cmd</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border flex-shrink-0 ${temaNoturno ? 'bg-zinc-900 border-zinc-800 text-zinc-400' : 'bg-zinc-50 border-zinc-200 text-zinc-500'}`}>{totalComandas} cmd</span>
                 </div>
                 <p className={`text-3xl font-semibold tracking-tight tabular-nums mt-1 ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
                   <span className="text-lg opacity-50 font-normal mr-1">R$</span>{ticketMedio.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
@@ -976,7 +976,7 @@ export default function TabFaturamento({
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={widgetsVisiveis} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full grid-flow-dense">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 w-full grid-flow-dense">
               {widgetsVisiveis.map(id => (
                 <SortableItem key={id} id={id} temaNoturno={temaNoturno}>
                    {renderizarConteudoWidget(id)}

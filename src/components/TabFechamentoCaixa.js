@@ -305,7 +305,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
 
   const labelStyle = `text-[13px] font-medium tracking-wide mb-2 block ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`;
 
-  const cardBaseStyle = `relative p-7 md:p-8 rounded-[24px] border transition-colors duration-500 overflow-hidden group
+  const cardBaseStyle = `relative p-7 md:p-8 rounded-[24px] border transition-colors duration-500 overflow-hidden group w-full
     ${temaNoturno ? 'bg-[#09090B]/80 backdrop-blur-xl border-white/[0.05] shadow-lg' : 'bg-white/80 backdrop-blur-xl border-black/[0.04] shadow-sm'}`;
 
   return (
@@ -326,7 +326,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
         )}
       </div>
 
-      <div className={`relative z-10 flex flex-col lg:flex-row gap-8 max-w-[1120px] mx-auto px-6 lg:px-8 transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] ${isModalOpen || isConsolidating ? 'scale-[0.99] opacity-70 blur-[4px]' : 'scale-100 opacity-100 blur-0'}`}>
+      <div className={`relative z-10 flex flex-col lg:flex-row gap-8 w-full max-w-full mx-auto px-6 lg:px-8 transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] ${isModalOpen || isConsolidating ? 'scale-[0.99] opacity-70 blur-[4px]' : 'scale-100 opacity-100 blur-0'}`}>
         
         <nav className="shrink-0 lg:w-56 flex flex-col gap-2">
           <div className={`p-1.5 rounded-[16px] flex lg:flex-col gap-1 backdrop-blur-xl border transition-colors duration-300 ${temaNoturno ? 'bg-white/[0.02] border-white/[0.04]' : 'bg-black/[0.02] border-black/[0.04]'}`}>
@@ -346,14 +346,14 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
         </nav>
 
         {/* TRANSIÇÃO BI-DIRECIONAL */}
-        <main className="flex-1 min-w-0 grid grid-cols-1 grid-rows-1 relative">
+        <main className="flex-1 min-w-0 grid grid-cols-1 grid-rows-1 relative w-full">
             
             {/* --- ABA: CAIXA OPERACIONAL --- */}
             <div className={`col-start-1 row-start-1 transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] ${abaInterna === 'atual' ? 'opacity-100 translate-y-0 scale-100 z-10 pointer-events-auto relative' : 'opacity-0 translate-y-3 scale-[0.99] z-0 pointer-events-none absolute inset-0'}`}>
               {caixaAtual?.status === 'aberto' ? (
-                <div className="flex flex-col gap-8 w-full max-w-3xl">
+                <div className="flex flex-col gap-8 w-full">
                   
-                  <div className="flex justify-end gap-3 mb-2">
+                  <div className="flex justify-end gap-3 mb-2 w-full">
                     <button onClick={() => { triggerPulse('neutral'); setMovModal({ visivel: true, tipo: 'suprimento', valor: '', descricao: '' }); }} 
                       className={`px-5 py-2.5 rounded-xl text-[13px] font-semibold tracking-wide transition-all duration-200 active:scale-[0.97] shadow-sm flex items-center gap-2 border ${temaNoturno ? 'bg-zinc-100 text-black border-transparent hover:bg-white' : 'bg-zinc-900 text-white border-transparent hover:bg-black'}`}>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"></path></svg>
@@ -480,7 +480,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                     </div>
                   </section>
 
-                  <div className="pt-2 pb-12">
+                  <div className="pt-2 pb-12 w-full">
                     <button onClick={() => mostrarConfirmacao('Fechar Caixa', 'Confirma o encerramento da sessão atual? O caixa passará a constar no histórico.', encerrarCaixaConfirmado)} 
                       disabled={isConsolidating}
                       className={`relative w-full py-4 rounded-[16px] text-[15px] font-semibold tracking-wide transition-all duration-200 active:scale-[0.98] shadow-md border disabled:opacity-80 disabled:active:scale-100 flex justify-center items-center gap-3 ${temaNoturno ? 'bg-zinc-100 text-black border-transparent hover:bg-white' : 'bg-zinc-900 text-white border-transparent hover:bg-black'}`}>
@@ -494,7 +494,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-[50vh]">
+                <div className="flex items-center justify-center h-[50vh] w-full">
                   <div className="text-center">
                     <div className={`w-14 h-14 mx-auto mb-5 rounded-[16px] flex items-center justify-center border ${temaNoturno ? 'bg-white/[0.03] border-white/[0.08] text-zinc-500' : 'bg-black/[0.02] border-black/[0.05] text-zinc-400'}`}>
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
@@ -507,7 +507,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
             </div>
 
             {/* --- ABA: TRILHA DE AUDITORIA --- */}
-            <div className={`col-start-1 row-start-1 transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] ${abaInterna === 'historico' ? 'opacity-100 translate-y-0 scale-100 z-10 pointer-events-auto relative' : 'opacity-0 translate-y-3 scale-[0.99] z-0 pointer-events-none absolute inset-0'}`}>
+            <div className={`col-start-1 row-start-1 transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] w-full ${abaInterna === 'historico' ? 'opacity-100 translate-y-0 scale-100 z-10 pointer-events-auto relative' : 'opacity-0 translate-y-3 scale-[0.99] z-0 pointer-events-none absolute inset-0'}`}>
                 
                 {/* Header do Histórico com Navegação Premium de Data */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 border-b pb-6 border-transparent">
@@ -530,14 +530,14 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                 </div>
 
                 {historicoCaixas.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-[30vh] text-center border-t border-dashed pt-10 mt-2 opacity-60" style={{ borderColor: temaNoturno ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}>
+                  <div className="flex flex-col items-center justify-center h-[30vh] text-center border-t border-dashed pt-10 mt-2 opacity-60 w-full" style={{ borderColor: temaNoturno ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}>
                     <p className={`text-[14px] font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Nenhum fechamento registrado nesta data.</p>
                   </div>
                 ) : (
-                  <div className="relative pt-2 pb-12 max-w-4xl">
+                  <div className="relative pt-2 pb-12 w-full">
                     <div className={`absolute top-6 bottom-12 left-[18px] md:left-[26px] w-[2px] rounded-full ${temaNoturno ? 'bg-white/[0.06]' : 'bg-black/[0.06]'}`} />
 
-                    <div className="flex flex-col gap-6 relative z-10">
+                    <div className="flex flex-col gap-6 relative z-10 w-full">
                       {historicoCaixas.map((caixa) => {
                         const isEstornado = caixa.status === 'estornado';
                         const isDiferenca = caixa.relatorio_fechamento?.diferencaDinheiro !== 0;
@@ -548,7 +548,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                         else if (isDiferenca) corMarcador = diferenca > 0 ? 'bg-emerald-500 ring-emerald-500/20' : 'bg-amber-500 ring-amber-500/20';
 
                         return (
-                          <div key={caixa.id} className="relative pl-12 md:pl-16 group">
+                          <div key={caixa.id} className="relative pl-12 md:pl-16 group w-full">
                             
                             <div className={`absolute left-[13.5px] md:left-[21.5px] top-7 w-2.5 h-2.5 rounded-full ring-4 shadow-sm transition-transform duration-300 group-hover:scale-125 ${corMarcador}`} />
 
