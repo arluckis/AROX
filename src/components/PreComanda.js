@@ -14,7 +14,8 @@ export default function PreComanda({
   isSistemaJaAcessado = false,
   onEnvUpdate 
 }) {
-  const estadoInicial = isFreshLogin ? 'boas-vindas' : (temPendencia ? 'pendencia' : (isSistemaJaAcessado ? 'inicio' : (isAntecipado ? 'antecipado' : 'inicio')));
+  // Removida a verificação de temPendencia do estado inicial
+  const estadoInicial = isFreshLogin ? 'boas-vindas' : (isSistemaJaAcessado ? 'inicio' : (isAntecipado ? 'antecipado' : 'inicio'));
 
   const [etapa, setEtapa] = useState(estadoInicial);
   const [valorCaixa, setValorCaixa] = useState('');
@@ -25,17 +26,16 @@ export default function PreComanda({
   const [saudacaoText, setSaudacaoText] = useState('Bem-vindo');
 
   const exitState = temaAnterior === 'light'
-    ? { light: 80.0, rotation: 25, planetY: -20, scale: 1.30, blur: 0, overlay: 0 }
-    : { light: 0.0, rotation: -10, planetY: 50, scale: 0.80, blur: 20, overlay: 1 };
+    ? { light: 600.0, rotation: 45, planetY: 0, scale: 6.50, blur: 15, overlay: 1 }
+    : { light: 0.0, rotation: -20, planetY: 0, scale: 4.50, blur: 20, overlay: 1 };
 
   const envStates = {
-    'boas-vindas': { light: 1.0, rotation: 0,  planetY: 10, scale: 0.98, blur: 0, overlay: 0 },
-    pendencia:     { light: 1.5, rotation: -2, planetY: 15, scale: 0.98, blur: 0, overlay: 0 },
-    antecipado:    { light: 1.5, rotation: 0,  planetY: 10, scale: 0.99, blur: 0, overlay: 0 },
+    'boas-vindas': { light: 1.0, rotation: 0,  planetY: 0, scale: 0.98, blur: 0, overlay: 0 },
+    antecipado:    { light: 1.5, rotation: 0,  planetY: 0, scale: 0.99, blur: 0, overlay: 0 },
     inicio:        { light: 2.0, rotation: 2,  planetY: 0,  scale: 1.00, blur: 0, overlay: 0 },
-    data:          { light: 3.5, rotation: 5,  planetY: -5, scale: 1.01, blur: 0, overlay: 0 },
-    valor:         { light: 5.0, rotation: 8,  planetY: -10, scale: 1.02, blur: 0, overlay: 0 },
-    pronto:        { light: 8.0, rotation: 12, planetY: -15, scale: 1.05, blur: 0, overlay: 0 },
+    data:          { light: 3.5, rotation: 5,  planetY: 0, scale: 1.01, blur: 0, overlay: 0 },
+    valor:         { light: 5.0, rotation: 8,  planetY: 0, scale: 1.02, blur: 0, overlay: 0 },
+    pronto:        { light: 8.0, rotation: 12, planetY: 0, scale: 1.05, blur: 0, overlay: 0 },
     exit:          exitState 
   };
 
@@ -48,7 +48,6 @@ export default function PreComanda({
     else if (hora >= 12 && hora < 18) setSaudacaoText('Boa tarde');
     else setSaudacaoText('Boa noite');
 
-    // Despacha evento nativo para avisar a orquestração que este contexto montou
     window.dispatchEvent(new CustomEvent('arox-precomanda-mounted'));
 
     const timer = setTimeout(() => setIsMounting(false), 50);
@@ -66,11 +65,8 @@ export default function PreComanda({
         onEnvUpdate(cenaConfig);
       }
       
-      // Fallback Absoluto: Sempre dispara o evento global para garantir que a Home escute,
-      // contornando casos onde o pai engole a prop em renders condicionados (ex: modais).
       window.dispatchEvent(new CustomEvent('arox-env-update', { detail: cenaConfig }));
       
-      // Micro-delay preventivo contra race conditions do layout (React batching)
       const timer = setTimeout(() => {
         window.dispatchEvent(new CustomEvent('arox-env-update', { detail: cenaConfig }));
       }, 50);
@@ -80,33 +76,32 @@ export default function PreComanda({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etapa, onEnvUpdate, temaAnterior]);
 
-  // === CORREÇÃO CIRÚRGICA: Tratamento de Reentrada ===
   useEffect(() => {
-    if (etapa === 'exit' || exitStage !== 'none') {
-      const estadoCorreto = isFreshLogin ? 'boas-vindas' : (temPendencia ? 'pendencia' : (isSistemaJaAcessado ? 'inicio' : (isAntecipado ? 'antecipado' : 'inicio')));
-      
+    if (etapa === 'exit' || exitStage !== 'none' || etapa === 'pronto' || isProcessingRef.current) {
+      return; 
+    }
+
+    // Removida a verificação de temPendencia
+    const estadoCorreto = isFreshLogin ? 'boas-vindas' : (isSistemaJaAcessado ? 'inicio' : (isAntecipado ? 'antecipado' : 'inicio'));
+    
+    if (etapa !== estadoCorreto && ['boas-vindas', 'inicio', 'antecipado'].includes(etapa)) {
       setEtapa(estadoCorreto);
-      setExitStage('none');
-      isProcessingRef.current = false;
-      
       const cenaCorreta = envStates[estadoCorreto];
-      if (typeof onEnvUpdate === 'function') {
-        onEnvUpdate(cenaCorreta);
-      }
+      if (typeof onEnvUpdate === 'function') onEnvUpdate(cenaCorreta);
       window.dispatchEvent(new CustomEvent('arox-env-update', { detail: cenaCorreta }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSistemaJaAcessado, isFreshLogin, temPendencia, isAntecipado]);
+  }, [isSistemaJaAcessado, isFreshLogin, isAntecipado]);
 
   const dataHoje = isClient ? new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
 
   const goToStep = (novaEtapa) => {
-    if(exitStage !== 'none' || etapa === 'pronto' || isProcessingRef.current) return;
+    if(exitStage !== 'none' || etapa === 'pronto' || etapa === 'exit' || isProcessingRef.current) return;
     setEtapa(novaEtapa);
   };
 
   const handleSequenceFinal = (callback) => {
-    if(isProcessingRef.current || exitStage !== 'none') return;
+    if(isProcessingRef.current || exitStage !== 'none' || etapa === 'exit') return;
     isProcessingRef.current = true; 
     setEtapa('pronto'); 
     
@@ -118,32 +113,34 @@ export default function PreComanda({
           setExitStage('arox'); 
           setTimeout(() => {
             setEtapa('exit'); 
-            callback(); 
-          }, 300); 
-        }, 600); 
-      }, 300); 
-    }, 600); 
+            setTimeout(() => {
+              callback(); 
+            }, 700);
+          }, 150); 
+        }, 250); 
+      }, 150); 
+    }, 300); 
   };
 
   if (!isClient) return null;
 
-  const stepIndex = ['boas-vindas', 'pendencia', 'antecipado', 'inicio'].includes(etapa) ? 1 : (etapa === 'data' ? 2 : (etapa === 'valor' ? 3 : (etapa === 'pronto' ? 4 : 0)));
+  const stepIndex = ['boas-vindas', 'antecipado', 'inicio'].includes(etapa) ? 1 : (etapa === 'data' ? 2 : (etapa === 'valor' ? 3 : (etapa === 'pronto' ? 4 : 0)));
 
   return (
-    <div className="fixed inset-0 w-full h-[100dvh] overflow-hidden flex items-center justify-center z-[50]">
-      <div className={`relative z-10 w-full h-full flex flex-col items-center justify-center px-6 perspective-[1200px] transition-all duration-[1000ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${isMounting ? 'opacity-0 translate-y-8 scale-95 blur-sm' : 'opacity-100 translate-y-0 scale-100 blur-0'}`}>
+    <div className={`absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center z-[50] ${isProcessingRef.current ? 'pointer-events-none' : ''}`}>
+      <div className={`relative z-10 w-full h-full flex flex-col items-center justify-center px-6 perspective-[1200px] transition-all duration-[600ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${isMounting ? 'opacity-0 translate-y-8 scale-95 blur-sm' : 'opacity-100 translate-y-0 scale-100 blur-0'}`}>
         
-        <div className={`cockpit-wrapper w-full max-w-[440px] flex flex-col min-h-[440px] transition-all duration-[500ms] ease-out p-10 ${
+        <div className={`cockpit-wrapper w-full max-w-[440px] flex flex-col min-h-[440px] transition-all duration-[400ms] ease-out p-10 ${
             exitStage === 'card' || exitStage === 'arox' 
             ? 'bg-transparent border-white/0 shadow-none backdrop-blur-none scale-[1.05] pointer-events-none' 
             : 'bg-[#05060A]/70 backdrop-blur-[40px] border border-white/[0.05] rounded-3xl shadow-[0_40px_80px_-20px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.06)]'
         }`}>
           
-          <div className={`flex flex-col items-center mb-10 shrink-0 transition-all duration-[400ms] ease-out ${exitStage === 'arox' ? 'opacity-0 scale-90 blur-sm' : 'opacity-100 scale-100 blur-0'}`}>
+          <div className={`flex flex-col items-center mb-10 shrink-0 transition-all duration-[300ms] ease-out ${exitStage === 'arox' ? 'opacity-0 scale-90 blur-sm' : 'opacity-100 scale-100 blur-0'}`}>
              <span className="text-[14px] font-bold tracking-[0.5em] text-white uppercase mb-1 drop-shadow-[0_0_12px_rgba(255,255,255,0.4)]">AROX</span>
-             <div className={`mt-3 flex gap-[6px] transition-opacity duration-300 ${exitStage !== 'none' || etapa === 'pronto' ? 'opacity-0' : 'opacity-100'}`}>
+             <div className={`mt-3 flex gap-[6px] transition-opacity duration-200 ${exitStage !== 'none' || etapa === 'pronto' ? 'opacity-0' : 'opacity-100'}`}>
                {[1, 2, 3].map(i => (
-                 <div key={i} className={`h-[2px] rounded-full transition-all duration-700 ease-in-out ${stepIndex >= i ? 'w-6 bg-white shadow-[0_0_8px_rgba(255,255,255,0.6)]' : 'w-2 bg-white/20'}`} />
+                 <div key={i} className={`h-[2px] rounded-full transition-all duration-500 ease-in-out ${stepIndex >= i ? 'w-6 bg-white shadow-[0_0_8px_rgba(255,255,255,0.6)]' : 'w-2 bg-white/20'}`} />
                ))}
              </div>
           </div>
@@ -158,8 +155,8 @@ export default function PreComanda({
                 </div>
                 <div className="mt-auto pt-8 w-full shrink-0 flex flex-col gap-3">
                   <button onClick={() => {
-                    if (temPendencia) goToStep('pendencia');
-                    else if (caixaAberto) {
+                    // Removido o redirecionamento para pendências
+                    if (caixaAberto) {
                       handleSequenceFinal(() => {
                          if (typeof onAcessarSistema === 'function') onAcessarSistema(false);
                       });
@@ -167,22 +164,6 @@ export default function PreComanda({
                     else goToStep(isAntecipado ? 'antecipado' : 'inicio');
                   }} className="w-full py-4 bg-white text-black text-[13px] font-semibold tracking-wide rounded-xl transition-all hover:bg-zinc-200 shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-[0.98]">
                     Continuar
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {etapa === 'pendencia' && (
-              <div key="pendencia" className="flex flex-col h-full step-transition">
-                <div className="text-center shrink-0">
-                  <h1 className="text-[22px] font-medium tracking-tight text-zinc-100 mb-3">Conciliação Pendente</h1>
-                  <p className="text-[14px] text-zinc-400 leading-relaxed font-light">Existem registros financeiros não processados no turno anterior que requerem sua atenção.</p>
-                </div>
-                <div className="mt-auto pt-8 shrink-0">
-                  <button onClick={() => handleSequenceFinal(() => {
-                    if (typeof onResolverPendencia === 'function') onResolverPendencia();
-                  })} className="w-full py-4 bg-white text-black text-[13px] font-semibold tracking-wide rounded-xl transition-all hover:bg-zinc-200 shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-[0.98]">
-                    Resolver Pendências
                   </button>
                 </div>
               </div>
@@ -243,7 +224,8 @@ export default function PreComanda({
                   <p className="text-[18px] font-medium text-zinc-200 capitalize tracking-wide">{dataHoje}</p>
                 </div>
                 <div className="mt-auto pt-4 shrink-0 flex gap-3">
-                  <button onClick={() => goToStep(temPendencia ? 'pendencia' : (isAntecipado ? 'antecipado' : 'inicio'))} className="px-6 py-4 bg-transparent text-zinc-500 hover:text-zinc-300 text-[13px] font-medium rounded-xl transition-colors">
+                  {/* Botão de voltar não checa mais pendências */}
+                  <button onClick={() => goToStep(isAntecipado ? 'antecipado' : 'inicio')} className="px-6 py-4 bg-transparent text-zinc-500 hover:text-zinc-300 text-[13px] font-medium rounded-xl transition-colors">
                     Voltar
                   </button>
                   <button onClick={() => goToStep('valor')} className="flex-1 py-4 bg-white text-black text-[13px] font-semibold tracking-wide rounded-xl transition-all hover:bg-zinc-200 active:scale-[0.98]">

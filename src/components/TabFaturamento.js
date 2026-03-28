@@ -23,6 +23,9 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+// Constante global para evitar perda de referência no useMemo e loop infinito
+const ARRAY_VAZIO = [];
+
 // --- COMPONENTE SORTABLE (Grid Integrado) ---
 const SortableItem = ({ id, children, temaNoturno, isOverlay, index }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -37,10 +40,9 @@ const SortableItem = ({ id, children, temaNoturno, isOverlay, index }) => {
 
   let colSpanClass = 'col-span-1';
   if (id === 'linhaTemporal' || id === 'produtos') {
-    colSpanClass = 'col-span-1 md:col-span-2 xl:col-span-2 2xl:col-span-3'; // Ampliado para 2XL
+    colSpanClass = 'col-span-1 md:col-span-2 xl:col-span-2 2xl:col-span-3'; 
   }
 
-  // Adicionamos a classe arox-cinematic ao widget base
   return (
     <div 
       ref={setNodeRef} 
@@ -233,7 +235,8 @@ export default function TabFaturamento({
   }, [comandas, filtroTempo, fatTotalSafe, getHoje, getMesAtual, getAnoAtual]);
 
   const dadosGraficoAcumulado = useMemo(() => {
-    if (filtroTempo?.tipo !== 'dia' || !comandas || comandas.length === 0) return [];
+    // Uso do ARRAY_VAZIO global para evitar perda de referência
+    if (filtroTempo?.tipo !== 'dia' || !comandas || comandas.length === 0) return ARRAY_VAZIO;
 
     const dataAtual = filtroTempo.valor || getHoje();
     const diaSemanaAtual = new Date(dataAtual + 'T12:00:00').getDay();
@@ -550,8 +553,9 @@ export default function TabFaturamento({
             </div>
             
             {dadosGraficoAcumulado.length > 0 ? (
-              <div className="flex-1 w-full h-[140px] mt-4 -ml-4 relative z-10">
-                <ResponsiveContainer width="100%" height="100%">
+              // FIX APLICADO: Trocado 'flex-1' por dimensões controladas e minHeight
+              <div className="w-full h-[140px] min-h-[140px] mt-4 -ml-4 relative z-10 overflow-hidden">
+                <ResponsiveContainer width="100%" height="100%" minHeight={140} minWidth={200}>
                   <AreaChart data={dadosGraficoAcumulado} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorAtual" x1="0" y1="0" x2="0" y2="1">
@@ -738,8 +742,9 @@ export default function TabFaturamento({
               </h3>
             </div>
             {rankingMaiusculo && rankingMaiusculo.length > 0 ? (
-              <div className="flex-1 w-full h-[160px]">
-                <ResponsiveContainer width="100%" height="100%">
+              // FIX APLICADO: Trocado 'flex-1' por dimensões controladas e minHeight
+              <div className="w-full h-[160px] min-h-[160px] overflow-hidden">
+                <ResponsiveContainer width="100%" height="100%" minHeight={160} minWidth={200}>
                   <BarChart data={rankingMaiusculo} layout="vertical" margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
                     <XAxis type="number" hide />
                     <YAxis dataKey="nome" type="category" axisLine={false} tickLine={false} tick={{fill: temaNoturno ? '#a1a1aa' : '#71717a', fontSize: 11, fontWeight: 700}} width={140} />

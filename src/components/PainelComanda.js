@@ -1,3 +1,4 @@
+// src/components/PainelComanda.js
 'use client';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import SystemLoader from './SystemLoader';
@@ -68,7 +69,7 @@ export default function PainelComanda({
       
       if (modalAberto) return;
 
-      const isSpecialKey = ['F1', 'F2', 'F3', 'F5', 'F6', 'Escape', 'Enter'].includes(e.key);
+      const isSpecialKey = ['F1', 'F2', 'F3', 'F4', 'F6', 'Escape', 'Enter'].includes(e.key);
       if (!isSpecialKey && isInput) return;
 
       if (e.key === 'Escape') { 
@@ -84,20 +85,6 @@ export default function PainelComanda({
         return;
       }
 
-      if (e.key === 'Enter' && isInput) {
-        const placeholder = activeEl?.placeholder?.toLowerCase() || '';
-        if (placeholder.includes('liente') || placeholder.includes('fidelidade')) {
-           e.preventDefault();
-           const primeiroCliente = document.querySelector('ul > li, li[class*="cursor-pointer"], div[class*="cursor-pointer"][class*="hover"], .item-cliente');
-           if (primeiroCliente) {
-              primeiroCliente.click();
-              const isMobile = window.innerWidth <= 768;
-              if (!isMobile) { setTimeout(() => { inputBuscaRef.current?.focus(); }, 150); }
-           }
-           return;
-        }
-      }
-
       if (e.key === 'Enter' && isInput && activeEl === inputBuscaRef.current) return; 
 
       if (e.key === 'F1') { e.preventDefault(); activeEl?.blur(); setMostrarModalPeso(true); }
@@ -109,10 +96,11 @@ export default function PainelComanda({
         e.preventDefault(); 
         if (produtosSeguros.length > 0 && !produtosSeguros.some(p => !p.pago)) { activeEl?.blur(); encerrarMesa(); }
       }
-      if (e.key === 'F5') { 
+      if (e.key === 'F4') { 
         e.preventDefault();
-        const inputCliente = document.querySelector('input[placeholder*="liente" i], input[placeholder*="Fidelidade" i], .input-cliente');
-        if (inputCliente) { inputCliente.focus(); } else if (adicionarClienteComanda) { activeEl?.blur(); adicionarClienteComanda(comandaAtiva.id, comandaAtiva.nome); }
+        // Apenas muda o foco para o novo input no Header, não abre mais painel antigo
+        const inputCliente = document.querySelector('.input-cliente');
+        if (inputCliente) { inputCliente.focus(); } 
       }
       if (e.key === 'F6') { e.preventDefault(); activeEl?.blur(); if(alternarTipoComanda) alternarTipoComanda(comandaAtiva.id, comandaAtiva.tipo); }
     };
@@ -212,11 +200,13 @@ export default function PainelComanda({
     return grupos;
   }, [produtosSeguros]);
 
-  const renderBotaoProduto = (item) => (
+  const renderBotaoProduto = (item, idx) => (
     <button 
       key={item.id || Math.random()} 
       onClick={() => adicionarProdutoNaComanda(item)} 
-      className={`p-3.5 rounded-xl flex justify-between items-center gap-3 transition-colors active:scale-[0.98] text-left border ${temaNoturno ? 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.06] hover:border-white/10' : 'bg-white border-black/[0.06] shadow-sm hover:border-black/15 hover:shadow'}`}
+      // Adicionado animate-in para cada botão de produto aparecer de forma fluida
+      className={`p-3.5 rounded-xl flex justify-between items-center gap-3 transition-colors active:scale-[0.98] text-left border animate-in fade-in zoom-in-95 fill-mode-both ${temaNoturno ? 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.06] hover:border-white/10' : 'bg-white border-black/[0.06] shadow-sm hover:border-black/15 hover:shadow'}`}
+      style={{ animationDelay: `${Math.min(idx * 20, 300)}ms` }} // Efeito em cascata
     >
       <div className="flex flex-col min-w-0 pr-2">
         <span className={`font-semibold text-[13px] tracking-tight truncate ${temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}`}>
@@ -237,7 +227,8 @@ export default function PainelComanda({
   );
 
   return (
-    <div className={`flex flex-col w-full h-[calc(100vh-64px)] overflow-hidden ${temaNoturno ? 'bg-[#0A0A0A]' : 'bg-[#FAFAFA]'}`}>
+    // Adicionado animate-in slide-in-from-bottom-4 para toda a tela entrar de forma suave
+    <div className={`flex flex-col w-full h-[calc(100vh-64px)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out ${temaNoturno ? 'bg-[#0A0A0A]' : 'bg-[#FAFAFA]'}`}>
       
       {/* BARRA SUPERIOR E DE BUSCA */}
       <div className={`w-full shrink-0 flex flex-col md:flex-row items-center justify-between gap-4 p-4 md:px-5 border-b min-h-[64px] z-10 ${temaNoturno ? 'border-white/[0.06]' : 'border-black/[0.06]'}`}>
@@ -260,7 +251,7 @@ export default function PainelComanda({
           <div className="flex items-center gap-1.5"><kbd className={`px-1.5 py-0.5 rounded-[4px] border ${temaNoturno ? 'bg-white/[0.04] border-white/10 text-zinc-400' : 'bg-black/[0.03] border-black/10 text-zinc-600'}`}>F2</kbd> Pagar</div>
           <div className="flex items-center gap-1.5"><kbd className={`px-1.5 py-0.5 rounded-[4px] border ${temaNoturno ? 'bg-white/[0.04] border-white/10 text-zinc-400' : 'bg-black/[0.03] border-black/10 text-zinc-600'}`}>F3</kbd> Encerrar</div>
           <div className={`w-[1px] h-3 ${temaNoturno ? 'bg-white/10' : 'bg-black/10'}`}></div>
-          <div className="flex items-center gap-1.5"><kbd className={`px-1.5 py-0.5 rounded-[4px] border ${temaNoturno ? 'bg-white/[0.04] border-white/10 text-zinc-400' : 'bg-black/[0.03] border-black/10 text-zinc-600'}`}>F5</kbd> Cliente</div>
+          <div className="flex items-center gap-1.5"><kbd className={`px-1.5 py-0.5 rounded-[4px] border ${temaNoturno ? 'bg-white/[0.04] border-white/10 text-zinc-400' : 'bg-black/[0.03] border-black/10 text-zinc-600'}`}>F4</kbd> Cliente</div>
         </div>
       </div>
 
@@ -329,16 +320,18 @@ export default function PainelComanda({
                 <p className={`text-[13px] italic px-1 ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Nenhum produto encontrado.</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {itensFiltrados.map(renderBotaoProduto)}
+                  {itensFiltrados.map((item, idx) => renderBotaoProduto(item, idx))}
                 </div>
               )}
             </div>
           </div>
         </div>
           
-        {/* ÁREA DE RESUMO (CARRINHO) */}
+        {/* ÁREA DE RESUMO (CARRINHO) COM RODAPÉ FLUTUANTE AJUSTADO PARA NÃO CORTAR */}
         <div className={`w-full md:w-[35%] lg:w-[30%] flex flex-col h-full min-h-0 relative ${abaDetalheMobile === 'resumo' ? 'flex' : 'hidden md:flex'} ${temaNoturno ? 'bg-[#0A0A0A]' : 'bg-[#FAFAFA]'}`}>
-          <div className="flex-1 overflow-y-auto min-h-0 px-4 md:px-5 py-4 scrollbar-hide">
+          
+          {/* Adicionado pb-32 para garantir que os itens do carrinho não fiquem escondidos atrás do footer flutuante */}
+          <div className="flex-1 overflow-y-auto min-h-0 px-4 md:px-5 py-4 scrollbar-hide pb-32">
             {produtosAgrupados.length === 0 ? (
               <div className={`flex flex-col items-center justify-center h-full opacity-40`}>
                  <span className="text-[13px] font-medium">A comanda está vazia.</span>
@@ -379,22 +372,26 @@ export default function PainelComanda({
             )}
           </div>
           
-          <div className={`p-5 shrink-0 relative z-10 border-t ${temaNoturno ? 'border-white/[0.06] bg-[#0A0A0A]' : 'border-black/[0.06] bg-[#FAFAFA]'}`}>
-            <div className="flex justify-between items-end mb-4">
-              <span className={`text-[13px] font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Total Pendente</span>
-              <span className="text-[28px] font-semibold tracking-tighter tabular-nums">
-                <span className="text-[16px] opacity-40 mr-1 font-medium">R$</span>{produtosSeguros.filter(p => !p.pago).reduce((acc, p) => acc + Number(p.preco || 0), 0).toFixed(2)}
-              </span>
-            </div>
-            <div className="flex gap-2.5">
-              <button onClick={() => setMostrarModalPagamento(true)} disabled={produtosSeguros.filter(p=>!p.pago).length === 0} className={`flex-[2] py-3 rounded-[10px] font-semibold text-[13px] transition-colors shadow-sm disabled:opacity-30 disabled:shadow-none active:scale-[0.98] flex items-center justify-center gap-2 ${temaNoturno ? 'bg-emerald-500 text-zinc-950 hover:bg-emerald-400' : 'bg-zinc-900 text-white hover:bg-zinc-800'}`}>
-                Cobrar <span className="text-[10px] opacity-70 font-medium px-1.5 border border-current rounded hidden md:inline">F2</span>
-              </button>
-              <button onClick={encerrarMesa} disabled={!comandaAtiva || produtosSeguros.length === 0 || produtosSeguros.some(p => !p.pago)} className={`flex-1 py-3 rounded-[10px] font-medium text-[13px] transition-colors disabled:opacity-30 active:scale-[0.98] border ${temaNoturno ? 'bg-transparent border-white/[0.1] text-zinc-300 hover:bg-white/[0.04]' : 'bg-transparent border-black/[0.1] text-zinc-700 hover:bg-black/[0.02]'}`}>
-                Encerrar
-              </button>
+          {/* BARRA INFERIOR SUSPENSA (ESTILOSA E RESOLVE O PROBLEMA DO CORTE) */}
+          <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none">
+            <div className={`pointer-events-auto p-4 rounded-[16px] shadow-2xl border transition-all ${temaNoturno ? 'border-white/[0.08] bg-[#111]/95 backdrop-blur-xl shadow-black/80' : 'border-black/[0.05] bg-white/95 backdrop-blur-xl shadow-zinc-300/80'}`}>
+              <div className="flex justify-between items-end mb-4">
+                <span className={`text-[13px] font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Total Pendente</span>
+                <span className="text-[28px] font-semibold tracking-tighter tabular-nums leading-none">
+                  <span className="text-[16px] opacity-40 mr-1 font-medium">R$</span>{produtosSeguros.filter(p => !p.pago).reduce((acc, p) => acc + Number(p.preco || 0), 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex gap-2.5">
+                <button onClick={() => setMostrarModalPagamento(true)} disabled={produtosSeguros.filter(p=>!p.pago).length === 0} className={`flex-[2] py-3 rounded-[10px] font-semibold text-[13px] transition-colors shadow-sm disabled:opacity-30 disabled:shadow-none active:scale-[0.98] flex items-center justify-center gap-2 ${temaNoturno ? 'bg-emerald-500 text-zinc-950 hover:bg-emerald-400' : 'bg-zinc-900 text-white hover:bg-zinc-800'}`}>
+                  Cobrar <span className="text-[10px] opacity-70 font-medium px-1.5 border border-current rounded hidden md:inline">F2</span>
+                </button>
+                <button onClick={encerrarMesa} disabled={!comandaAtiva || produtosSeguros.length === 0 || produtosSeguros.some(p => !p.pago)} className={`flex-1 py-3 rounded-[10px] font-medium text-[13px] transition-colors disabled:opacity-30 active:scale-[0.98] border ${temaNoturno ? 'bg-transparent border-white/[0.1] text-zinc-300 hover:bg-white/[0.04]' : 'bg-transparent border-black/[0.1] text-zinc-700 hover:bg-black/[0.02]'}`}>
+                  Encerrar
+                </button>
+              </div>
             </div>
           </div>
+
         </div>
       </div>
     </div>

@@ -272,7 +272,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
 
   const labelStyle = `text-[10px] font-bold uppercase tracking-widest mb-2 block ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`;
 
-  const cardBaseStyle = `relative p-6 md:p-8 rounded-[32px] border transition-colors overflow-hidden w-full arox-cinematic
+  const cardBaseStyle = `relative p-6 md:p-8 rounded-[32px] border transition-colors overflow-hidden w-full arox-cinematic flex flex-col
     ${temaNoturno ? 'bg-[#0A0A0A] border-white/[0.04] shadow-md' : 'bg-white border-black/[0.04] shadow-sm'}`;
 
   const btnAROXPrimario = `px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-2 active:scale-95 border ${temaNoturno ? 'bg-zinc-100 text-black border-transparent hover:bg-white' : 'bg-zinc-900 text-white border-transparent hover:bg-black'}`;
@@ -290,24 +290,40 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
 
       <div className={`relative z-10 flex flex-col gap-6 w-full max-w-full mx-auto px-4 md:px-6 transition-all duration-400`}>
         
-        {/* NAV SUPERIOR - IDÊNTICA AO TABFIDELIDADE */}
-        <div className={`flex flex-wrap items-center gap-4 md:gap-6 pb-2 shrink-0 border-b mb-4 ${bordaDestaque}`}>
-          {tabs.map(tab => (
-            <button 
-              key={tab.id} 
-              onClick={() => {
-                if(tab.id === 'historico' && !historicoLiberado) {
-                  setAcaoPendente('historico'); setSenhaModal({ visivel: true, senha: '' });
-                } else {
-                  setAbaInterna(tab.id);
-                }
-              }} 
-              className={`relative py-2.5 text-[11px] font-bold tracking-[0.05em] uppercase transition-colors duration-300 ${abaInterna === tab.id ? (temaNoturno ? 'text-white' : 'text-black') : `${textSecundario} hover:${textPrincipal}`}`}
-            >
-              {tab.label}
-              {abaInterna === tab.id && <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-emerald-500 shadow-[0_-1px_8px_rgba(16,185,129,0.4)]" />}
-            </button>
-          ))}
+        {/* NAV SUPERIOR - COM OS BOTÕES NA MESMA LINHA NO DESKTOP */}
+        <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 shrink-0 border-b mb-4 ${bordaDestaque}`}>
+          <div className="flex flex-wrap items-center gap-4 md:gap-6">
+            {tabs.map(tab => (
+              <button 
+                key={tab.id} 
+                onClick={() => {
+                  if(tab.id === 'historico' && !historicoLiberado) {
+                    setAcaoPendente('historico'); setSenhaModal({ visivel: true, senha: '' });
+                  } else {
+                    setAbaInterna(tab.id);
+                  }
+                }} 
+                className={`relative py-2.5 text-[11px] font-bold tracking-[0.05em] uppercase transition-colors duration-300 ${abaInterna === tab.id ? (temaNoturno ? 'text-white' : 'text-black') : `${textSecundario} hover:${textPrincipal}`}`}
+              >
+                {tab.label}
+                {abaInterna === tab.id && <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-emerald-500 shadow-[0_-1px_8px_rgba(16,185,129,0.4)]" />}
+              </button>
+            ))}
+          </div>
+
+          {/* BOTÕES DE GAVETA: Renderizados aqui para ficarem na mesma linha */}
+          {abaInterna === 'atual' && caixaAtual?.status === 'aberto' && (
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto arox-cinematic" style={{animationDelay: '0ms'}}>
+              <button onClick={() => { setMovModal({ visivel: true, tipo: 'suprimento', valor: '', descricao: '' }); }} className={`${btnAROXPrimario} flex-1 md:flex-none justify-center`}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"></path></svg>
+                Entrada Extra
+              </button>
+              <button onClick={() => { setMovModal({ visivel: true, tipo: 'sangria', valor: '', descricao: '' }); }} className={`${btnAROXSecundario} flex-1 md:flex-none justify-center`}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M20 12H4"></path></svg>
+                Retirada (Sangria)
+              </button>
+            </div>
+          )}
         </div>
 
         {/* TRANSIÇÃO BI-DIRECIONAL */}
@@ -317,21 +333,9 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
             <div className={`w-full ${abaInterna === 'atual' ? 'block' : 'hidden'}`}>
               {caixaAtual?.status === 'aberto' ? (
                 <div className="flex flex-col gap-6 w-full">
-                  
-                  {/* AÇÕES DE GAVETA */}
-                  <div className="flex justify-end gap-3 mb-2 w-full arox-cinematic" style={{animationDelay: '0ms'}}>
-                    <button onClick={() => { setMovModal({ visivel: true, tipo: 'suprimento', valor: '', descricao: '' }); }} className={btnAROXPrimario}>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"></path></svg>
-                      Entrada Extra
-                    </button>
-                    <button onClick={() => { setMovModal({ visivel: true, tipo: 'sangria', valor: '', descricao: '' }); }} className={btnAROXSecundario}>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M20 12H4"></path></svg>
-                      Retirada (Sangria)
-                    </button>
-                  </div>
 
-                  {/* GRID 2 COLUNAS: Operacional e Valores */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+                  {/* GRID 3 COLUNAS: Operacional, Valores e Motoboys */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
                     
                     {/* COLUNA 1: Apuração do Sistema */}
                     <section className={cardBaseStyle} style={{animationDelay: '50ms'}}>
@@ -339,19 +343,19 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                           <div>
                             <h2 className="text-[20px] font-bold tracking-tight mb-1">Apuração do Sistema</h2>
-                            <p className={`text-[12px] font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Totais registrados pelas vendas e operações.</p>
+                            <p className={`text-[12px] font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Totais registrados.</p>
                           </div>
                           <button onClick={() => { if(mostrarEsperado) setMostrarEsperado(false); else { setAcaoPendente('revelar'); setSenhaModal({ visivel: true, senha: '' }); } }} 
                             className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-200 active:scale-[0.97] border shadow-sm ${temaNoturno ? 'bg-zinc-800 border-white/10 hover:bg-zinc-700 text-zinc-300 hover:text-white' : 'bg-white border-black/10 hover:bg-zinc-50 text-zinc-700 hover:text-black'}`}>
-                            {mostrarEsperado ? 'Ocultar Valores' : 'Desbloquear Visualização'}
+                            {mostrarEsperado ? 'Ocultar Valores' : 'Desbloquear'}
                           </button>
                         </div>
                         
-                        <div className={`grid transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] ${mostrarEsperado ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 pointer-events-none'}`}>
+                        <div className={`grid transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] flex-1 ${mostrarEsperado ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 pointer-events-none'}`}>
                           <div className="overflow-hidden">
                             <div className="grid grid-cols-2 gap-y-6 gap-x-6">
                               <div className="col-span-2 mb-2 pb-6 border-b border-dashed border-zinc-500/20">
-                                <p className={labelStyle}>Saldo Esperado em Gaveta</p>
+                                <p className={labelStyle}>Saldo Esperado</p>
                                 <p className={`text-[36px] font-bold tracking-tight leading-none tabular-nums ${temaNoturno ? 'text-white' : 'text-black'}`}>R$ {saldoGavetaEsperado.toFixed(2)}</p>
                               </div>
                               <div>
@@ -359,7 +363,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                                 <p className={`text-[15px] font-bold tracking-tight tabular-nums ${temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}`}>R$ {saldoInicial.toFixed(2)}</p>
                               </div>
                               <div>
-                                <p className={labelStyle}>Vendas em Dinheiro</p>
+                                <p className={labelStyle}>Vendas (Dinheiro)</p>
                                 <p className="text-[15px] font-bold tracking-tight tabular-nums text-emerald-500">+ R$ {totalSistemaDinheiro.toFixed(2)}</p>
                               </div>
                               <div>
@@ -372,7 +376,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                               </div>
                               <div className="col-span-2 pt-6 border-t border-dashed border-zinc-500/20 grid grid-cols-2 gap-6">
                                 <div>
-                                  <p className={labelStyle}>Total Maquininhas</p>
+                                  <p className={labelStyle}>Maquininhas</p>
                                   <p className={`text-[18px] font-bold tracking-tight tabular-nums ${temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}`}>R$ {totalSistemaCartao.toFixed(2)}</p>
                                 </div>
                                 <div>
@@ -397,7 +401,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                       <div className="relative z-10 flex flex-col h-full">
                         <div className="mb-6 border-b border-transparent">
                           <h2 className="text-[20px] font-bold tracking-tight mb-1">Declaração Física</h2>
-                          <p className={`text-[12px] font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Informe os valores reais contados no caixa.</p>
+                          <p className={`text-[12px] font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Informe os valores reais contados.</p>
                         </div>
                         <div className="flex flex-col gap-6 flex-1 justify-center">
                           <div>
@@ -425,37 +429,36 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                       </div>
                     </section>
 
-                  </div>
-
-                  {/* BLOCO MOTOBOY */}
-                  <section className={cardBaseStyle} style={{animationDelay: '150ms'}}>
-                    <div className="relative z-10">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-8">
-                        <div className="flex-1">
-                          <h3 className="text-[20px] font-bold tracking-tight mb-1">Acerto de Motoboys</h3>
-                          <p className={`text-[12px] font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Controle automático de taxas de entrega pendentes.</p>
+                    {/* COLUNA 3: BLOCO MOTOBOY */}
+                    <section className={cardBaseStyle} style={{animationDelay: '150ms'}}>
+                      <div className="relative z-10 flex flex-col h-full">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-8">
+                          <div className="flex-1">
+                            <h3 className="text-[20px] font-bold tracking-tight mb-1">Acerto de Motoboys</h3>
+                            <p className={`text-[12px] font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Controle de taxas pendentes.</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                             <button onClick={() => { toggleMotoboy(); }} className={`w-12 h-6 rounded-full relative transition-colors duration-300 shrink-0 shadow-inner border ${motoboyAtivo ? (temaNoturno ? 'bg-zinc-200 border-transparent' : 'bg-zinc-900 border-transparent') : (temaNoturno ? 'bg-transparent border-white/20' : 'bg-transparent border-black/20')}`}>
+                                <span className={`absolute left-1 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition-transform duration-300 shadow-sm ${temaNoturno ? (motoboyAtivo ? 'bg-zinc-900' : 'bg-zinc-400') : (motoboyAtivo ? 'bg-white' : 'bg-zinc-400')} ${motoboyAtivo ? 'translate-x-6' : 'translate-x-0'}`} />
+                             </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                           <span className={`text-[11px] font-bold uppercase tracking-wider ${motoboyAtivo ? (temaNoturno ? 'text-zinc-300' : 'text-zinc-700') : (temaNoturno ? 'text-zinc-600' : 'text-zinc-400')}`}>Motoboy Ativo</span>
-                           <button onClick={() => { toggleMotoboy(); }} className={`w-12 h-6 rounded-full relative transition-colors duration-300 shrink-0 shadow-inner border ${motoboyAtivo ? (temaNoturno ? 'bg-zinc-200 border-transparent' : 'bg-zinc-900 border-transparent') : (temaNoturno ? 'bg-transparent border-white/20' : 'bg-transparent border-black/20')}`}>
-                              <span className={`absolute left-1 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition-transform duration-300 shadow-sm ${temaNoturno ? (motoboyAtivo ? 'bg-zinc-900' : 'bg-zinc-400') : (motoboyAtivo ? 'bg-white' : 'bg-zinc-400')} ${motoboyAtivo ? 'translate-x-6' : 'translate-x-0'}`} />
+
+                        <div className={`flex flex-col items-center justify-center p-6 flex-1 rounded-[20px] transition-all duration-300 border ${motoboyAtivo ? (temaNoturno ? 'bg-white/[0.03] border-white/[0.08]' : 'bg-black/[0.02] border-black/[0.05]') : (temaNoturno ? 'bg-transparent border-white/[0.05] opacity-50' : 'bg-transparent border-black/[0.05] opacity-50')} ${motoboyAtivo ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+                           <div className="mb-6 text-center w-full">
+                              <p className={labelStyle}>Valor Pendente Hoje</p>
+                              <p className={`text-[36px] font-bold tracking-tight tabular-nums ${temaNoturno ? 'text-white' : 'text-black'}`}>
+                                 R$ {pendenteMotoboy.toFixed(2)}
+                              </p>
+                           </div>
+                           <button onClick={() => { abrirConfirmacaoMotoboy(); }} disabled={!motoboyAtivo || pendenteMotoboy <= 0} className={`w-full px-6 py-4 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all duration-200 active:scale-[0.97] border shadow-sm disabled:opacity-50 disabled:active:scale-100 ${temaNoturno ? 'bg-zinc-800 border-white/10 text-white hover:bg-zinc-700' : 'bg-white border-black/10 text-zinc-900 hover:bg-zinc-50'}`}>
+                              Autorizar Pagamento
                            </button>
                         </div>
                       </div>
+                    </section>
 
-                      <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 rounded-[20px] transition-all duration-300 border ${motoboyAtivo ? (temaNoturno ? 'bg-white/[0.03] border-white/[0.08]' : 'bg-black/[0.02] border-black/[0.05]') : (temaNoturno ? 'bg-transparent border-white/[0.05] opacity-50' : 'bg-transparent border-black/[0.05] opacity-50')} ${motoboyAtivo ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-                         <div className="mb-4 sm:mb-0">
-                            <p className={labelStyle}>Valor Pendente Hoje</p>
-                            <p className={`text-[28px] font-bold tracking-tight tabular-nums ${temaNoturno ? 'text-white' : 'text-black'}`}>
-                               R$ {pendenteMotoboy.toFixed(2)}
-                            </p>
-                         </div>
-                         <button onClick={() => { abrirConfirmacaoMotoboy(); }} disabled={!motoboyAtivo || pendenteMotoboy <= 0} className={`w-full sm:w-auto px-6 py-3 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all duration-200 active:scale-[0.97] border shadow-sm disabled:opacity-50 disabled:active:scale-100 ${temaNoturno ? 'bg-zinc-800 border-white/10 text-white hover:bg-zinc-700' : 'bg-white border-black/10 text-zinc-900 hover:bg-zinc-50'}`}>
-                            Autorizar Pagamento
-                         </button>
-                      </div>
-                    </div>
-                  </section>
+                  </div>
 
                   {/* BOTÃO FINALIZAR */}
                   <div className="pt-4 pb-12 w-full arox-cinematic" style={{animationDelay: '200ms'}}>
@@ -526,7 +529,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                             
                             <div className={`absolute left-[13.5px] md:left-[21.5px] top-7 w-2.5 h-2.5 rounded-full ring-4 shadow-sm transition-transform duration-300 group-hover:scale-125 ${corMarcador}`} />
 
-                            <div className={`relative p-6 md:p-8 rounded-[24px] transition-all duration-300 border shadow-sm hover:shadow-md overflow-hidden ${isEstornado ? (temaNoturno ? 'bg-rose-950/5 border-rose-500/10 opacity-70 grayscale-[50%]' : 'bg-rose-50/50 border-rose-200/50 opacity-70 grayscale-[50%]') : cardBaseStyle.replace('arox-cinematic', '')}`}>
+                            <div className={`relative p-6 md:p-8 rounded-[24px] transition-all duration-300 border shadow-sm hover:shadow-md overflow-hidden ${isEstornado ? (temaNoturno ? 'bg-rose-950/5 border-rose-500/10 opacity-70 grayscale-[50%]' : 'bg-rose-50/50 border-rose-200/50 opacity-70 grayscale-[50%]') : cardBaseStyle.replace('arox-cinematic flex flex-col', '')}`}>
                               
                               <div className="relative z-10 flex flex-col gap-6">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-transparent">

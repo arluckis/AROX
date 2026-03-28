@@ -1,3 +1,4 @@
+// src/components/TabComandas.js
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import CardComanda from '@/components/CardComanda';
@@ -6,7 +7,8 @@ import PreComanda from '@/components/PreComanda';
 export default function TabComandas({
   temaNoturno, comandasAbertas, modoExclusao, setModoExclusao,
   selecionadasExclusao, toggleSelecaoExclusao, confirmarExclusaoEmMassa,
-  adicionarComanda, setIdSelecionado, caixaAtual, abrirCaixaManual
+  adicionarComanda, setIdSelecionado, caixaAtual, abrirCaixaManual,
+  abaAtiva // Adicionado aqui para receber a prop
 }) {
 
   const [saldoInicial, setSaldoInicial] = useState('');
@@ -18,6 +20,14 @@ export default function TabComandas({
     const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); 
     setDataHoje(hoje);
   }, []);
+
+  // === FIX ABA FANTASMA: Se o usuário clica na Sidebar para ir para outra aba, fecha a comanda aberta ===
+  useEffect(() => {
+    if (abaAtiva !== 'comandas') {
+      setIdSelecionado(null);
+    }
+  }, [abaAtiva, setIdSelecionado]);
+
 
   // === CORREÇÃO CIRÚRGICA: Revelar a Cena Cinematográfica (Planeta) ===
   useEffect(() => {

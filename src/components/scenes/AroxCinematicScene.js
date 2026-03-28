@@ -96,7 +96,7 @@ export default function AroxCinematicScene({
       
       p.mouseX = lerp(p.mouseX, p.targetMouseX, 0.04); 
       p.mouseY = lerp(p.mouseY, p.targetMouseY, 0.04);
-      p.light = lerp(p.light, p.targetLight, p.targetLight > 5 ? 0.02 : 0.015); 
+      p.light = lerp(p.light, p.targetLight, p.targetLight > 5 ? 0.09 : 0.015); 
       p.rotation = lerp(p.rotation, p.targetRotation, 0.01); 
       p.planetY = lerp(p.planetY, p.targetPlanetY, scenePhase === 'reveal' ? 0.03 : 0.015);
       p.scale = lerp(p.scale, p.targetScale, p.targetLight > 5 ? 0.02 : 0.01);
