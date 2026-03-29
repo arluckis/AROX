@@ -1,3 +1,4 @@
+// src/components/Sidebar.js
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -8,6 +9,8 @@ export default function Sidebar({
   fazerLogout, caixaAtual
 }) {
   const [planoEmpresa, setPlanoEmpresa] = useState('Starter');
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [tabTravada, setTabTravada] = useState(false); 
 
   const isPlanetVisible = abaAtiva === 'comandas' && (!caixaAtual || caixaAtual.status !== 'aberto');
   const isDark = isPlanetVisible ? true : temaNoturno;
@@ -28,6 +31,24 @@ export default function Sidebar({
     return () => window.removeEventListener('resize', handleResize);
   }, [setMenuMobileAberto]);
 
+  // Função para mudar abas normais
+  const fecharPainelEMudarAba = (novaAba) => {
+    setAbaAtiva(novaAba);
+    setMenuMobileAberto(false);
+    // Caso precise fechar algum modal de voltar no header
+    document.getElementById('btn-voltar-header')?.click();
+  };
+
+  // Funções de hover e clique inteligente
+  const handleHoverAba = (id) => {
+    if (!tabTravada) setAbaAtiva(id);
+  };
+
+  const handleClickAba = (id) => {
+    setTabTravada(true);
+    fecharPainelEMudarAba(id);
+  };
+
   const iconeComandas = <svg className="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>;
   const iconeEncerradas = <svg className="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>;
   const iconeFaturamento = <svg className="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>;
@@ -36,13 +57,23 @@ export default function Sidebar({
   const iconeConfig = <svg className="w-full h-full" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
   const iconeLogout = <svg className="w-full h-full" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>;
 
-  const MenuItem = ({ id, titulo, icone, onClick, isAtivo }) => (
+  const MenuItem = ({ id, titulo, icone, onClick, onHover, isAtivo, hoverable }) => (
     <button 
-      onClick={onClick} 
-      className={`relative w-full rounded-[10px] xl:rounded-lg font-medium transition-colors duration-200 flex items-center outline-none group overflow-hidden 
+      onClick={(e) => {
+        if (hoverable) {
+          const target = e.currentTarget;
+          target.classList.add('scale-95', 'opacity-80');
+          setTimeout(() => {
+            if (target) target.classList.remove('scale-95', 'opacity-80');
+          }, 150);
+        }
+        onClick(e);
+      }} 
+      onMouseEnter={() => { if (hoverable && onHover) onHover(); }}
+      className={`relative w-full rounded-[10px] xl:rounded-lg font-medium transition-all duration-200 flex items-center outline-none group overflow-hidden 
         py-3 px-3.5 gap-3.5 text-[14px] xl:py-2.5 xl:px-3 xl:gap-3 xl:text-[13px]
         ${isAtivo 
-          ? (isDark ? 'text-white bg-white/[0.08]' : 'text-zinc-900 bg-black/[0.04]') 
+          ? (isDark ? 'text-white bg-white/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]' : 'text-zinc-900 bg-black/[0.04] shadow-[inset_0_1px_1px_rgba(0,0,0,0.05)]') 
           : (isDark ? 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]' : 'text-zinc-600 hover:text-zinc-900 hover:bg-black/[0.03]')
       }`}
     >
@@ -55,9 +86,13 @@ export default function Sidebar({
   return (
     <>
       <div className={`fixed inset-0 z-[90] xl:hidden bg-black/50 backdrop-blur-sm transition-opacity duration-400 ${menuMobileAberto ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setMenuMobileAberto(false)} />
-      <div className="hidden xl:block shrink-0 w-[72px]" />
+      
+      <div className={`hidden xl:block shrink-0 transition-[width] duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] will-change-[width] ${isExpanded ? 'w-[260px]' : 'w-[72px]'}`} />
 
-      <aside className={`group/sidebar fixed top-0 left-0 h-full flex flex-col z-[100] transition-all duration-300 overflow-hidden will-change-transform
+      <aside 
+        onMouseEnter={() => setIsExpanded(true)}
+        onMouseLeave={() => { setIsExpanded(false); setTabTravada(false); }}
+        className={`group/sidebar fixed top-0 left-0 h-full flex flex-col z-[100] transition-all duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] overflow-hidden will-change-transform
         ${menuMobileAberto ? 'translate-x-0 shadow-2xl' : '-translate-x-full xl:translate-x-0'}
         w-[80vw] max-w-[280px] xl:w-[72px] hover:xl:w-[260px] xl:border-r hover:xl:shadow-2xl 
         backdrop-blur-[24px] ${isDark ? 'bg-[#09090B]/85 xl:bg-[#09090B]/70 border-white/[0.04]' : 'bg-white/85 xl:bg-white/70 border-black/[0.04]'}
@@ -72,16 +107,16 @@ export default function Sidebar({
             <div className="flex flex-col gap-1">
               <p className={`px-2 xl:px-3 text-[10px] font-bold uppercase tracking-widest mb-1 whitespace-nowrap ${isDark ? 'text-zinc-500' : 'text-zinc-400'} xl:opacity-0 xl:h-0 group-hover/sidebar:xl:h-auto group-hover/sidebar:xl:opacity-100 transition-all duration-200`}>Operação</p>
               <div className="hidden xl:block h-px w-5 mx-auto bg-current opacity-10 mb-1.5 mt-0.5 group-hover/sidebar:xl:hidden transition-opacity"></div>
-              <MenuItem id="comandas" titulo="Terminal" icone={iconeComandas} isAtivo={abaAtiva === 'comandas'} onClick={() => { setAbaAtiva('comandas'); setMenuMobileAberto(false); }} />
-              <MenuItem id="fechadas" titulo="Histórico" icone={iconeEncerradas} isAtivo={abaAtiva === 'fechadas'} onClick={() => { setAbaAtiva('fechadas'); setMenuMobileAberto(false); }} />
-              {(sessao?.role === 'dono' || sessao?.perm_faturamento) && <MenuItem id="faturamento" titulo="Métricas" icone={iconeFaturamento} isAtivo={abaAtiva === 'faturamento'} onClick={() => { setAbaAtiva('faturamento'); setMenuMobileAberto(false); }} />}
+              <MenuItem id="comandas" titulo="Terminal" icone={iconeComandas} hoverable={true} isAtivo={abaAtiva === 'comandas'} onClick={() => handleClickAba('comandas')} onHover={() => handleHoverAba('comandas')} />
+              <MenuItem id="fechadas" titulo="Histórico" icone={iconeEncerradas} hoverable={true} isAtivo={abaAtiva === 'fechadas'} onClick={() => handleClickAba('fechadas')} onHover={() => handleHoverAba('fechadas')} />
+              {(sessao?.role === 'dono' || sessao?.perm_faturamento) && <MenuItem id="faturamento" titulo="Métricas" hoverable={true} icone={iconeFaturamento} isAtivo={abaAtiva === 'faturamento'} onClick={() => handleClickAba('faturamento')} onHover={() => handleHoverAba('faturamento')} />}
             </div>
 
             <div className="flex flex-col gap-1">
               <p className={`px-2 xl:px-3 text-[10px] font-bold uppercase tracking-widest mb-1 whitespace-nowrap ${isDark ? 'text-zinc-500' : 'text-zinc-400'} xl:opacity-0 xl:h-0 group-hover/sidebar:xl:h-auto group-hover/sidebar:xl:opacity-100 transition-all duration-200`}>Gestão</p>
               <div className="hidden xl:block h-px w-5 mx-auto bg-current opacity-10 mb-1.5 mt-0.5 group-hover/sidebar:xl:hidden transition-opacity"></div>
-              <MenuItem id="caixa" titulo="Caixa Central" icone={iconeCaixa} isAtivo={abaAtiva === 'caixa'} onClick={() => { setAbaAtiva('caixa'); setMenuMobileAberto(false); }} />
-              {(sessao?.role === 'dono' || sessao?.perm_fidelidade || sessao?.perm_estudo) && <MenuItem id="fidelidade" titulo="Clientes" icone={iconeClientes} isAtivo={abaAtiva === 'fidelidade'} onClick={() => { setAbaAtiva('fidelidade'); setMenuMobileAberto(false); }} />}
+              <MenuItem id="caixa" titulo="Caixa Central" icone={iconeCaixa} hoverable={true} isAtivo={abaAtiva === 'caixa'} onClick={() => handleClickAba('caixa')} onHover={() => handleHoverAba('caixa')} />
+              {(sessao?.role === 'dono' || sessao?.perm_fidelidade || sessao?.perm_estudo) && <MenuItem id="fidelidade" titulo="Clientes" hoverable={true} icone={iconeClientes} isAtivo={abaAtiva === 'fidelidade'} onClick={() => handleClickAba('fidelidade')} onHover={() => handleHoverAba('fidelidade')} />}
             </div>
          </div>
 
@@ -101,10 +136,20 @@ export default function Sidebar({
                  </div>
                </div>
                
-               {/* BOTÃO ÚNICO QUE CHAMA O ORQUESTRADOR */}
-               {sessao?.role === 'dono' && <MenuItem titulo="Ajustes do Sistema" icone={iconeConfig} onClick={() => { setMostrarConfigEmpresa(true); setMenuMobileAberto(false); }} />}
+               {/* CORREÇÃO AQUI: Voltamos a disparar o setMostrarConfigEmpresa */}
+               {sessao?.role === 'dono' && (
+                 <MenuItem 
+                    titulo="Ajustes do Sistema" 
+                    hoverable={false} 
+                    icone={iconeConfig} 
+                    onClick={() => {
+                      setMostrarConfigEmpresa(true); 
+                      setMenuMobileAberto(false);
+                    }} 
+                 />
+               )}
                
-               <MenuItem titulo={temaNoturno ? 'Modo Claro' : 'Modo Escuro'} icone={temaNoturno ? <svg className="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg> : <svg className="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>} onClick={() => setTemaNoturno(!temaNoturno)} />
+               <MenuItem titulo={temaNoturno ? 'Modo Claro' : 'Modo Escuro'} hoverable={false} icone={temaNoturno ? <svg className="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg> : <svg className="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>} onClick={() => setTemaNoturno(!temaNoturno)} />
                
                <button onClick={fazerLogout} className={`relative w-full rounded-[10px] xl:rounded-lg font-medium transition-colors duration-200 flex items-center outline-none group overflow-hidden mt-1 py-3 px-3.5 gap-3.5 text-[14px] xl:py-2.5 xl:px-3 xl:gap-3 xl:text-[13px] ${isDark ? 'text-zinc-500 hover:text-red-400 hover:bg-red-400/10' : 'text-zinc-500 hover:text-red-600 hover:bg-red-50'}`}>
                  <span className="shrink-0 transition-transform duration-300 w-[20px] h-[20px] xl:w-[18px] xl:h-[18px] opacity-70 group-hover:opacity-100 flex items-center justify-center">{iconeLogout}</span>

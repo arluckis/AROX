@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
-import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, AlertTriangle, DollarSign, Zap, Clock, GripHorizontal, Award, BarChart2, Activity } from 'lucide-react';
 
@@ -79,6 +79,32 @@ export default function TabFaturamento({
   const [insightAtivo, setInsightAtivo] = useState(0);
   const [activeId, setActiveId] = useState(null); 
 
+  // --- BLINDAGEM 1: Extração de valores primitivos para evitar recálculo por perda de referência ---
+  const strHoje = getHoje?.() || '';
+  const strMesAtual = getMesAtual?.() || '';
+  const strAnoAtual = getAnoAtual?.() || '';
+  
+  const fTipo = filtroTempo?.tipo || '';
+  const fValor = filtroTempo?.valor || '';
+  const fInicio = filtroTempo?.inicio || '';
+  const fFim = filtroTempo?.fim || '';
+
+  const fatTotalSafe = faturamentoTotal || 0;
+  const lucroSafe = lucroEstimado || 0;
+  const totalComandas = (comandasFiltradas || []).length;
+  const ticketMedio = totalComandas > 0 ? (fatTotalSafe / totalComandas) : 0;
+
+  // --- BLINDAGEM 2: Memoização do ranking para não gerar novo array a cada renderização ---
+  const rankingMaiusculo = useMemo(() => {
+    return (rankingProdutos || []).map(p => ({ 
+      ...p, 
+      nome: p?.nome || 'Desconhecido',
+      custo: Math.max(0, (p?.valor || 0) - (p?.lucro || 0)) || 0,
+      lucro: p?.lucro || 0,
+      valor: p?.valor || 0
+    }));
+  }, [rankingProdutos]);
+
   useEffect(() => {
     const widgetsSalvos = localStorage.getItem('bessa_widgets_faturamento_v10');
     const ordemSalva = localStorage.getItem('bessa_ordem_faturamento_v10');
@@ -98,8 +124,8 @@ export default function TabFaturamento({
   };
 
   const mudarTempo = (direcao) => {
-    if (filtroTempo?.tipo === 'dia') {
-      const [ano, mes, dia] = (filtroTempo.valor || getHoje()).split('-').map(Number);
+    if (fTipo === 'dia') {
+      const [ano, mes, dia] = (fValor || strHoje).split('-').map(Number);
       const dataObj = new Date(ano, mes - 1, dia);
       dataObj.setDate(dataObj.getDate() + direcao);
       
@@ -108,8 +134,8 @@ export default function TabFaturamento({
       const diaNovo = String(dataObj.getDate()).padStart(2, '0');
       
       setFiltroTempo({ ...filtroTempo, valor: `${anoNovo}-${mesNovo}-${diaNovo}` });
-    } else if (filtroTempo?.tipo === 'mes') {
-      const [ano, mes] = (filtroTempo.valor || getMesAtual()).split('-').map(Number);
+    } else if (fTipo === 'mes') {
+      const [ano, mes] = (fValor || strMesAtual).split('-').map(Number);
       const dataObj = new Date(ano, mes - 1, 1);
       dataObj.setMonth(dataObj.getMonth() + direcao);
       
@@ -121,24 +147,12 @@ export default function TabFaturamento({
   };
 
   const podeAvancar = () => {
-    if (filtroTempo?.tipo === 'dia') return filtroTempo.valor < getHoje();
-    if (filtroTempo?.tipo === 'mes') return filtroTempo.valor < getMesAtual();
+    if (fTipo === 'dia') return fValor < strHoje;
+    if (fTipo === 'mes') return fValor < strMesAtual;
     return false; 
   };
 
-  const fatTotalSafe = faturamentoTotal || 0;
-  const lucroSafe = lucroEstimado || 0;
-  const totalComandas = (comandasFiltradas || []).length;
-  const ticketMedio = totalComandas > 0 ? (fatTotalSafe / totalComandas) : 0;
-  
-  const rankingMaiusculo = (rankingProdutos || []).map(p => ({ 
-    ...p, 
-    nome: p?.nome || 'Desconhecido',
-    custo: Math.max(0, (p?.valor || 0) - (p?.lucro || 0)) || 0,
-    lucro: p?.lucro || 0,
-    valor: p?.valor || 0
-  }));
-
+  // --- BLINDAGEM 3: Arrays de dependências ajustados usando apenas as strings extraídas ---
   const { diffAbsoluta, percentualReal, percentualBarra, bateuMeta, semHistorico, diferenca, mediaHistorica } = useMemo(() => {
     const defaultMetrics = { mediaHistorica: 0, diferenca: 0, diffAbsoluta: 0, percentualReal: 0, percentualBarra: 0, bateuMeta: false, semHistorico: true };
     if (!comandas || !Array.isArray(comandas) || comandas.length === 0) return defaultMetrics;
@@ -146,8 +160,8 @@ export default function TabFaturamento({
     let media = 0;
     let hasPastData = false;
 
-    if (filtroTempo?.tipo === 'dia') {
-       const dataAtual = filtroTempo.valor || getHoje();
+    if (fTipo === 'dia') {
+       const dataAtual = fValor || strHoje;
        const diaSemanaAtual = new Date(dataAtual + 'T12:00:00').getDay();
        let somaPassada = 0;
        let diasUnicos = new Set();
@@ -171,27 +185,27 @@ export default function TabFaturamento({
        let pastStart = null;
        let pastEnd = null;
        
-       if (filtroTempo?.tipo === '7 dias') {
-           let end = new Date(getHoje() + 'T12:00:00');
+       if (fTipo === '7 dias') {
+           let end = new Date(strHoje + 'T12:00:00');
            end.setDate(end.getDate() - 7);
            let start = new Date(end.getTime());
            start.setDate(start.getDate() - 6);
            pastStart = start.toISOString().split('T')[0];
            pastEnd = end.toISOString().split('T')[0];
-       } else if (filtroTempo?.tipo === 'mes') {
-           const [ano, mes] = (filtroTempo.valor || getMesAtual()).split('-');
-           let prevMes = parseInt(mes) - 1; let prevAno = parseInt(ano);
+       } else if (fTipo === 'mes') {
+           const [ano, mes] = (fValor || strMesAtual).split('-');
+           let prevMes = parseInt(mes, 10) - 1; let prevAno = parseInt(ano, 10);
            if (prevMes === 0) { prevMes = 12; prevAno--; }
            pastStart = `${prevAno}-${String(prevMes).padStart(2, '0')}-01`;
            pastEnd = `${prevAno}-${String(prevMes).padStart(2, '0')}-31`; 
-       } else if (filtroTempo?.tipo === 'ano') {
-           const valAno = parseInt(filtroTempo.valor || getAnoAtual());
+       } else if (fTipo === 'ano') {
+           const valAno = parseInt(fValor || strAnoAtual, 10);
            pastStart = `${valAno - 1}-01-01`;
            pastEnd = `${valAno - 1}-12-31`;
-       } else if (filtroTempo?.tipo === 'periodo') {
-           if (!filtroTempo.inicio || !filtroTempo.fim) return defaultMetrics;
-           const start = new Date(filtroTempo.inicio + 'T12:00:00');
-           const end = new Date(filtroTempo.fim + 'T12:00:00');
+       } else if (fTipo === 'periodo') {
+           if (!fInicio || !fFim) return defaultMetrics;
+           const start = new Date(fInicio + 'T12:00:00');
+           const end = new Date(fFim + 'T12:00:00');
            const diffTime = Math.abs(end - start);
            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
            
@@ -232,13 +246,12 @@ export default function TabFaturamento({
       percentualReal: pctReal || 0, percentualBarra: pctBarra || 0, 
       bateuMeta: bateu, semHistorico: false 
     };
-  }, [comandas, filtroTempo, fatTotalSafe, getHoje, getMesAtual, getAnoAtual]);
+  }, [comandas, fTipo, fValor, fInicio, fFim, fatTotalSafe, strHoje, strMesAtual, strAnoAtual]);
 
   const dadosGraficoAcumulado = useMemo(() => {
-    // Uso do ARRAY_VAZIO global para evitar perda de referência
-    if (filtroTempo?.tipo !== 'dia' || !comandas || comandas.length === 0) return ARRAY_VAZIO;
+    if (fTipo !== 'dia' || !comandas || comandas.length === 0) return ARRAY_VAZIO;
 
-    const dataAtual = filtroTempo.valor || getHoje();
+    const dataAtual = fValor || strHoje;
     const diaSemanaAtual = new Date(dataAtual + 'T12:00:00').getDay();
 
     let hourlyCurrent = Array(24).fill(0);
@@ -267,7 +280,7 @@ export default function TabFaturamento({
     }
 
     const horaAtualDoSistema = new Date().getHours();
-    const isHoje = dataAtual === getHoje();
+    const isHoje = dataAtual === strHoje;
 
     let accCur = 0, accPast = 0;
     const res = [];
@@ -283,8 +296,7 @@ export default function TabFaturamento({
         }
     }
     return res;
-  }, [comandas, filtroTempo, getHoje]);
-
+  }, [comandas, fTipo, fValor, strHoje]);
 
   const { mapaCalor, maxCalor, topCombos } = useMemo(() => {
     const horasVisiveis = [17, 18, 19, 20, 21, 22, 23];
@@ -335,7 +347,7 @@ export default function TabFaturamento({
   const insightsDinamicos = useMemo(() => {
     const frases = [];
     const totalPagamentos = (dadosPizza || []).reduce((acc, item) => acc + (item?.value || 0), 0);
-    const aindaSemMovimentoHoje = filtroTempo?.tipo === 'dia' && fatTotalSafe === 0 && filtroTempo?.valor === getHoje();
+    const aindaSemMovimentoHoje = fTipo === 'dia' && fatTotalSafe === 0 && fValor === strHoje;
 
     if (aindaSemMovimentoHoje) {
       let maxVolHoje = 0;
@@ -357,17 +369,13 @@ export default function TabFaturamento({
 
       if (maxVolHoje > 0) {
         frases.push({ 
-          tipo: 'info', 
-          icone: <Zap className="w-5 h-5 text-amber-500" />, 
-          titulo: 'Previsão Operacional', 
-          texto: `Atenção: com base no seu histórico, prepare a operação para um maior fluxo esperado próximo às ${horaPicoHoje}h.` 
+          tipo: 'info', icone: <Zap className="w-5 h-5 text-amber-500" />, 
+          titulo: 'Previsão Operacional', texto: `Atenção: com base no seu histórico, prepare a operação para um maior fluxo esperado próximo às ${horaPicoHoje}h.` 
         });
       } else {
         frases.push({ 
-          tipo: 'neutro', 
-          icone: <Clock className={`w-5 h-5 ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`} />, 
-          titulo: 'Aguardando Operação', 
-          texto: 'Aguardando movimentações suficientes para gerar inteligência de dados.' 
+          tipo: 'neutro', icone: <Clock className={`w-5 h-5 ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`} />, 
+          titulo: 'Aguardando Operação', texto: 'Aguardando movimentações suficientes para gerar inteligência de dados.' 
         });
       }
       return frases; 
@@ -420,7 +428,7 @@ export default function TabFaturamento({
       const horaAtual = new Date().getHours();
       const diaNome = mapaCalor?.diasSemana?.[maxD] || '';
       
-      if (filtroTempo?.tipo === 'dia') {
+      if (fTipo === 'dia') {
         frases.push({ 
           tipo: 'info', icone: <Zap className="w-5 h-5 text-amber-500" />, 
           titulo: 'Previsão de Pico Hoje', texto: `Com base no histórico recente, prepare-se para maior volume próximo às ${maxH}h.` 
@@ -456,7 +464,7 @@ export default function TabFaturamento({
     }
     
     return frases;
-  }, [rankingMaiusculo, dadosPizza, semHistorico, diferenca, diffAbsoluta, mediaHistorica, maxCalor, mapaCalor, fatTotalSafe, filtroTempo, getHoje]);
+  }, [rankingMaiusculo, dadosPizza, semHistorico, diferenca, diffAbsoluta, mediaHistorica, maxCalor, mapaCalor, fatTotalSafe, fTipo, fValor, strHoje]);
 
   useEffect(() => {
     if (!insightsDinamicos || insightsDinamicos.length <= 1) return;
@@ -499,7 +507,7 @@ export default function TabFaturamento({
               <p className={`text-[11px] opacity-70 ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Comparado à média de períodos anteriores</p>
             </div>
 
-            {semHistorico || (filtroTempo?.tipo === 'dia' && fatTotalSafe === 0 && filtroTempo?.valor === getHoje()) ? (
+            {semHistorico || (fTipo === 'dia' && fatTotalSafe === 0 && fValor === strHoje) ? (
               <div className="flex-1 flex flex-col items-center justify-center mt-4">
                 <p className={`text-[13px] font-medium ${temaNoturno ? 'text-zinc-600' : 'text-zinc-400'}`}>Sem base de comparação</p>
               </div>
@@ -537,7 +545,7 @@ export default function TabFaturamento({
                 <h3 className={`flex items-center gap-2 mb-1 ${labelArox}`}>
                   <TrendingUp className="w-3.5 h-3.5" /> Linha Temporal de Receita
                 </h3>
-                <p className={`text-[11px] opacity-70 ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Acúmulo intradiário vs Média histórica (mesmo dia da semana)</p>
+                <p className={`text-[11px] opacity-70 ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Acúmulo intradiário vs Média histórica</p>
               </div>
               
               <div className="flex items-center gap-4 mt-1 sm:mt-0">
@@ -553,9 +561,9 @@ export default function TabFaturamento({
             </div>
             
             {dadosGraficoAcumulado.length > 0 ? (
-              // FIX APLICADO: Trocado 'flex-1' por dimensões controladas e minHeight
+              // BLINDAGEM 4: Adicionado debounce={50} para evitar loop de estado por redimensionamento
               <div className="w-full h-[140px] min-h-[140px] mt-4 -ml-4 relative z-10 overflow-hidden">
-                <ResponsiveContainer width="100%" height="100%" minHeight={140} minWidth={200}>
+                <ResponsiveContainer width="100%" height="100%" minHeight={140} minWidth={200} debounce={50}>
                   <AreaChart data={dadosGraficoAcumulado} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorAtual" x1="0" y1="0" x2="0" y2="1">
@@ -742,9 +750,9 @@ export default function TabFaturamento({
               </h3>
             </div>
             {rankingMaiusculo && rankingMaiusculo.length > 0 ? (
-              // FIX APLICADO: Trocado 'flex-1' por dimensões controladas e minHeight
+              // BLINDAGEM 4: Adicionado debounce={50} no ResponsiveContainer
               <div className="w-full h-[160px] min-h-[160px] overflow-hidden">
-                <ResponsiveContainer width="100%" height="100%" minHeight={160} minWidth={200}>
+                <ResponsiveContainer width="100%" height="100%" minHeight={160} minWidth={200} debounce={50}>
                   <BarChart data={rankingMaiusculo} layout="vertical" margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
                     <XAxis type="number" hide />
                     <YAxis dataKey="nome" type="category" axisLine={false} tickLine={false} tick={{fill: temaNoturno ? '#a1a1aa' : '#71717a', fontSize: 11, fontWeight: 700}} width={140} />
@@ -819,10 +827,10 @@ export default function TabFaturamento({
   const widgetsVisiveis = useMemo(() => {
     return ordemGraficos.filter(id => {
       if (!widgets?.[id]) return false;
-      if (id === 'linhaTemporal' && filtroTempo?.tipo !== 'dia') return false;
+      if (id === 'linhaTemporal' && fTipo !== 'dia') return false;
       return true;
     });
-  }, [ordemGraficos, widgets, filtroTempo?.tipo]);
+  }, [ordemGraficos, widgets, fTipo]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), 
@@ -866,20 +874,20 @@ export default function TabFaturamento({
          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
             <div className={`flex p-1.5 rounded-xl border shadow-sm w-full sm:w-auto ${temaNoturno ? 'bg-[#0A0A0A]/80 backdrop-blur-md border-white/10' : 'bg-white/80 backdrop-blur-md border-black/10'}`}>
               {['dia', '7 dias', 'mes', 'ano', 'periodo'].map(t => (
-                 <button key={t} onClick={() => setFiltroTempo({...filtroTempo, tipo: t, valor: t==='dia'||t==='7 dias'?getHoje():t==='mes'?getMesAtual():getAnoAtual()})} 
-                 className={`flex-1 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 ease-out ${filtroTempo?.tipo === t ? (temaNoturno ? 'bg-white/10 text-white shadow-sm' : 'bg-black/5 text-zinc-900 shadow-sm') : (temaNoturno ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-500 hover:text-zinc-700')}`}>
+                 <button key={t} onClick={() => setFiltroTempo({...filtroTempo, tipo: t, valor: t==='dia'||t==='7 dias'?strHoje:t==='mes'?strMesAtual:strAnoAtual})} 
+                 className={`flex-1 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 ease-out ${fTipo === t ? (temaNoturno ? 'bg-white/10 text-white shadow-sm' : 'bg-black/5 text-zinc-900 shadow-sm') : (temaNoturno ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-500 hover:text-zinc-700')}`}>
                    {t}
                  </button>
               ))}
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              {(filtroTempo?.tipo === 'dia' || filtroTempo?.tipo === 'mes') && (
+              {(fTipo === 'dia' || fTipo === 'mes') && (
                 <>
                   <button onClick={() => mudarTempo(-1)} className={`p-2.5 rounded-xl border transition-all duration-300 hover:scale-105 active:scale-95 flex-shrink-0 shadow-sm ${temaNoturno ? 'bg-[#0A0A0A] border-white/10 text-zinc-400 hover:text-white' : 'bg-white border-black/10 text-zinc-500 hover:text-black'}`}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg>
                   </button>
-                  <input type={filtroTempo?.tipo === 'dia' ? 'date' : 'month'} value={filtroTempo?.valor || ''} max={filtroTempo?.tipo === 'dia' ? getHoje() : getMesAtual()} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} 
+                  <input type={fTipo === 'dia' ? 'date' : 'month'} value={fValor || ''} max={fTipo === 'dia' ? strHoje : strMesAtual} onChange={e => setFiltroTempo({...filtroTempo, valor: e.target.value})} 
                     className={`px-4 py-2.5 text-center border rounded-xl outline-none text-[12px] font-bold uppercase tracking-wider transition-all w-full sm:w-36 focus:border-zinc-500 shadow-sm ${temaNoturno ? 'bg-[#0A0A0A] border-white/10 [color-scheme:dark]' : 'bg-white border-black/10'}`} />
                   {podeAvancar() ? (
                     <button onClick={() => mudarTempo(1)} className={`p-2.5 rounded-xl border transition-all duration-300 hover:scale-105 active:scale-95 flex-shrink-0 shadow-sm ${temaNoturno ? 'bg-[#0A0A0A] border-white/10 text-zinc-400 hover:text-white' : 'bg-white border-black/10 text-zinc-500 hover:text-black'}`}>
@@ -888,11 +896,11 @@ export default function TabFaturamento({
                   ) : <div className="w-[42px]" />}
                 </>
               )}
-              {filtroTempo?.tipo === 'periodo' && (
+              {fTipo === 'periodo' && (
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border shadow-sm w-full ${temaNoturno ? 'bg-[#0A0A0A] border-white/10' : 'bg-white border-black/10'}`}>
-                  <input type="date" value={filtroTempo?.inicio || ''} onChange={e => setFiltroTempo({...filtroTempo, inicio: e.target.value})} className={`bg-transparent outline-none text-[11px] font-bold uppercase tracking-wider w-full ${temaNoturno ? '[color-scheme:dark]' : ''}`} />
+                  <input type="date" value={fInicio || ''} onChange={e => setFiltroTempo({...filtroTempo, inicio: e.target.value})} className={`bg-transparent outline-none text-[11px] font-bold uppercase tracking-wider w-full ${temaNoturno ? '[color-scheme:dark]' : ''}`} />
                   <span className={`text-[12px] font-medium opacity-30`}>/</span>
-                  <input type="date" value={filtroTempo?.fim || ''} onChange={e => setFiltroTempo({...filtroTempo, fim: e.target.value})} className={`bg-transparent outline-none text-[11px] font-bold uppercase tracking-wider w-full ${temaNoturno ? '[color-scheme:dark]' : ''}`} />
+                  <input type="date" value={fFim || ''} onChange={e => setFiltroTempo({...filtroTempo, fim: e.target.value})} className={`bg-transparent outline-none text-[11px] font-bold uppercase tracking-wider w-full ${temaNoturno ? '[color-scheme:dark]' : ''}`} />
                 </div>
               )}
             </div>

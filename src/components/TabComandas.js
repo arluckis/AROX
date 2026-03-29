@@ -204,7 +204,7 @@ export default function TabComandas({
             </button>
 
             {mostrarAntigas && (
-              <div className="flex flex-wrap gap-5 justify-start w-full mt-5 animate-in slide-in-from-top-2 fade-in duration-500">
+              <div className="flex flex-wrap gap-5 justify-start w-full mt-5 p-2 pt-3 animate-in slide-in-from-top-2 fade-in duration-500">
                 {comandasAntigas.map(comanda => (
                   <div key={comanda.id} className="relative group transition-all duration-300 opacity-90 hover:opacity-100 hover:-translate-y-1">
                     <CardComanda comanda={comanda} onClick={() => setIdSelecionado(comanda.id)} temaNoturno={temaNoturno} />
@@ -230,8 +230,8 @@ export default function TabComandas({
             isSistemaJaAcessado={true}
           />
         ) : (
-          /* 3. GRID PRINCIPAL */
-          <div className="flex flex-wrap gap-5 justify-start w-full">
+          /* 3. GRID PRINCIPAL (O pl-2 pt-2 dá o respiro necessário pro número não cortar) */
+          <div className="flex flex-wrap gap-5 justify-start w-full pl-2 pt-2">
             
             {/* Empty State AROX */}
             {comandasHoje.length === 0 && !modoExclusao && (
@@ -248,7 +248,7 @@ export default function TabComandas({
                 
                 {/* Atalho de Teclado Premium */}
                 {index < 9 && !modoExclusao && (
-                  <div className="absolute -top-3 -left-3 z-20 pointer-events-none transition-all duration-300 opacity-0 group-hover:opacity-100 group-hover:scale-110">
+                  <div className="absolute -top-1 -left-1 z-20 pointer-events-none transition-all duration-300 opacity-0 group-hover:opacity-100 group-hover:scale-110">
                       <div className={`w-7 h-7 rounded-xl border flex items-center justify-center text-[12px] font-black shadow-lg backdrop-blur-md ${temaNoturno ? 'bg-zinc-800/90 border-white/10 text-zinc-300' : 'bg-white/90 border-black/10 text-zinc-700'}`}>
                         {index + 1}
                       </div>

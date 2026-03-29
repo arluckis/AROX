@@ -98,7 +98,6 @@ export default function PainelComanda({
       }
       if (e.key === 'F4') { 
         e.preventDefault();
-        // Apenas muda o foco para o novo input no Header, não abre mais painel antigo
         const inputCliente = document.querySelector('.input-cliente');
         if (inputCliente) { inputCliente.focus(); } 
       }
@@ -204,9 +203,8 @@ export default function PainelComanda({
     <button 
       key={item.id || Math.random()} 
       onClick={() => adicionarProdutoNaComanda(item)} 
-      // Adicionado animate-in para cada botão de produto aparecer de forma fluida
       className={`p-3.5 rounded-xl flex justify-between items-center gap-3 transition-colors active:scale-[0.98] text-left border animate-in fade-in zoom-in-95 fill-mode-both ${temaNoturno ? 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.06] hover:border-white/10' : 'bg-white border-black/[0.06] shadow-sm hover:border-black/15 hover:shadow'}`}
-      style={{ animationDelay: `${Math.min(idx * 20, 300)}ms` }} // Efeito em cascata
+      style={{ animationDelay: `${Math.min(idx * 20, 300)}ms` }}
     >
       <div className="flex flex-col min-w-0 pr-2">
         <span className={`font-semibold text-[13px] tracking-tight truncate ${temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}`}>
@@ -227,18 +225,17 @@ export default function PainelComanda({
   );
 
   return (
-    // Adicionado animate-in slide-in-from-bottom-4 para toda a tela entrar de forma suave
-    <div className={`flex flex-col w-full h-[calc(100vh-64px)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out ${temaNoturno ? 'bg-[#0A0A0A]' : 'bg-[#FAFAFA]'}`}>
+    <div className={`flex flex-col w-full flex-1 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out ${temaNoturno ? 'bg-[#0A0A0A]' : 'bg-[#FAFAFA]'}`}>
       
       {/* BARRA SUPERIOR E DE BUSCA */}
-      <div className={`w-full shrink-0 flex flex-col md:flex-row items-center justify-between gap-4 p-4 md:px-5 border-b min-h-[64px] z-10 ${temaNoturno ? 'border-white/[0.06]' : 'border-black/[0.06]'}`}>
+      <div className={`w-full shrink-0 flex flex-col md:flex-row items-center justify-between gap-4 p-4 md:px-5 border-b z-10 ${temaNoturno ? 'border-white/[0.06]' : 'border-black/[0.06]'}`}>
         
         <div className="w-full md:w-[320px] lg:w-[400px] relative">
           <input 
               ref={inputBuscaRef} type="text" 
               placeholder="Pesquisar item ou código..." 
               value={filtroTexto} onChange={(e) => setFiltroTexto(e.target.value)} onKeyDown={handleBuscaKeyDown}
-              className={`w-full py-2 pl-9 pr-3 rounded-[8px] outline-none font-medium text-[13px] transition-colors border ${temaNoturno ? 'bg-white/[0.04] border-transparent text-white focus:bg-white/[0.06] focus:border-white/20 placeholder-zinc-500' : 'bg-black/[0.03] border-transparent text-zinc-900 focus:bg-white focus:border-black/15 shadow-sm placeholder-zinc-500'}`}
+              className={`input-busca-produto w-full py-2 pl-9 pr-3 rounded-[8px] outline-none font-medium text-[13px] transition-colors border ${temaNoturno ? 'bg-white/[0.04] border-transparent text-white focus:bg-white/[0.06] focus:border-white/20 placeholder-zinc-500' : 'bg-black/[0.03] border-transparent text-zinc-900 focus:bg-white focus:border-black/15 shadow-sm placeholder-zinc-500'}`}
           />
           <svg className={`w-4 h-4 absolute left-3 top-[10px] ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
         </div>
@@ -300,7 +297,7 @@ export default function PainelComanda({
         
         {/* ÁREA DE CARDÁPIO */}
         <div className={`w-full md:w-[65%] lg:w-[70%] flex flex-col h-full min-h-0 border-r ${abaDetalheMobile === 'menu' ? 'flex' : 'hidden md:flex'} ${temaNoturno ? 'border-white/[0.06]' : 'border-black/[0.06]'}`}>
-          <div className="flex-1 overflow-y-auto min-h-0 p-4 md:p-6 pb-12 scrollbar-hide">
+          <div className="flex-1 overflow-y-auto min-h-0 p-4 md:p-6 pb-20 scrollbar-hide">
             
             <button onClick={() => setMostrarModalPeso(true)} className={`w-full flex justify-between items-center p-4 md:p-5 mb-6 rounded-xl border transition-colors active:scale-[0.99] group ${temaNoturno ? 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04] hover:border-white/20' : 'bg-white border-black/[0.06] shadow-sm hover:border-black/15'}`}>
                <div className="flex flex-col text-left gap-0.5">
@@ -327,11 +324,10 @@ export default function PainelComanda({
           </div>
         </div>
           
-        {/* ÁREA DE RESUMO (CARRINHO) COM RODAPÉ FLUTUANTE AJUSTADO PARA NÃO CORTAR */}
+        {/* ÁREA DE RESUMO (CARRINHO) COM O CARD DEFINITIVAMENTE CORRIGIDO */}
         <div className={`w-full md:w-[35%] lg:w-[30%] flex flex-col h-full min-h-0 relative ${abaDetalheMobile === 'resumo' ? 'flex' : 'hidden md:flex'} ${temaNoturno ? 'bg-[#0A0A0A]' : 'bg-[#FAFAFA]'}`}>
           
-          {/* Adicionado pb-32 para garantir que os itens do carrinho não fiquem escondidos atrás do footer flutuante */}
-          <div className="flex-1 overflow-y-auto min-h-0 px-4 md:px-5 py-4 scrollbar-hide pb-32">
+          <div className="flex-1 overflow-y-auto min-h-0 px-4 md:px-5 py-4 scrollbar-hide">
             {produtosAgrupados.length === 0 ? (
               <div className={`flex flex-col items-center justify-center h-full opacity-40`}>
                  <span className="text-[13px] font-medium">A comanda está vazia.</span>
@@ -372,9 +368,9 @@ export default function PainelComanda({
             )}
           </div>
           
-          {/* BARRA INFERIOR SUSPENSA (ESTILOSA E RESOLVE O PROBLEMA DO CORTE) */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none">
-            <div className={`pointer-events-auto p-4 rounded-[16px] shadow-2xl border transition-all ${temaNoturno ? 'border-white/[0.08] bg-[#111]/95 backdrop-blur-xl shadow-black/80' : 'border-black/[0.05] bg-white/95 backdrop-blur-xl shadow-zinc-300/80'}`}>
+          {/* O pb-10 md:pb-6 garante distância IMPOSSÍVEL de ser ultrapassada */}
+          <div className="w-full shrink-0 p-4 pb-10 md:pb-6 mt-auto">
+            <div className={`p-4 rounded-[16px] shadow-2xl border transition-all ${temaNoturno ? 'border-white/[0.08] bg-[#111]/95 backdrop-blur-xl shadow-black/80' : 'border-black/[0.05] bg-white/95 backdrop-blur-xl shadow-zinc-300/80'}`}>
               <div className="flex justify-between items-end mb-4">
                 <span className={`text-[13px] font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Total Pendente</span>
                 <span className="text-[28px] font-semibold tracking-tighter tabular-nums leading-none">
