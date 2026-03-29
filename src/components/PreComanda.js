@@ -14,8 +14,7 @@ export default function PreComanda({
   isSistemaJaAcessado = false,
   onEnvUpdate 
 }) {
-  // Removida a verificação de temPendencia do estado inicial
-  const estadoInicial = isFreshLogin ? 'boas-vindas' : (isSistemaJaAcessado ? 'inicio' : (isAntecipado ? 'antecipado' : 'inicio'));
+  const estadoInicial = (isFreshLogin || caixaAberto) ? 'boas-vindas' : (isSistemaJaAcessado ? 'inicio' : (isAntecipado ? 'antecipado' : 'inicio'));
 
   const [etapa, setEtapa] = useState(estadoInicial);
   const [valorCaixa, setValorCaixa] = useState('');
@@ -25,9 +24,10 @@ export default function PreComanda({
   const isProcessingRef = useRef(false);
   const [saudacaoText, setSaudacaoText] = useState('Bem-vindo');
 
+  // Removido o brilho do Dark Mode. Mantendo escuridão total no Dark e luz no Light.
   const exitState = temaAnterior === 'light'
-    ? { light: 600.0, rotation: 45, planetY: 0, scale: 6.50, blur: 15, overlay: 1 }
-    : { light: 0.0, rotation: -20, planetY: 0, scale: 4.50, blur: 20, overlay: 1 };
+    ? { light: 600.0, rotation: 12, planetY: 0, scale: 1.02, blur: 15, overlay: 1 }
+    : { light: 0.0, rotation: 12, planetY: 0, scale: 1.00, blur: 20, overlay: 1 };
 
   const envStates = {
     'boas-vindas': { light: 1.0, rotation: 0,  planetY: 0, scale: 0.98, blur: 0, overlay: 0 },
@@ -81,8 +81,7 @@ export default function PreComanda({
       return; 
     }
 
-    // Removida a verificação de temPendencia
-    const estadoCorreto = isFreshLogin ? 'boas-vindas' : (isSistemaJaAcessado ? 'inicio' : (isAntecipado ? 'antecipado' : 'inicio'));
+    const estadoCorreto = (isFreshLogin || caixaAberto) ? 'boas-vindas' : (isSistemaJaAcessado ? 'inicio' : (isAntecipado ? 'antecipado' : 'inicio'));
     
     if (etapa !== estadoCorreto && ['boas-vindas', 'inicio', 'antecipado'].includes(etapa)) {
       setEtapa(estadoCorreto);
@@ -91,7 +90,7 @@ export default function PreComanda({
       window.dispatchEvent(new CustomEvent('arox-env-update', { detail: cenaCorreta }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSistemaJaAcessado, isFreshLogin, isAntecipado]);
+  }, [isSistemaJaAcessado, isFreshLogin, isAntecipado, caixaAberto]);
 
   const dataHoje = isClient ? new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
 
@@ -113,11 +112,12 @@ export default function PreComanda({
           setExitStage('arox'); 
           setTimeout(() => {
             setEtapa('exit'); 
+            
             setTimeout(() => {
               callback(); 
-            }, 700);
-          }, 150); 
-        }, 250); 
+            }, 1300);
+          }, 250); 
+        }, 300); 
       }, 150); 
     }, 300); 
   };
@@ -155,7 +155,6 @@ export default function PreComanda({
                 </div>
                 <div className="mt-auto pt-8 w-full shrink-0 flex flex-col gap-3">
                   <button onClick={() => {
-                    // Removido o redirecionamento para pendências
                     if (caixaAberto) {
                       handleSequenceFinal(() => {
                          if (typeof onAcessarSistema === 'function') onAcessarSistema(false);
@@ -224,7 +223,6 @@ export default function PreComanda({
                   <p className="text-[18px] font-medium text-zinc-200 capitalize tracking-wide">{dataHoje}</p>
                 </div>
                 <div className="mt-auto pt-4 shrink-0 flex gap-3">
-                  {/* Botão de voltar não checa mais pendências */}
                   <button onClick={() => goToStep(isAntecipado ? 'antecipado' : 'inicio')} className="px-6 py-4 bg-transparent text-zinc-500 hover:text-zinc-300 text-[13px] font-medium rounded-xl transition-colors">
                     Voltar
                   </button>

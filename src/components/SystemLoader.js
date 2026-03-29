@@ -1,10 +1,16 @@
 'use client';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 export const Skeleton = ({ className }) => <div className={`animate-pulse bg-zinc-800/50 rounded-md ${className}`}></div>;
 
 export default function SystemLoader({ variant = 'section', text = '', phase = 'sync', exitStage = 'none' }) {
+  const [mounted, setMounted] = useState(false);
   
+  // Utilizado para coordenar a absorção do bluring da tela anterior
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const isExitingContent = exitStage !== 'none';
   const isExitingCard = exitStage === 'card' || exitStage === 'arox';
   const isExitingArox = exitStage === 'arox';
@@ -28,7 +34,7 @@ export default function SystemLoader({ variant = 'section', text = '', phase = '
     return (
       <div className={`absolute inset-0 z-50 w-full h-full flex flex-col items-center justify-center perspective-[1200px] transition-all duration-[1000ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
         isExitingLoaderGlobal ? 'pointer-events-none opacity-0 scale-105 blur-lg' : 
-        isEarly ? 'opacity-0 scale-95 blur-md pointer-events-none' : 'opacity-100 scale-100 blur-0'
+        (!mounted || isEarly) ? 'opacity-0 scale-95 blur-md pointer-events-none' : 'opacity-100 scale-100 blur-0'
       }`}>
         
         <div className={`flex flex-col items-center justify-center p-12 transition-all duration-[500ms] ease-out min-w-[320px] min-h-[320px] relative overflow-hidden ${

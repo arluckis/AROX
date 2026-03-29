@@ -8,7 +8,6 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
   const [bairros, setBairros] = useState([]);
   const [motoboyAtivo, setMotoboyAtivo] = useState(false);
   
-  // Histórico e Filtro de Data
   const [historicoCaixas, setHistoricoCaixas] = useState([]);
   const [dataFiltro, setDataFiltro] = useState(new Date());
   
@@ -91,17 +90,13 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
   };
 
   const carregarHistorico = async () => {
-    const start = new Date(dataFiltro);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(dataFiltro);
-    end.setHours(23, 59, 59, 999);
+    const dataIso = dataFiltro.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
     const { data: histData } = await supabase.from('caixas')
       .select('*')
       .eq('empresa_id', sessao.empresa_id)
       .in('status', ['fechado', 'estornado'])
-      .gte('data_abertura', start.toISOString())
-      .lte('data_abertura', end.toISOString())
+      .eq('data_abertura', dataIso)
       .order('data_fechamento', { ascending: false });
       
     if (histData) setHistoricoCaixas(histData);
@@ -278,7 +273,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
   const btnAROXPrimario = `px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-2 active:scale-95 border ${temaNoturno ? 'bg-zinc-100 text-black border-transparent hover:bg-white' : 'bg-zinc-900 text-white border-transparent hover:bg-black'}`;
   const btnAROXSecundario = `px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-2 active:scale-95 border ${temaNoturno ? 'bg-[#18181B] border-white/10 text-white hover:bg-zinc-800' : 'bg-white border-black/10 text-zinc-900 hover:bg-zinc-50'}`;
   
-  const tabs = [{ id: 'atual', label: 'Caixa Operacional' }, { id: 'historico', label: 'Trilha de Auditoria' }];
+  const tabs = [{ id: 'atual', label: 'Ciclo Operacional' }, { id: 'historico', label: 'Trilha de Auditoria' }];
 
   return (
     <div className={`w-full min-h-screen relative font-sans pt-4 pb-20 overflow-hidden ${bgPrincipal} ${textPrincipal}`}>
@@ -290,13 +285,21 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
 
       <div className={`relative z-10 flex flex-col gap-6 w-full max-w-full mx-auto px-4 md:px-6 transition-all duration-400`}>
         
-        {/* NAV SUPERIOR - COM OS BOTÕES NA MESMA LINHA NO DESKTOP */}
         <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 shrink-0 border-b mb-4 ${bordaDestaque}`}>
           <div className="flex flex-wrap items-center gap-4 md:gap-6">
             {tabs.map(tab => (
               <button 
                 key={tab.id} 
+                onMouseEnter={() => {
+                  if (senhaModal.visivel) return;
+                  if(tab.id === 'historico' && !historicoLiberado) {
+                    setAcaoPendente('historico'); setSenhaModal({ visivel: true, senha: '' });
+                  } else {
+                    setAbaInterna(tab.id);
+                  }
+                }}
                 onClick={() => {
+                  if (senhaModal.visivel) return;
                   if(tab.id === 'historico' && !historicoLiberado) {
                     setAcaoPendente('historico'); setSenhaModal({ visivel: true, senha: '' });
                   } else {
@@ -311,7 +314,6 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
             ))}
           </div>
 
-          {/* BOTÕES DE GAVETA: Renderizados aqui para ficarem na mesma linha */}
           {abaInterna === 'atual' && caixaAtual?.status === 'aberto' && (
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto arox-cinematic" style={{animationDelay: '0ms'}}>
               <button onClick={() => { setMovModal({ visivel: true, tipo: 'suprimento', valor: '', descricao: '' }); }} className={`${btnAROXPrimario} flex-1 md:flex-none justify-center`}>
@@ -326,18 +328,14 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
           )}
         </div>
 
-        {/* TRANSIÇÃO BI-DIRECIONAL */}
         <main className="flex-1 min-w-0 w-full relative">
             
-            {/* --- ABA: CAIXA OPERACIONAL --- */}
             <div className={`w-full ${abaInterna === 'atual' ? 'block' : 'hidden'}`}>
               {caixaAtual?.status === 'aberto' ? (
                 <div className="flex flex-col gap-6 w-full">
 
-                  {/* GRID 3 COLUNAS: Operacional, Valores e Motoboys */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
                     
-                    {/* COLUNA 1: Apuração do Sistema */}
                     <section className={cardBaseStyle} style={{animationDelay: '50ms'}}>
                       <div className="relative z-10 h-full flex flex-col">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -396,7 +394,6 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                       </div>
                     </section>
 
-                    {/* COLUNA 2: Valores Informados */}
                     <section className={cardBaseStyle} style={{animationDelay: '100ms'}}>
                       <div className="relative z-10 flex flex-col h-full">
                         <div className="mb-6 border-b border-transparent">
@@ -429,7 +426,6 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                       </div>
                     </section>
 
-                    {/* COLUNA 3: BLOCO MOTOBOY */}
                     <section className={cardBaseStyle} style={{animationDelay: '150ms'}}>
                       <div className="relative z-10 flex flex-col h-full">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-8">
@@ -460,9 +456,8 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
 
                   </div>
 
-                  {/* BOTÃO FINALIZAR */}
                   <div className="pt-4 pb-12 w-full arox-cinematic" style={{animationDelay: '200ms'}}>
-                    <button onClick={() => mostrarConfirmacao('Fechar Caixa', 'Confirma o encerramento da sessão atual? O caixa passará a constar no histórico.', encerrarCaixaConfirmado)} 
+                    <button onClick={() => mostrarConfirmacao('Fechar Ciclo', 'Confirma o encerramento da sessão atual? O ciclo passará a constar no histórico.', encerrarCaixaConfirmado)} 
                       disabled={isConsolidating}
                       className={`relative w-full py-5 rounded-[20px] text-[13px] font-bold uppercase tracking-wider transition-all duration-200 active:scale-[0.98] shadow-md border disabled:opacity-80 disabled:active:scale-100 flex justify-center items-center gap-3 ${temaNoturno ? 'bg-zinc-100 text-black border-transparent hover:bg-white' : 'bg-zinc-900 text-white border-transparent hover:bg-black'}`}>
                       {isConsolidating ? (
@@ -470,7 +465,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                            Fechando e Consolidando...
                          </>
-                      ) : 'Confirmar e Fechar Caixa'}
+                      ) : 'Confirmar e Fechar Ciclo'}
                     </button>
                   </div>
                 </div>
@@ -480,17 +475,15 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                     <div className={`w-16 h-16 mx-auto mb-6 rounded-[20px] flex items-center justify-center border ${temaNoturno ? 'bg-white/[0.03] border-white/[0.08] text-zinc-500' : 'bg-black/[0.02] border-black/[0.05] text-zinc-400'}`}>
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                     </div>
-                    <p className={`text-[18px] font-bold tracking-tight mb-1 ${temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}`}>Caixa Fechado</p>
+                    <p className={`text-[18px] font-bold tracking-tight mb-1 ${temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}`}>Ciclo Fechado</p>
                     <p className={`text-[13px] font-medium ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Nenhuma sessão operacional aberta no momento.</p>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* --- ABA: TRILHA DE AUDITORIA --- */}
             <div className={`w-full ${abaInterna === 'historico' ? 'block' : 'hidden'}`}>
                 
-                {/* Header de Ações sem os H1s gigantes */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 border-b pb-4 border-transparent arox-cinematic" style={{animationDelay: '0ms'}}>
                   
                   <div className={`flex items-center p-1.5 rounded-xl border ${temaNoturno ? 'bg-white/[0.03] border-white/[0.08]' : 'bg-black/[0.02] border-black/[0.06]'}`}>
@@ -536,7 +529,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                                   <div>
                                      <div className="flex items-center gap-3 mb-1.5">
                                        <h3 className={`text-[15px] font-bold tracking-tight ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
-                                          {isEstornado ? 'Caixa Estornado' : 'Fechamento de Caixa'}
+                                          {isEstornado ? 'Ciclo Estornado' : 'Fechamento de Ciclo'}
                                        </h3>
                                        {isEstornado ? (
                                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest ${temaNoturno ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-600'}`}>Anulado</span>

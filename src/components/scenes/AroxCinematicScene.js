@@ -21,14 +21,13 @@ export default function AroxCinematicScene({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   
-  // MOTION FIX: Coroa de luz no eixo Y para Mobile
   const phaseConfig = {
-    ignition:    { light: 0.00, rotation: -2,   planetY: isMobile ? -140 : 60, scale: isMobile ? 0.90 : 0.85, blur: 0,   overlay: 0 },
-    reveal:      { light: 0.05, rotation: -1,   planetY: isMobile ? -160 : 20, scale: isMobile ? 1.00 : 0.95, blur: 0,   overlay: 0 },
-    sync:        { light: 0.15, rotation: 0.5,  planetY: isMobile ? -180 : 5,  scale: isMobile ? 1.05 : 0.98, blur: isMobile ? 0 : 2, overlay: isMobile ? 0 : 0.1 },
-    handoff:     { light: 0.40, rotation: 1.5,  planetY: isMobile ? -100 : -10, scale: 1.00, blur: 4,   overlay: 0.2 },
-    bridgeLight: { light: 80.0, rotation: 25.0, planetY: isMobile ? -50 : -20, scale: 1.30, blur: 0,   overlay: 0 },
-    bridgeDark:  { light: 0.00, rotation: -10.0,planetY: 50,  scale: 0.80, blur: 20,  overlay: 1 } 
+    ignition:    { light: 0.00, rotation: -2,   planetY: isMobile ? -240 : 60, scale: isMobile ? 0.90 : 0.85, blur: 0,   overlay: 0 },
+    reveal:      { light: 0.02, rotation: -1.5, planetY: isMobile ? -260 : 40, scale: isMobile ? 0.95 : 0.90, blur: 0,   overlay: 0 },
+    sync:        { light: 0.10, rotation: 0.0,  planetY: isMobile ? -280 : 15, scale: isMobile ? 1.05 : 0.98, blur: isMobile ? 0 : 2, overlay: isMobile ? 0 : 0.05 },
+    handoff:     { light: 0.30, rotation: 1.5,  planetY: isMobile ? -200 : -10, scale: 1.00, blur: 4,   overlay: 0.15 },
+    bridgeLight: { light: 150.0, rotation: 1.5, planetY: isMobile ? -200 : -10, scale: 1.00, blur: 12,  overlay: 1 }, 
+    bridgeDark:  { light: 0.00,  rotation: 1.5, planetY: isMobile ? -200 : -10, scale: 1.00, blur: 16,  overlay: 1 } 
   };
 
   const activeConfig = customConfig || phaseConfig[scenePhase] || phaseConfig.ignition;
@@ -49,47 +48,50 @@ export default function AroxCinematicScene({
     physics.current.targetScale = activeConfig.scale;
   }, [activeConfig]);
 
-  // MOTION FIX CRÍTICO: Removido o scenePhase da dependência. 
-  // O canvas nunca mais será destruído. Flui a 60 FPS ininterruptos.
   useEffect(() => {
     if (!isClient) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d', { alpha: false });
+    const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
     let width = window.innerWidth; 
     let height = window.innerHeight;
     canvas.width = width; 
     canvas.height = height;
 
-    const starsLayer1 = Array.from({ length: 800 }).map(() => ({ 
+    const densityMult = isMobile ? 0.3 : 0.8; 
+    const PI2 = Math.PI * 2; 
+
+    const starsLayer1 = Array.from({ length: Math.floor(800 * densityMult) }).map(() => ({ 
       x: (Math.random() - 0.5) * 6000, y: (Math.random() - 0.5) * 6000,
       baseZ: Math.random() * 2000 + 1500, size: Math.random() * 0.4 + 0.1, alphaMult: Math.random() * 0.2 + 0.1, twinkle: false, timeOffset: 0
     }));
     
-    const starsLayer2 = Array.from({ length: 250 }).map(() => ({ 
+    const starsLayer2 = Array.from({ length: Math.floor(250 * densityMult) }).map(() => ({ 
       x: (Math.random() - 0.5) * 5000, y: (Math.random() - 0.5) * 5000,
-      baseZ: Math.random() * 800 + 700, size: Math.random() * 0.8 + 0.4, alphaMult: Math.random() * 0.4 + 0.2, twinkle: Math.random() > 0.5, timeOffset: Math.random() * Math.PI * 2
+      baseZ: Math.random() * 800 + 700, size: Math.random() * 0.8 + 0.4, alphaMult: Math.random() * 0.4 + 0.2, twinkle: Math.random() > 0.5, timeOffset: Math.random() * PI2
     }));
 
-    const starsLayer3 = Array.from({ length: 50 }).map(() => ({ 
+    const starsLayer3 = Array.from({ length: Math.floor(50 * densityMult) }).map(() => ({ 
       x: (Math.random() - 0.5) * 4000, y: (Math.random() - 0.5) * 4000,
-      baseZ: Math.random() * 400 + 200, size: Math.random() * 1.5 + 1.0, alphaMult: Math.random() * 0.6 + 0.4, twinkle: true, timeOffset: Math.random() * Math.PI * 2, hasHalo: true
+      baseZ: Math.random() * 400 + 200, size: Math.random() * 1.5 + 1.0, alphaMult: Math.random() * 0.6 + 0.4, twinkle: true, timeOffset: Math.random() * PI2, hasHalo: true
     }));
 
     const stars = [...starsLayer1, ...starsLayer2, ...starsLayer3];
     const lerp = (start, end, f) => start + (end - start) * f;
+    const fov = 1000;
 
     const handleMouseMove = (e) => {
+      if (scenePhase === 'bridgeLight' || scenePhase === 'bridgeDark') return;
       physics.current.targetMouseX = (e.clientX / width - 0.5) * 0.6;
       physics.current.targetMouseY = (e.clientY / height - 0.5) * 0.6;
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
     window.addEventListener('resize', () => {
       width = window.innerWidth; height = window.innerHeight;
       canvas.width = width; canvas.height = height;
-    });
+    }, { passive: true });
 
     let time = 0;
 
@@ -97,61 +99,104 @@ export default function AroxCinematicScene({
       time += 0.012; 
       const p = physics.current;
       
-      p.mouseX = lerp(p.mouseX, p.targetMouseX, 0.04); 
-      p.mouseY = lerp(p.mouseY, p.targetMouseY, 0.04);
-      p.light = lerp(p.light, p.targetLight, p.targetLight > 5 ? 0.09 : 0.015); 
-      p.rotation = lerp(p.rotation, p.targetRotation, 0.01); 
-      p.planetY = lerp(p.planetY, p.targetPlanetY, 0.02);
-      p.scale = lerp(p.scale, p.targetScale, p.targetLight > 5 ? 0.02 : 0.01);
+      const isBridge = scenePhase === 'bridgeLight' || scenePhase === 'bridgeDark' || activeConfig.overlay === 1;
+      
+      const isExploding = p.targetLight > 50;  
+      const isImploding = p.targetScale <= 0.5; 
+      const isReturning = p.targetScale < p.scale && !isImploding; 
+
+      const speedScale = isExploding ? 0.018 : (isImploding ? 0.012 : (isReturning ? 0.010 : 0.035));
+      const speedPos   = isExploding ? 0.015 : (isImploding ? 0.010 : (isReturning ? 0.015 : 0.030));
+      
+      if (isBridge) {
+        p.scale = lerp(p.scale, p.targetScale, 0.02); 
+        p.rotation = lerp(p.rotation, p.targetRotation, 0.02);
+        p.planetY = lerp(p.planetY, p.targetPlanetY, 0.02);
+        p.mouseX = lerp(p.mouseX, 0, 0.02); 
+        p.mouseY = lerp(p.mouseY, 0, 0.02);
+      } else {
+        p.scale = lerp(p.scale, p.targetScale, speedScale);
+        p.rotation = lerp(p.rotation, p.targetRotation, speedPos * 0.8); 
+        p.planetY = lerp(p.planetY, p.targetPlanetY, speedPos);
+        p.mouseX = lerp(p.mouseX, p.targetMouseX, 0.04); 
+        p.mouseY = lerp(p.mouseY, p.targetMouseY, 0.04);
+      }
+
+      let speedLight = 0.040;
+      if (isBridge && temaAnterior === 'light') {
+        const progress = Math.min(p.light / p.targetLight, 1);
+        speedLight = 0.002 + (progress * progress * 0.06); 
+      } else if (isBridge && temaAnterior === 'dark') {
+        speedLight = 0.015; 
+      } else {
+        // Interpolação super leve e lenta (0.004) para que o "clarão" desperte de forma ultra suave
+        const isEarlyPhase = p.targetLight <= 0.30;
+        speedLight = isExploding ? 0.025 : (isImploding ? 0.030 : (isReturning ? 0.015 : (isEarlyPhase ? 0.004 : 0.040)));
+      }
+      p.light = lerp(p.light, p.targetLight, speedLight); 
 
       ctx.fillStyle = '#030406';
       ctx.fillRect(0, 0, width, height);
 
-      const cx = width / 2; const cy = height / 2;
+      const cx = width / 2; 
+      const cy = (height / 2) + p.planetY; 
+      
+      const dimFactor = Math.max(0, 1 - (p.light * 0.08));
 
-      for (let i = 0; i < stars.length; i++) {
-        const star = stars[i]; 
-        const actualZ = star.baseZ / p.scale; 
-        
-        const fov = 1000;
-        const offsetX = p.mouseX * 120 * (1000 / actualZ); 
-        const offsetY = p.mouseY * 120 * (1000 / actualZ);
-        
-        const px = (star.x / actualZ) * fov + cx - offsetX; 
-        const py = (star.y / actualZ) * fov + cy - offsetY;
-        
-        let currentAlpha = star.alphaMult;
-        if (star.twinkle) {
-          currentAlpha *= (0.6 + Math.sin(time + star.timeOffset) * 0.4);
-        }
-        
-        const alpha = Math.min(currentAlpha, (3000 - actualZ) / 1000); 
-        
-        const dimFactor = Math.max(0, 1 - (p.light * 0.08));
-        const size = Math.max(0.1, star.size * (fov / actualZ));
-        
-        if (px > 0 && px < width && py > 0 && py < height && alpha > 0 && dimFactor > 0) {
-           ctx.fillStyle = `rgba(220, 235, 255, ${alpha * dimFactor})`; 
-           ctx.beginPath(); 
-           ctx.arc(px, py, size, 0, Math.PI * 2); 
-           ctx.fill();
+      if (dimFactor > 0.01) {
+        const currentScale = p.scale;
+        const parallaxX = p.mouseX * 120;
+        const parallaxY = p.mouseY * 120;
 
-           if (star.hasHalo && size > 1.2) {
-             ctx.fillStyle = `rgba(160, 200, 255, ${alpha * 0.25 * dimFactor})`;
-             ctx.beginPath();
-             ctx.arc(px, py, size * 3, 0, Math.PI * 2);
-             ctx.fill();
-           }
+        for (let i = 0; i < stars.length; i++) {
+          const star = stars[i]; 
+          const actualZ = star.baseZ / currentScale; 
+          const zRatio = fov / actualZ; 
+          
+          const px = (star.x * zRatio) + cx - (parallaxX * zRatio); 
+          const py = (star.y * zRatio) + cy - (parallaxY * zRatio);
+          
+          const size = Math.max(0.1, star.size * zRatio);
+
+          if (px < -size || px > width + size || py < -size || py > height + size) continue;
+
+          let currentAlpha = star.alphaMult;
+          if (star.twinkle) {
+            currentAlpha *= (0.6 + Math.sin(time + star.timeOffset) * 0.4);
+          }
+          
+          const alpha = Math.min(currentAlpha, (3000 - actualZ) / 1000); 
+          
+          if (alpha > 0) {
+             ctx.fillStyle = `rgba(220, 235, 255, ${alpha * dimFactor})`; 
+             
+             if (size <= 1.2 && !star.hasHalo) {
+               ctx.fillRect(px - size, py - size, size * 2, size * 2);
+             } else {
+               ctx.beginPath(); 
+               ctx.arc(px, py, size, 0, PI2); 
+               ctx.fill();
+
+               if (star.hasHalo) {
+                 ctx.fillStyle = `rgba(160, 200, 255, ${alpha * 0.25 * dimFactor})`;
+                 ctx.beginPath();
+                 ctx.arc(px, py, size * 3, 0, PI2);
+                 ctx.fill();
+               }
+             }
+          }
         }
       }
 
       if (containerRef.current) {
-        containerRef.current.style.setProperty('--pr-mouse-x', p.mouseX);
-        containerRef.current.style.setProperty('--pr-mouse-y', p.mouseY);
-        containerRef.current.style.setProperty('--pr-light', p.light);
-        containerRef.current.style.setProperty('--pr-rot', `${p.rotation}deg`);
-        containerRef.current.style.setProperty('--pr-planet-y', `${p.planetY}px`);
-        containerRef.current.style.setProperty('--pr-scale', p.scale);
+        containerRef.current.style.cssText = `
+          --pr-mouse-x: ${p.mouseX};
+          --pr-mouse-y: ${p.mouseY};
+          --pr-light: ${p.light};
+          --pr-rot: ${p.rotation}deg;
+          --pr-planet-y: ${p.planetY}px;
+          --pr-scale: ${p.scale};
+        `;
       }
       
       requestRef.current = requestAnimationFrame(render);
@@ -162,60 +207,142 @@ export default function AroxCinematicScene({
       window.removeEventListener('mousemove', handleMouseMove); 
       cancelAnimationFrame(requestRef.current); 
     };
-  }, [isClient]); // <--- Dependência isolada e limpa
+  }, [isClient, scenePhase, temaAnterior, activeConfig.overlay]);
 
   if (!isClient) return null;
 
   const isLight = temaAnterior === 'light';
-  const orbitalCoreColor = isLight ? 'rgba(255, 255, 255, 1)' : 'rgba(180, 210, 255, 0.15)';
-  const orbitalSpreadColor = isLight ? '#fafafa' : 'transparent';
-  const overlayColor = isLight ? '250, 250, 250' : '9, 9, 11';
+  
+  const orbitalCoreColor = isLight ? 'rgba(255, 255, 255, 0.85)' : 'rgba(160, 190, 255, 0.1)';
+  const orbitalSpreadColor = isLight ? 'rgba(250, 250, 250, 0.6)' : 'transparent';
+  
+  const overlayColor = isLight ? '255, 255, 255' : '3, 4, 6'; 
+  const isExiting = activeConfig.overlay === 1;
 
   return (
     <div ref={containerRef} className="fixed inset-0 w-full h-[100dvh] z-0 overflow-hidden text-zinc-200 font-sans select-none bg-[#030406]">
       
       <style dangerouslySetInnerHTML={{__html: `
-        .cinematic-entry { animation: cinematicFadeIn 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .cinematic-entry { 
+          animation: cinematicFadeIn 3s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+        }
         @keyframes cinematicFadeIn { 
-          0% { opacity: 0; transform: translate(-50%, -30%) scale(0.9); filter: blur(20px); } 
-          100% { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); } 
+          0% { opacity: 0; filter: blur(12px); } 
+          100% { opacity: 1; filter: blur(0); } 
         }
 
         .orbital-backlight {
           position: absolute; top: 50%; left: 50%;
-          width: 80vmax; height: 80vmax;
+          width: 90vmax; height: 90vmax;
           border-radius: 50%;
-          transform: translate(-50%, -50%) scale(calc(0.01 + var(--pr-light, 0) * 0.08));
-          background: radial-gradient(circle at center, ${orbitalCoreColor} 0%, ${orbitalSpreadColor} 40%, transparent 70%);
-          opacity: calc(var(--pr-light, 0) * 1.5);
+          transform: translate(-50%, -50%) translateY(var(--pr-planet-y, 0px)) scale(calc(0.5 + var(--pr-light, 0) * 0.035)) translateZ(0);
+          background: radial-gradient(circle at center, ${orbitalCoreColor} 0%, ${orbitalSpreadColor} 35%, transparent 65%);
+          opacity: calc(min(1, var(--pr-light, 0) * 0.4));
           z-index: 0; 
           pointer-events: none;
           will-change: transform, opacity;
+          mix-blend-mode: screen;
+          transition: opacity 3s cubic-bezier(0.2, 0.8, 0.2, 1); /* Amortece opacidade garantindo que o brilho surja organicamente */
         }
 
-        .arox-planet-container {
+        .arox-planet-system {
           position: absolute; top: 50%; left: 50%;
           width: clamp(320px, 50vw, 600px); height: clamp(320px, 50vw, 600px);
           pointer-events: none; z-index: 1;
-          transform: translate(-50%, -50%) translate3d(calc(var(--pr-mouse-x, 0) * -12px), calc(var(--pr-mouse-y, 0) * -12px + var(--pr-planet-y, 0px)), 0) rotate(var(--pr-rot, 0deg)) scale(var(--pr-scale, 1));
+          transform: 
+            translate(-50%, -50%) 
+            translateY(var(--pr-planet-y, 0px)) 
+            scale(var(--pr-scale, 1))
+            rotate(var(--pr-rot, 0deg))
+            translateZ(0);
           will-change: transform;
         }
 
         .arox-planet {
-          width: 100%; height: 100%; border-radius: 50%;
-          background: radial-gradient(circle at 65% 35%, #151c24 0%, #0a0d14 40%, #040508 80%, #000000 100%);
-          position: relative;
-          box-shadow: 
-            inset -30px -30px 60px rgba(0,0,0,0.9), 
-            inset 0 0 clamp(0px, calc(var(--pr-light, 0) * 4px), 60px) ${isLight ? 'rgba(255,255,255,0.8)' : 'rgba(200,225,255,0.3)'},
-            inset 0 0 clamp(0px, calc((var(--pr-light, 0) - 5) * 35px), 1000px) ${orbitalSpreadColor};
-          opacity: clamp(0, 1 - (var(--pr-light, 0) - 15) * 0.05, 1);
+          position: absolute; inset: 0; border-radius: 50%;
+          background: radial-gradient(circle at 50% 50%, #06080b 0%, #020304 60%, #000000 100%);
+          box-shadow: inset 0 0 40px rgba(0,0,0,1);
+          transform: translate3d(
+            calc(var(--pr-mouse-x, 0) * -20px), 
+            calc(var(--pr-mouse-y, 0) * -20px), 
+            0
+          );
+          z-index: 20;
+          will-change: transform;
         }
 
-        .arox-planet::after {
-          content: ''; position: absolute; inset: -5px; border-radius: 50%;
-          background: radial-gradient(circle at 50% 50%, transparent 60%, rgba(255,255,255,calc(var(--pr-light,0)*0.02)) 100%);
-          filter: blur(8px); z-index: 2;
+        .arox-planet::before {
+          content: ''; position: absolute; inset: 0; border-radius: 50%;
+          background: radial-gradient(circle at 50% 100%, rgba(255,255,255,calc(min(0.15, var(--pr-light, 0) * 0.012))) 0%, transparent 60%);
+          z-index: 21;
+        }
+
+        .arox-ring-main {
+          position: absolute; top: 50%; left: 50%;
+          width: 120%; height: 120%;
+          border: 1px solid rgba(255, 255, 255, 0.25);
+          border-radius: 50%;
+          transform: 
+            translate(-50%, -50%) 
+            translate3d(calc(var(--pr-mouse-x, 0) * -30px), calc(var(--pr-mouse-y, 0) * -30px), 0); 
+          will-change: transform;
+          z-index: 10;
+        }
+
+        .arox-ring-thin-group {
+          position: absolute; top: 50%; left: 50%;
+          width: 140%; height: 140%;
+          transform: 
+            translate(-50%, -50%) 
+            translate3d(calc(var(--pr-mouse-x, 0) * -16px), calc(var(--pr-mouse-y, 0) * -16px), 0); 
+          will-change: transform;
+          z-index: 5;
+        }
+        
+        .arox-ring-thin {
+          position: absolute; top: 50%; left: 50%;
+          border: 1px solid rgba(255, 255, 255, 0.04);
+          border-radius: 50%;
+          transform: translate(-50%, -50%);
+        }
+        .arox-ring-thin:nth-child(1) { width: 100%; height: 100%; border-color: rgba(255,255,255,0.06); }
+        .arox-ring-thin:nth-child(2) { width: 92%; height: 92%; }
+        .arox-ring-thin:nth-child(3) { width: 84%; height: 84%; }
+        .arox-ring-thin:nth-child(4) { width: 76%; height: 76%; }
+
+        .arox-flare {
+          position: absolute;
+          width: 160px; height: 160px;
+          z-index: 40;
+          will-change: transform;
+        }
+        
+        .flare-bl { 
+          bottom: 10%; left: -2%; 
+          transform: translate3d(calc(var(--pr-mouse-x, 0) * -50px), calc(var(--pr-mouse-y, 0) * -50px), 0) rotate(20deg); 
+        }
+        .flare-tr { 
+          top: 10%; right: -2%; 
+          transform: translate3d(calc(var(--pr-mouse-x, 0) * -50px), calc(var(--pr-mouse-y, 0) * -50px), 0) rotate(20deg); 
+        }
+
+        .flare-core {
+          position: absolute; top: 50%; left: 50%;
+          width: 2px; height: 2px; background: rgba(255, 255, 255, 0.9); border-radius: 50%;
+          box-shadow: 0 0 6px 1px rgba(255,255,255,0.4);
+          transform: translate(-50%, -50%);
+        }
+        .flare-beam {
+          position: absolute; top: 50%; left: 50%;
+          background: radial-gradient(ellipse at center, rgba(255,255,255,0.5) 0%, transparent 60%);
+          transform: translate(-50%, -50%);
+        }
+        .flare-beam.h { width: 80%; height: 1px; }
+        .flare-beam.v { width: 80%; height: 1px; transform: translate(-50%, -50%) rotate(90deg); }
+        .flare-beam.diag { 
+          width: 120%; height: 1px; 
+          transform: translate(-50%, -50%) rotate(30deg); 
+          opacity: 0.4; 
         }
       `}} />
 
@@ -223,12 +350,40 @@ export default function AroxCinematicScene({
 
       <div className="orbital-backlight"></div>
 
-      <div className="arox-planet-container cinematic-entry">
+      <div className="arox-planet-system cinematic-entry">
+         
+         <div className="arox-ring-main"></div>
+         
+         <div className="arox-ring-thin-group">
+            <div className="arox-ring-thin"></div>
+            <div className="arox-ring-thin"></div>
+            <div className="arox-ring-thin"></div>
+            <div className="arox-ring-thin"></div>
+         </div>
+
          <div className="arox-planet"></div>
+
+         <div className="arox-flare flare-bl">
+            <div className="flare-core"></div>
+            <div className="flare-beam h"></div>
+            <div className="flare-beam v"></div>
+            <div className="flare-beam diag"></div>
+         </div>
+         
+         <div className="arox-flare flare-tr">
+            <div className="flare-core"></div>
+            <div className="flare-beam h"></div>
+            <div className="flare-beam v"></div>
+            <div className="flare-beam diag"></div>
+         </div>
       </div>
 
       <div 
-        className="absolute inset-0 z-[5] pointer-events-none transition-[backdrop-filter,background-color] duration-[1500ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+        className={`absolute inset-0 z-[50] pointer-events-none transition-all ${
+          isExiting 
+            ? 'duration-[800ms] ease-in' 
+            : 'duration-[2000ms] ease-[cubic-bezier(0.25,0.1,0.25,1)]'
+        }`}
         style={{
           backdropFilter: `blur(${activeConfig.blur}px)`,
           WebkitBackdropFilter: `blur(${activeConfig.blur}px)`,

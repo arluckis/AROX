@@ -33,11 +33,13 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
   const [modalEdicaoAberto, setModalEdicaoAberto] = useState(false);
   const [empresaEditando, setEmpresaEditando] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  const [confirmConfig, setConfirmConfig] = useState({ id: null, status: null, nome: '' });
+  const [confirmConfig, setConfirmConfig] = useState({ id: null, status: null, nome: '', acao: 'status' });
   const [toast, setToast] = useState({ visivel: false, texto: '', tipo: 'info' });
 
+  // Wizard e Provisionamento
   const [etapaWizard, setEtapaWizard] = useState(1);
   const [cinematicText, setCinematicText] = useState('');
+  const [progressoCinematic, setProgressoCinematic] = useState(0);
   const [dadosEdicao, setDadosEdicao] = useState({ nomeRestaurante: '', nomeDono: '', email: '', novaSenhaTemporaria: '', usuarioId: null, plano: 'free' });
   const [formData, setFormData] = useState({ 
     nomeRestaurante: '', nomeDono: '', email: '', senha: '', tipoPlano: 'free', ciclo: 'mensal', cidade: '', abertura: '', fechamento: '', tipoOperacao: 'hibrido', codigoIntegracao: ''
@@ -92,6 +94,45 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
     setTrustedIps(trustedIps.filter(ip => ip.id !== id));
   };
 
+  // --- MOTOR DE TELEMETRIA: CLASSIFICAÇÃO DE STATUS ---
+  const classificarStatusOperacional = (empresa, dono) => {
+    if (!dono || !dono.ultimo_ping_at) return { nivel: 'abandonado', tag: 'Abandonado', corBg: 'bg-zinc-500/10', corTxt: 'text-zinc-500', dot: 'bg-zinc-500 opacity-40' };
+    
+    const diffMinutos = (Date.now() - new Date(dono.ultimo_ping_at).getTime()) / 60000;
+    const temAtividade = empresa.uso_registros > 0;
+    
+    if (diffMinutos < 5 && dono.status_presenca !== 'offline' && temAtividade) return { nivel: 'operando', tag: 'Operando Agora', corBg: 'bg-emerald-500/10', corTxt: 'text-emerald-500', dot: 'bg-emerald-500 animate-pulse' };
+    if (diffMinutos < 30) return { nivel: 'ocioso', tag: 'Online Ocioso', corBg: 'bg-amber-500/10', corTxt: 'text-amber-500', dot: 'bg-amber-500' };
+    if (diffMinutos < 60 * 24 * 3) return { nivel: 'parado', tag: 'Parado', corBg: 'bg-rose-500/10', corTxt: 'text-rose-500', dot: 'bg-rose-500' };
+    return { nivel: 'abandonado', tag: 'Fantasma', corBg: 'bg-zinc-500/10', corTxt: 'text-zinc-500', dot: 'bg-zinc-600' };
+  };
+
+  // --- MOTOR DE TELEMETRIA: HEALTH SCORE ---
+  const calcularHealthScore = (empresa, dono) => {
+    let score = 30; 
+    if (empresa.ativo === false) return { nota: 0, label: 'Bloqueado', cor: 'text-rose-600' };
+    
+    if (empresa.uso_registros > 500) score += 30;
+    else if (empresa.uso_registros > 100) score += 20;
+    else if (empresa.uso_registros > 0) score += 10;
+
+    if (dono?.ultimo_ping_at) {
+      const diasUltimoAcesso = (Date.now() - new Date(dono.ultimo_ping_at).getTime()) / (1000 * 3600 * 24);
+      if (diasUltimoAcesso < 1) score += 20;
+      else if (diasUltimoAcesso < 3) score += 10;
+      else score -= 15; 
+    }
+
+    if (empresa.plano !== 'free' && empresa.plano) score += 20;
+
+    score = Math.min(Math.max(score, 0), 100);
+
+    if (score >= 80) return { nota: score, label: 'Elite', cor: 'text-emerald-500', bg: 'bg-emerald-500/10' };
+    if (score >= 60) return { nota: score, label: 'Saudável', cor: 'text-indigo-500', bg: 'bg-indigo-500/10' };
+    if (score >= 40) return { nota: score, label: 'Atenção', cor: 'text-amber-500', bg: 'bg-amber-500/10' };
+    return { nota: score, label: 'Risco Crítico', cor: 'text-rose-500', bg: 'bg-rose-500/10' };
+  };
+
   const carregarEcossistema = async () => {
     setLoading(true);
     try {
@@ -106,7 +147,10 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
       if (emps) {
         const empresasMapeadas = emps.map(emp => {
           const uso = comandasData ? comandasData.filter(c => c.empresa_id === emp.id).length : 0;
-          return { ...emp, uso_registros: uso, usuarios: usrs ? usrs.filter(u => u.empresa_id === emp.id) : [] };
+          const dono = usrs ? usrs.find(u => u.empresa_id === emp.id) : null;
+          const statusOp = classificarStatusOperacional(emp, dono);
+          const health = calcularHealthScore(emp, dono);
+          return { ...emp, uso_registros: uso, usuarios: usrs ? usrs.filter(u => u.empresa_id === emp.id) : [], statusOp, health };
         });
         setEmpresas(empresasMapeadas);
       }
@@ -119,12 +163,9 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
     try {
       let query = supabase.from('logs_acesso').select('*').order('criado_em', { ascending: false }).limit(200);
       
-      // Filtra de forma robusta a lista de IPs
       if (esconderMeuIp && trustedIps.length > 0) {
          const ipsArray = trustedIps.map(t => t.ip_address);
-         // Filter local instance IP and trusted table list
          if(meuIp && !ipsArray.includes(meuIp)) ipsArray.push(meuIp);
-         // Requires Not In array query
          query = query.not('ip', 'in', `(${ipsArray.map(ip => `"${ip}"`).join(',')})`);
       } else if (esconderMeuIp && meuIp) {
          query = query.neq('ip', meuIp);
@@ -162,18 +203,32 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
     else setEtapaWizard(etapaWizard - 1);
   };
 
+  // --- PROVISIONAMENTO CINEMATOGRÁFICO ---
   const iniciarProvisionamento = (e) => {
     e.preventDefault();
     setEtapaWizard(5);
-    const steps = ["Registrando workspace...", "Vinculando credenciais administrativas...", "Iniciando módulos de operação...", "Finalizando configuração."];
+    const stepsText = [
+      "Estabelecendo handshake seguro...",
+      "Alocando shard de dados isolado no cluster...",
+      "Provisionando identidade do workspace...",
+      "Sincronizando telemetria operacional...",
+      "Ativando módulos de inteligência..."
+    ];
     let current = 0;
-    setCinematicText(steps[0]);
+    setCinematicText(stepsText[0]);
+    setProgressoCinematic(10);
     
     const interval = setInterval(() => {
       current++;
-      if (current < steps.length) { setCinematicText(steps[current]); } 
-      else { clearInterval(interval); executarCriacaoSupabase(); }
-    }, 800);
+      if (current < stepsText.length) { 
+        setCinematicText(stepsText[current]); 
+        setProgressoCinematic((current / stepsText.length) * 100);
+      } else { 
+        clearInterval(interval); 
+        setProgressoCinematic(100);
+        setTimeout(executarCriacaoSupabase, 800); 
+      }
+    }, 1200); 
   };
 
   const executarCriacaoSupabase = async () => {
@@ -192,7 +247,7 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
 
       await supabase.from('config_fidelidade').insert([{ empresa_id: novaEmpresa.id }]);
 
-      mostrarNotificacao('Workspace provisionado com sucesso.', 'sucesso');
+      mostrarNotificacao('Ambiente provisionado com sucesso.', 'sucesso');
       setFormData({ nomeRestaurante: '', nomeDono: '', email: '', senha: '', tipoPlano: 'free', ciclo: 'mensal', cidade: '', abertura: '', fechamento: '', tipoOperacao: 'hibrido', codigoIntegracao: '' });
       setEtapaWizard(1); 
       carregarEcossistema();
@@ -229,12 +284,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
     finally { setLoading(false); }
   };
 
-  const abrirConfirmModal = (empresa) => {
-    const isAtivo = empresa.ativo !== false;
-    setConfirmConfig({ id: empresa.id, status: isAtivo, nome: empresa.nome });
-    setConfirmModalOpen(true);
-  };
-
   const alternarStatusEmpresa = async () => {
     setConfirmModalOpen(false);
     try {
@@ -244,6 +293,19 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
       carregarEcossistema();
       mostrarNotificacao(`Workspace ${novoStatus ? 'reativado' : 'suspenso'}.`, 'sucesso');
     } catch (err) { mostrarNotificacao(err.message, 'erro'); }
+  };
+
+  // --- EXCLUSÃO SEGURA EXTREMA ---
+  const confirmarExclusaoExtrema = async () => {
+    setConfirmModalOpen(false);
+    mostrarNotificacao('Iniciando desintegração do ambiente...', 'info');
+    try {
+      const { error } = await supabase.rpc('excluir_workspace_seguro', { p_empresa_id: confirmConfig.id });
+      if (error) throw error;
+      
+      carregarEcossistema();
+      mostrarNotificacao(`Workspace e todas as dependências vaporizados.`, 'sucesso');
+    } catch (err) { mostrarNotificacao(`Falha na exclusão: ${err.message}`, 'erro'); }
   };
 
   const entrarComoCliente = (dono) => {
@@ -261,16 +323,11 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
 
   const stats = useMemo(() => {
     const ativos = empresas.filter(e => e.ativo !== false);
-    const pagantes = ativos.filter(e => e.plano !== 'free' && e.plano !== null);
-    const topActive = [...empresas].sort((a,b) => b.uso_registros - a.uso_registros).slice(0,5);
-    const inactives = empresas.filter(e => e.ativo === false || (e.uso_registros === 0 && e.created_at < new Date(Date.now() - 7*24*60*60*1000).toISOString()));
-    
-    const mrr = pagantes.reduce((acc, emp) => {
-      const ciclo = CICLOS_PREMIUM.find(c => c.id === emp.plano);
-      return acc + (ciclo ? ciclo.precoMes : 0);
-    }, 0);
+    const mrr = ativos.filter(e => e.plano !== 'free').reduce((acc, emp) => acc + (CICLOS_PREMIUM.find(c => c.id === emp.plano)?.precoMes || 0), 0);
+    const scoreMedio = ativos.reduce((acc, emp) => acc + emp.health.nota, 0) / (ativos.length || 1);
+    const emRisco = ativos.filter(e => e.health.nota < 50).length;
 
-    return { total: empresas.length, ativos: ativos.length, bloqueados: empresas.filter(e => e.ativo === false).length, testes: empresas.filter(e => e.plano === 'free').length, receitaEstimada: mrr, topActive, inactives: inactives.slice(0, 4) };
+    return { total: empresas.length, ativos: ativos.length, receitaEstimada: mrr, scoreMedio: scoreMedio.toFixed(0), emRisco };
   }, [empresas]);
 
   return (
@@ -300,45 +357,45 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
         <main className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8 pt-6 z-10 flex flex-col relative">
           <div className="w-full max-w-[1400px] mx-auto flex-1 flex flex-col space-y-10">
             
-            {/* DASHBOARD RESTAURADO */}
+            {/* DASHBOARD RESTAURADO COM TELEMETRIA */}
             {abaAtiva === 'dashboard' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <header className="mb-8 border-b pb-6 border-black/5 dark:border-white/5">
-                  <h2 className="text-[32px] font-bold tracking-tight">Visão Operacional</h2>
-                  <p className="text-[14px] mt-1 text-zinc-500 font-medium">Telemetria de performance e adoção da plataforma.</p>
+                  <h2 className="text-[32px] font-bold tracking-tight">Centro de Inteligência</h2>
+                  <p className="text-[14px] mt-1 text-zinc-500 font-medium">Telemetria de performance e estado global da operação.</p>
                 </header>
+                
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-8">
                   <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-white/5' : 'bg-white border-black/5'}`}>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">MRR Real (Estimado)</p>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">MRR Projetado</p>
                     <h3 className="text-[28px] font-black tracking-tighter">R$ {stats.receitaEstimada.toFixed(2)}</h3>
                   </div>
                   <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-white/5' : 'bg-white border-black/5'}`}>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Workspaces (Nós Ativos)</p>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Health Score Médio</p>
+                    <h3 className={`text-[28px] font-black tracking-tighter ${stats.scoreMedio >= 70 ? 'text-emerald-500' : 'text-amber-500'}`}>{stats.scoreMedio}/100</h3>
+                  </div>
+                  <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-white/5' : 'bg-white border-black/5'}`}>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Clientes Operando</p>
                     <h3 className="text-[28px] font-black tracking-tighter text-indigo-500">{stats.ativos}</h3>
                   </div>
-                  <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-white/5' : 'bg-white border-black/5'}`}>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Contas em Trial</p>
-                    <h3 className="text-[28px] font-black tracking-tighter text-blue-500">{stats.testes}</h3>
-                  </div>
-                  <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-white/5' : 'bg-white border-black/5'}`}>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Contas Bloqueadas</p>
-                    <h3 className="text-[28px] font-black tracking-tighter text-rose-500">{stats.bloqueados}</h3>
+                  <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-rose-500/20' : 'bg-rose-50/50 border-rose-200'}`}>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-rose-500 mb-2">Risco de Churn</p>
+                    <h3 className="text-[28px] font-black tracking-tighter text-rose-500">{stats.emRisco} <span className="text-sm font-medium opacity-70">contas</span></h3>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
-                  {/* Célula Placeholder do Storage */}
+                  {/* Monitor de Banco Mantido */}
                   <div className={`lg:col-span-2 p-6 md:p-8 rounded-[24px] border flex flex-col items-center justify-center text-center ${temaNoturno ? 'bg-[#111111]/80 border-white/[0.04]' : 'bg-white border-black/[0.04]'}`}>
                      <svg className={`w-12 h-12 mb-4 ${temaNoturno ? 'text-zinc-700' : 'text-zinc-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                      <h4 className={`text-[15px] font-bold ${temaNoturno ? 'text-white' : 'text-slate-900'}`}>Monitoramento de Banco de Dados</h4>
                      <p className={`text-[12px] font-medium mt-1 max-w-sm ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Aguardando permissão de root role para cálculo real de tamanho em disco.</p>
                   </div>
 
-                  {/* Volume Real */}
                   <div className={`p-6 rounded-[24px] border flex flex-col ${temaNoturno ? 'bg-[#111111]/80 border-white/[0.04]' : 'bg-white border-black/[0.04]'}`}>
-                    <h4 className={`text-[13px] font-bold uppercase tracking-widest mb-6 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Maior Volume Operacional</h4>
+                    <h4 className={`text-[13px] font-bold uppercase tracking-widest mb-6 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Ranking Operacional</h4>
                     <div className="flex flex-col gap-4 flex-1">
-                      {stats.topActive.length > 0 && stats.topActive[0].uso_registros > 0 ? stats.topActive.map((emp, i) => (
+                      {empresas.sort((a,b) => b.uso_registros - a.uso_registros).slice(0,5).map((emp, i) => (
                         emp.uso_registros > 0 && (
                           <div key={emp.id} className="flex items-center gap-3">
                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[11px] ${i === 0 ? (temaNoturno ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') : (temaNoturno ? 'bg-white/5 text-zinc-400' : 'bg-black/5 text-zinc-600')}`}>#{i+1}</div>
@@ -348,20 +405,20 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
                              </div>
                           </div>
                         )
-                      )) : <p className={`text-xs ${temaNoturno?'text-zinc-600':'text-zinc-400'}`}>Nenhuma comanda processada ainda.</p>}
+                      ))}
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* WORKSPACES */}
+            {/* WORKSPACES COM SCORE E STATUS LIVE */}
             {abaAtiva === 'clientes' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex-1 flex flex-col">
                 <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6 border-black/5 dark:border-white/5">
                   <div>
                     <h2 className="text-[32px] font-bold tracking-tight">Workspaces</h2>
-                    <p className="text-[14px] mt-1 text-zinc-500 font-medium">Gestão de acessos, suspensão e impersonação.</p>
+                    <p className="text-[14px] mt-1 text-zinc-500 font-medium">Gestão de acessos, telemetria e controle.</p>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
                      <div className={`relative flex-1 flex items-center p-1 rounded-xl border transition-all focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 ${temaNoturno ? 'bg-[#111111] border-white/10' : 'bg-white border-black/10'}`}>
@@ -377,31 +434,51 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                   {empresasFiltradas.map(emp => {
                     const dono = emp.usuarios?.find(u => u.role === 'dono');
-                    const isAtivo = emp.ativo !== false;
                     
                     return (
                       <div key={emp.id} onClick={() => setWorkspaceSelecionado(emp)} className={`cursor-pointer group relative p-5 rounded-[20px] border transition-all hover:-translate-y-1 hover:shadow-lg flex flex-col ${temaNoturno ? 'bg-[#111] border-white/5 hover:border-white/20' : 'bg-white border-black/5 hover:border-black/10 shadow-sm'}`}>
+                        {/* Cabeçalho do Card */}
                         <div className="flex justify-between items-start mb-4">
-                           <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0">
-                             {emp.logo_url && <img src={emp.logo_url} alt="Logo" className="w-full h-full object-cover absolute inset-0 z-10" referrerPolicy="no-referrer" onError={(e) => e.currentTarget.style.display = 'none'} />}
-                             <div className={`absolute inset-0 z-0 flex items-center justify-center font-black ${temaNoturno ? 'bg-[#222] text-zinc-400' : 'bg-zinc-200 text-zinc-500'}`}>{emp.nome.charAt(0).toUpperCase()}</div>
+                           <div className="flex items-center gap-3">
+                             <div className="relative w-12 h-12 rounded-xl bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0 overflow-hidden">
+                                {emp.logo_url && <img src={emp.logo_url} alt="Logo" className="w-full h-full object-cover absolute inset-0 z-10" referrerPolicy="no-referrer" onError={(e) => e.currentTarget.style.display = 'none'} />}
+                                <div className={`absolute inset-0 z-0 flex items-center justify-center font-black ${temaNoturno ? 'bg-[#222] text-zinc-400' : 'bg-zinc-200 text-zinc-500'}`}>{emp.nome.charAt(0).toUpperCase()}</div>
+                             </div>
+                             <div>
+                               <h3 className="font-bold text-[16px] truncate tracking-tight">{emp.nome}</h3>
+                               <div className="flex items-center gap-1.5 mt-1">
+                                  <div className={`w-2 h-2 rounded-full ${emp.statusOp?.dot || 'bg-zinc-500'}`}></div>
+                                  <span className={`text-[11px] font-semibold ${emp.statusOp?.corTxt || 'text-zinc-500'}`}>{emp.statusOp?.tag || 'Desconhecido'}</span>
+                               </div>
+                             </div>
                            </div>
-                           <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest ${isAtivo ? (temaNoturno ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : (temaNoturno ? 'bg-rose-500/10 text-rose-400' : 'bg-rose-50 text-rose-700')}`}>
-                             {isAtivo ? 'Rodando' : 'Suspenso'}
-                           </span>
                         </div>
-                        <h3 className="font-bold text-[16px] truncate tracking-tight">{emp.nome}</h3>
-                        <p className={`text-[12px] font-medium truncate mt-0.5 mb-5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>{dono?.email || 'Sem Credencial'}</p>
-                        
-                        <div className="mt-auto pt-4 border-t border-black/5 dark:border-white/5 grid grid-cols-3 gap-2">
+
+                        {/* Inteligência Derivada */}
+                        <div className={`mt-2 p-3 rounded-xl border flex justify-between items-center ${temaNoturno ? 'bg-[#1A1A1A] border-white/5' : 'bg-[#FAFAFA] border-black/5'}`}>
+                           <div>
+                             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Health Score</p>
+                             <p className={`text-[14px] font-black mt-0.5 ${emp.health?.cor || 'text-zinc-500'}`}>{emp.health?.nota || 0} <span className="text-[10px] font-medium opacity-70">({emp.health?.label || 'N/A'})</span></p>
+                           </div>
+                           <div className="text-right">
+                             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Comandas</p>
+                             <p className="text-[14px] font-black mt-0.5 dark:text-white">{emp.uso_registros}</p>
+                           </div>
+                        </div>
+
+                        {/* Ações Integradas com Delete Seguro */}
+                        <div className="mt-5 pt-4 border-t border-black/5 dark:border-white/5 grid grid-cols-4 gap-2">
                            <button onClick={(e) => { e.stopPropagation(); abrirModalEdicao(emp, dono); }} className={`p-2 rounded-lg text-[11px] font-bold transition-colors flex items-center justify-center ${temaNoturno ? 'bg-white/5 hover:bg-white/10' : 'bg-black/5 hover:bg-black/10'}`} title="Editar">
                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                            </button>
                            <button onClick={(e) => { e.stopPropagation(); entrarComoCliente(dono); }} className={`p-2 rounded-lg text-[11px] font-bold transition-colors flex items-center justify-center ${temaNoturno ? 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`} title="Acessar Console">
                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
                            </button>
-                           <button onClick={(e) => { e.stopPropagation(); abrirConfirmModal(emp); }} className={`p-2 rounded-lg text-[11px] font-bold transition-colors flex items-center justify-center ${temaNoturno ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}`} title={isAtivo ? 'Suspender' : 'Reativar'}>
+                           <button onClick={(e) => { e.stopPropagation(); setConfirmConfig({ id: emp.id, acao: 'status', status: emp.ativo, nome: emp.nome }); setConfirmModalOpen(true); }} className={`p-2 rounded-lg text-[11px] font-bold transition-colors flex items-center justify-center ${temaNoturno ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`} title={emp.ativo ? 'Suspender' : 'Reativar'}>
                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                           </button>
+                           <button onClick={(e) => { e.stopPropagation(); setConfirmConfig({ id: emp.id, acao: 'excluir', nome: emp.nome }); setConfirmModalOpen(true); }} className={`p-2 rounded-lg text-[11px] font-bold transition-colors flex items-center justify-center ${temaNoturno ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}`} title="Destruir Workspace">
+                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                            </button>
                         </div>
                       </div>
@@ -411,7 +488,7 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
               </div>
             )}
 
-            {/* AUDITORIA COM WHITELIST DE IP */}
+            {/* AUDITORIA RESTAURADA INTACTA */}
             {abaAtiva === 'auditoria' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl">
                 <header className="mb-8 border-b pb-6 border-black/5 dark:border-white/5 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -420,7 +497,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
                     <p className="text-[14px] mt-1 text-zinc-500 font-medium">Histórico autêntico da tabela <code className="bg-zinc-800 text-zinc-300 px-1 py-0.5 rounded">logs_acesso</code>.</p>
                   </div>
                   
-                  {/* Gestão de IP Elegante */}
                   <div className={`p-4 rounded-xl border flex flex-col gap-3 ${temaNoturno ? 'bg-[#111] border-white/10' : 'bg-white border-black/10'}`}>
                     <div className="flex items-center justify-between gap-6 border-b pb-3 border-black/5 dark:border-white/5">
                       <div className="flex flex-col">
@@ -490,7 +566,7 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
               </div>
             )}
 
-            {/* WIZARD NOVO WORKSPACE (COM ALTURA FIXA/ESTÁVEL) */}
+            {/* WIZARD NOVO WORKSPACE COM PROVISIONAMENTO CINEMATOGRÁFICO */}
             {abaAtiva === 'novo' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto pb-10">
                 {etapaWizard < 5 && (
@@ -507,9 +583,8 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
                   </>
                 )}
 
-                {/* Container com min-h estável para evitar pulos */}
-                <div className={`rounded-[24px] border relative transition-all duration-500 min-h-[500px] flex flex-col ${etapaWizard === 5 ? 'bg-transparent border-transparent shadow-none' : (temaNoturno ? 'bg-[#111111] border-white/5 shadow-2xl' : 'bg-white border-black/5 shadow-xl')}`}>
-                  {etapaWizard < 5 && (
+                <div className={`rounded-[24px] border relative transition-all duration-700 min-h-[500px] flex flex-col overflow-hidden ${etapaWizard === 5 ? (temaNoturno ? 'bg-black border-white/10 shadow-[0_0_50px_rgba(99,102,241,0.1)]' : 'bg-slate-900 border-black shadow-2xl') : (temaNoturno ? 'bg-[#111111] border-white/5' : 'bg-white border-black/5')}`}>
+                  {etapaWizard < 5 ? (
                     <form onSubmit={iniciarProvisionamento} className="relative z-10 p-6 md:p-10 flex flex-col flex-1">
                       
                       <div className="flex-1">
@@ -611,21 +686,29 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
                          {etapaWizard < 4 ? (
                            <button type="button" onClick={avancarWizard} className={`px-8 py-3 rounded-xl font-semibold text-[13px] transition-colors ${temaNoturno ? 'bg-white text-zinc-900 hover:bg-zinc-200' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-sm'}`}>Próximo</button>
                          ) : (
-                           <button type="submit" disabled={loading} className={`px-8 py-3 rounded-xl font-semibold text-[13px] transition-colors shadow-lg ${temaNoturno ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}>Criar Workspace</button>
+                           <button type="submit" disabled={loading} className={`px-8 py-3 rounded-xl font-semibold text-[13px] transition-colors shadow-lg ${temaNoturno ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}>Compilar e Provisionar</button>
                          )}
                       </div>
                     </form>
-                  )}
-
-                  {etapaWizard === 5 && (
-                    <div className="flex flex-col items-center justify-center p-16 md:p-24 text-center flex-1 animate-in fade-in duration-700">
-                       <div className="relative w-20 h-20 mb-8">
-                         <div className="absolute inset-0 rounded-full border-4 border-indigo-500/20"></div>
-                         <div className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
-                         <div className="absolute inset-0 flex items-center justify-center"><div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse"></div></div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-16 md:p-24 text-center flex-1 relative z-20 animate-in fade-in duration-700">
+                       <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none"></div>
+                       
+                       <div className="relative w-24 h-24 mb-10 flex items-center justify-center">
+                         <div className="absolute inset-0 rounded-full border-2 border-indigo-500/20"></div>
+                         <div className="absolute inset-0 rounded-full border-t-2 border-l-2 border-indigo-500 animate-[spin_1s_linear_infinite]"></div>
+                         <div className="absolute inset-2 rounded-full border-b-2 border-r-2 border-blue-400 animate-[spin_2s_linear_infinite_reverse]"></div>
+                         <div className="w-2 h-2 bg-indigo-400 rounded-full animate-ping"></div>
                        </div>
-                       <h3 className={`text-[20px] font-bold tracking-tight mb-2 ${temaNoturno ? 'text-white' : 'text-slate-900'}`}>Processando</h3>
-                       <p className={`text-[14px] font-medium font-mono animate-pulse ${temaNoturno ? 'text-indigo-400' : 'text-indigo-600'}`}>{cinematicText}</p>
+
+                       <h3 className="text-[24px] font-bold tracking-tight mb-4 text-white">Infraestrutura em Deploy</h3>
+                       
+                       <div className="w-full max-w-md bg-black/50 border border-white/10 rounded-lg p-4 font-mono text-left mb-8 shadow-inner">
+                          <p className="text-[13px] text-emerald-400 mb-2">{'>'} _ {cinematicText}</p>
+                          <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                             <div className="h-full bg-indigo-500 transition-all duration-300 ease-out" style={{ width: `${progressoCinematic}%` }}></div>
+                          </div>
+                       </div>
                     </div>
                   )}
                 </div>
@@ -635,6 +718,7 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
         </main>
       </div>
 
+      {/* MODAIS RESTAURADOS E EXPANDIDOS */}
       {modalEdicaoAberto && (
         <div className="fixed inset-0 z-[400] flex justify-end">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setModalEdicaoAberto(false)}></div>
@@ -684,14 +768,24 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
         </div>
       )}
 
+      {/* MODAL DE CONFIRMAÇÃO SEGURO (MÚLTIPLO USO) */}
       {confirmModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[400] animate-in fade-in">
-           <div className={`rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col text-center border ${temaNoturno ? 'bg-[#09090b] border-white/10' : 'bg-white border-black/5'}`}>
-             <h2 className={`text-lg font-bold tracking-tight mb-2 ${temaNoturno ? 'text-white' : 'text-slate-900'}`}>{confirmConfig.status ? 'Suspender Acesso' : 'Restaurar Acesso'}</h2>
-             <p className={`text-sm font-medium mb-6 ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Deseja realmente {confirmConfig.status ? 'suspender' : 'restaurar'} o workspace <span className={temaNoturno ? 'text-white' : 'text-black'}>{confirmConfig.nome}</span>?</p>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[400] animate-in fade-in">
+           <div className={`rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col text-center border ${temaNoturno ? 'bg-[#0A0A0A] border-white/10' : 'bg-white border-black/5'}`}>
+             <h2 className={`text-lg font-bold tracking-tight mb-2 ${confirmConfig.acao === 'excluir' ? 'text-red-500' : (temaNoturno ? 'text-white' : 'text-slate-900')}`}>
+               {confirmConfig.acao === 'excluir' ? 'Atenção Crítica: Exclusão' : 'Alterar Status'}
+             </h2>
+             <p className={`text-sm font-medium mb-6 ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>
+               {confirmConfig.acao === 'excluir' 
+                 ? `Você está prestes a DESTRUIR completamente os dados de "${confirmConfig.nome}". Essa ação é irreversível e apagará comandas, usuários e finanças.`
+                 : `Deseja ${confirmConfig.status ? 'suspender' : 'restaurar'} o acesso de "${confirmConfig.nome}"?`
+               }
+             </p>
              <div className="flex gap-3">
-               <button onClick={() => setConfirmModalOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${temaNoturno ? 'bg-white/5 text-zinc-300 hover:bg-white/10' : 'bg-black/5 text-zinc-600 hover:bg-black/10'}`}>Cancelar</button>
-               <button onClick={alternarStatusEmpresa} className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all shadow-md ${confirmConfig.status ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>Confirmar</button>
+               <button onClick={() => setConfirmModalOpen(false)} className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-zinc-800 text-white hover:bg-zinc-700 transition-all">Cancelar</button>
+               <button onClick={confirmConfig.acao === 'excluir' ? confirmarExclusaoExtrema : alternarStatusEmpresa} className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all shadow-md ${confirmConfig.acao === 'excluir' ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                 Executar
+               </button>
              </div>
            </div>
         </div>

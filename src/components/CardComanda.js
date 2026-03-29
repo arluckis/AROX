@@ -14,16 +14,29 @@ export default function CardComanda({ comanda, onClick, temaNoturno }) {
   const isPagaTotal = totalOriginal > 0 && totalPendente <= 0.01;
   const qtdProdutos = (comanda.produtos || []).length;
   
-  // Tempo aberto
+  // Tempo aberto com cálculo de Semanas e Dias
   const getTempoAberto = () => {
     if (!comanda.hora_abertura) return '';
     try {
       const ms = new Date() - new Date(comanda.hora_abertura);
       if (isNaN(ms) || ms < 0) return '';
-      const minutos = Math.floor(ms / 60000);
-      if (minutos < 60) return `${minutos}m`;
-      const horas = Math.floor(minutos / 60);
-      return `${horas}h ${minutos % 60}m`;
+      
+      const minutosTotais = Math.floor(ms / 60000);
+      const minutos = minutosTotais % 60;
+      
+      const horasTotais = Math.floor(minutosTotais / 60);
+      const horas = horasTotais % 24;
+      
+      const diasTotais = Math.floor(horasTotais / 24);
+      const dias = diasTotais % 7;
+        
+      if (diasTotais > 0) {
+        return horas > 0 ? `${diasTotais}d ${horas}h` : `${diasTotais}d`;
+      }
+      if (horasTotais > 0) {
+        return minutos > 0 ? `${horasTotais}h ${minutos}m` : `${horasTotais}h`;
+      }
+      return `${minutosTotais}m`;
     } catch(e) { return ''; }
   };
   const tempoTexto = getTempoAberto();

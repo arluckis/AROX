@@ -1,4 +1,3 @@
-// src/components/PainelComanda.js
 'use client';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import SystemLoader from './SystemLoader';
@@ -368,7 +367,6 @@ export default function PainelComanda({
             )}
           </div>
           
-          {/* O pb-10 md:pb-6 garante distância IMPOSSÍVEL de ser ultrapassada */}
           <div className="w-full shrink-0 p-4 pb-10 md:pb-6 mt-auto">
             <div className={`p-4 rounded-[16px] shadow-2xl border transition-all ${temaNoturno ? 'border-white/[0.08] bg-[#111]/95 backdrop-blur-xl shadow-black/80' : 'border-black/[0.05] bg-white/95 backdrop-blur-xl shadow-zinc-300/80'}`}>
               <div className="flex justify-between items-end mb-4">

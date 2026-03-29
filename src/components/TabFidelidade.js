@@ -195,43 +195,50 @@ export default function TabFidelidade({ temaNoturno, sessao, mostrarAlerta, clie
   const bordaDestaque = temaNoturno ? 'border-white/[0.08]' : 'border-black/[0.08]';
   const btnArox = temaNoturno ? 'bg-zinc-100 text-zinc-950 hover:bg-white shadow-[0_0_15px_rgba(255,255,255,0.05)]' : 'bg-zinc-900 text-white hover:bg-black shadow-[0_2px_10px_rgba(0,0,0,0.1)]';
   
-  // Modal Background - Translucidez sem escurecer visualmente no light mode
   const modalBackdrop = temaNoturno ? 'bg-black/60' : 'bg-white/40';
   const surfaceModal = temaNoturno ? 'bg-[#0A0A0C] border-white/[0.08]' : 'bg-white/90 backdrop-blur-2xl border-black/[0.05] shadow-2xl';
 
   return (
     <div className={`w-full h-full flex flex-col font-sans overflow-hidden ${bgPrincipal} ${textPrincipal}`}>
-      <div className={`flex flex-wrap items-center gap-4 md:gap-6 pb-2 shrink-0 border-b mb-6 px-4 md:px-6 transition-colors duration-300 ${bordaDestaque}`}>
-        {tabs.map(tab => (
-          <button key={tab.id} onClick={() => setAbaInterna(tab.id)} className={`relative py-3 text-[11px] font-bold tracking-[0.05em] uppercase transition-colors duration-300 ${abaInterna === tab.id ? (temaNoturno ? 'text-white' : 'text-black') : `${textSecundario} hover:${textPrincipal}`}`}>
-            {tab.label}
-            {abaInterna === tab.id && <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-emerald-500 shadow-[0_-1px_8px_rgba(16,185,129,0.4)]" />}
-          </button>
-        ))}
+      <div className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-2 shrink-0 border-b mb-6 px-4 md:px-6 transition-colors duration-300 ${bordaDestaque}`}>
+        <div className="flex flex-wrap items-center gap-4 md:gap-6">
+          {tabs.map(tab => (
+            <button 
+              key={tab.id} 
+              onMouseEnter={() => setAbaInterna(tab.id)}
+              onClick={() => setAbaInterna(tab.id)}
+              className={`relative py-3 text-[11px] font-bold tracking-[0.05em] uppercase transition-colors duration-300 ${abaInterna === tab.id ? (temaNoturno ? 'text-white' : 'text-black') : `${textSecundario} hover:${textPrincipal}`}`}
+            >
+              {tab.label}
+              {abaInterna === tab.id && <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-emerald-500 shadow-[0_-1px_8px_rgba(16,185,129,0.4)]" />}
+            </button>
+          ))}
+        </div>
+
+        {abaInterna === 'clientes' && (
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-start md:justify-end arox-cinematic" style={{animationDelay: '0ms'}}>
+            <input type="file" accept=".xlsx, .xls, .csv" className="hidden" ref={fileInputRef} onChange={acionarImportacao} />
+            <div className="hidden sm:flex bg-transparent rounded-xl border border-dashed overflow-hidden shadow-sm" style={{borderColor: temaNoturno ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}}>
+               <button onClick={() => fileInputRef.current?.click()} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 active:bg-zinc-500/10 ${temaNoturno ? 'text-zinc-300 hover:text-white border-r border-white/10' : 'text-zinc-600 hover:text-black border-r border-black/10'}`}>Excel / CSV</button>
+               <button onClick={() => setMostrarModalTexto(true)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 active:bg-zinc-500/10 ${temaNoturno ? 'text-zinc-300 hover:text-white' : 'text-zinc-600 hover:text-black'}`}>Colar Lista</button>
+            </div>
+            <button onClick={() => { setClienteEditando(null); setNovoCliente({nome:'', telefone:'', aniversario:'', pontos:0}); setMostrarModalNovo(true); }} className={`flex-1 sm:flex-none px-5 py-2 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all duration-300 active:scale-95 border border-transparent ${btnArox}`}>+ Integrar Cliente</button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto pb-16 scrollbar-hide px-4 md:px-6 relative z-10 w-full">
         {abaInterna === 'clientes' && (
           <div className="flex flex-col h-full w-full animate-in fade-in duration-500">
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 arox-cinematic w-full" style={{animationDelay: '0ms'}}>
-              <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1">
-                <div className={`relative w-full sm:w-80 flex items-center rounded-xl border transition-all duration-300 focus-within:border-emerald-500/40 shadow-sm ${surfaceBase} ${bordaDestaque}`}>
-                  <div className="pl-3 opacity-40"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg></div>
-                  <input type="text" placeholder="Buscar cliente ou telefone..." value={busca} onChange={e => setBusca(e.target.value)} className="w-full bg-transparent border-none outline-none py-2.5 px-3 text-[13px] font-bold placeholder:text-zinc-500" />
-                </div>
-                <div className={`flex items-center p-1 rounded-xl border shadow-sm overflow-x-auto scrollbar-hide w-full sm:w-auto ${surfaceBase} ${bordaDestaque}`}>
-                  {[{id:'todos', l:'Todos'}, {id:'resgate', l:'Prontos'}, {id:'quase', l:'Aquecidos'}, {id:'inativos', l:'Inativos'}].map(f => (
-                    <button key={f.id} onClick={() => setFiltroCategoria(f.id)} className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all duration-300 shrink-0 ${filtroCategoria === f.id ? (temaNoturno ? 'bg-white/10 text-white shadow-sm' : 'bg-black/5 text-black shadow-sm') : `bg-transparent ${textSecundario} hover:${textPrincipal}`}`}>{f.l}</button>
-                  ))}
-                </div>
+            <div className="flex flex-col sm:flex-row gap-3 w-full mb-6 arox-cinematic" style={{animationDelay: '0ms'}}>
+              <div className={`relative w-full sm:w-80 flex items-center rounded-xl border transition-all duration-300 focus-within:border-emerald-500/40 shadow-sm ${surfaceBase} ${bordaDestaque}`}>
+                <div className="pl-3 opacity-40"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg></div>
+                <input type="text" placeholder="Buscar cliente ou telefone..." value={busca} onChange={e => setBusca(e.target.value)} className="w-full bg-transparent border-none outline-none py-2.5 px-3 text-[13px] font-bold placeholder:text-zinc-500" />
               </div>
-              <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
-                <input type="file" accept=".xlsx, .xls, .csv" className="hidden" ref={fileInputRef} onChange={acionarImportacao} />
-                <div className="flex bg-transparent rounded-xl border border-dashed overflow-hidden shadow-sm" style={{borderColor: temaNoturno ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}}>
-                   <button onClick={() => fileInputRef.current?.click()} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 active:bg-zinc-500/10 ${temaNoturno ? 'text-zinc-300 hover:text-white border-r border-white/10' : 'text-zinc-600 hover:text-black border-r border-black/10'}`}>Excel / CSV</button>
-                   <button onClick={() => setMostrarModalTexto(true)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 active:bg-zinc-500/10 ${temaNoturno ? 'text-zinc-300 hover:text-white' : 'text-zinc-600 hover:text-black'}`}>Colar Lista</button>
-                </div>
-                <button onClick={() => { setClienteEditando(null); setNovoCliente({nome:'', telefone:'', aniversario:'', pontos:0}); setMostrarModalNovo(true); }} className={`flex-1 sm:flex-none px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all duration-300 active:scale-95 border border-transparent ${btnArox}`}>+ Integrar Cliente</button>
+              <div className={`flex items-center p-1 rounded-xl border shadow-sm overflow-x-auto scrollbar-hide w-full sm:w-auto ${surfaceBase} ${bordaDestaque}`}>
+                {[{id:'todos', l:'Todos'}, {id:'resgate', l:'Prontos'}, {id:'quase', l:'Aquecidos'}, {id:'inativos', l:'Inativos'}].map(f => (
+                  <button key={f.id} onClick={() => setFiltroCategoria(f.id)} className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all duration-300 shrink-0 ${filtroCategoria === f.id ? (temaNoturno ? 'bg-white/10 text-white shadow-sm' : 'bg-black/5 text-black shadow-sm') : `bg-transparent ${textSecundario} hover:${textPrincipal}`}`}>{f.l}</button>
+                ))}
               </div>
             </div>
 
@@ -477,7 +484,6 @@ export default function TabFidelidade({ temaNoturno, sessao, mostrarAlerta, clie
 
       </div>
 
-      {/* MODAIS: Agora usam o mesmo padrão blur do TabFechamentoCaixa sem escurecer visualmente no light mode */}
       {mostrarModalTexto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className={`absolute inset-0 transition-opacity duration-300 backdrop-blur-md ${modalBackdrop}`} onClick={() => setMostrarModalTexto(false)} />
