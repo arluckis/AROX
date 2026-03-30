@@ -285,7 +285,7 @@ export default function Login({ getHoje, setSessao, setScenePhase }) {
           {/* NOVO BOTÃO COMERCIAL: Demonstração */}
           <div className="mt-8 flex gap-4 pointer-events-auto">
             <button 
-              onClick={() => window.open('https://wa.me/seunumeroaqui', '_blank')}
+              onClick={() => window.open('https://wa.me/5584994229126', '_blank')}
               className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-[13px] font-medium text-white hover:bg-white/10 hover:border-white/20 hover:shadow-[0_0_20px_rgba(255,255,255,0.05)] transition-all duration-300 flex items-center gap-2 group backdrop-blur-sm"
             >
               Agendar Demonstração
