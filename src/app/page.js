@@ -66,7 +66,7 @@ export default function Home() {
   }, [frasesLoading]);
 
   const [sessao, setSessao] = useState(null); 
-  const [statusPresenca, setStatusPresenca] = useState('online'); // CONTROLE DE PRESENÇA
+  const [statusPresenca, setStatusPresenca] = useState('online');
   const [nomeEmpresa, setNomeEmpresa] = useState('AROX'); 
   const [temaNoturno, setTemaNoturno] = useState(true);
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
@@ -129,6 +129,31 @@ export default function Home() {
   const [loaderExitStage, setLoaderExitStage] = useState('none');
   
   const isFirstLoad = useRef(true);
+
+  // --- MOTOR DE NORMALIZAÇÃO DE CICLOS (RETROATIVO E ATUAL) ---
+  const normalizarComandas = (listaComandas, listaCaixas) => {
+    return listaComandas.map(c => {
+      let cicloData = c.data;
+      
+      // 1. Se a comanda já tem a marcação do caixa atualizado
+      if (c.caixa_id) {
+        const cx = listaCaixas.find(x => x.id === c.caixa_id);
+        if (cx) cicloData = cx.data_abertura;
+      } 
+      // 2. Lógica Retroativa: Descobre o ciclo pela hora que a comanda nasceu!
+      else {
+        const timeComanda = new Date(c.hora_abertura || c.created_at).getTime();
+        const cx = listaCaixas.find(x => {
+          const timeAbertura = new Date(x.criado_em).getTime();
+          const timeFechamento = x.data_fechamento ? new Date(x.data_fechamento).getTime() : Infinity;
+          return timeAbertura <= timeComanda && timeComanda <= timeFechamento;
+        });
+        if (cx) cicloData = cx.data_abertura;
+      }
+      
+      return { ...c, data: cicloData };
+    });
+  };
 
   useEffect(() => {
     if (appMode !== 'loading') return;
@@ -298,7 +323,6 @@ export default function Home() {
     return () => clearInterval(intervalo);
   }, [sessao]);
 
-  // SISTEMA DE HEARTBEAT E PRESENÇA (MODIFICADO)
   useEffect(() => {
     if (!sessao || sessao.role === 'super_admin') return;
     
@@ -316,18 +340,15 @@ export default function Home() {
       await supabase.from('usuarios').update({ ultimo_ping_at: now, status_presenca: novoStatus }).eq('id', sessao.id);
     };
 
-    // 1. Inicia o heartbeat de 1 minuto
     atualizarBanco('online'); 
     const heartbeatInterval = setInterval(() => {
        atualizarBanco(document.hidden ? 'ausente' : 'online');
     }, 60000); 
 
-    // 2. Detecta mudança de aba
     const handleVisibilidade = () => {
       atualizarBanco(document.hidden ? 'ausente' : 'online');
     };
 
-    // 3. Detecta ociosidade de 3 minutos
     const resetarTemporizador = () => {
       if (document.hidden) return; 
       
@@ -442,17 +463,22 @@ export default function Home() {
     if (!sessao?.empresa_id) return;
     setIsLoading(true);
     try {
-      const { data: caixasAbertos } = await supabase.from('caixas')
-        .select('*')
+      const { data: todosCaixas } = await supabase.from('caixas')
+        .select('id, data_abertura, data_fechamento, criado_em, status')
         .eq('empresa_id', sessao.empresa_id)
-        .eq('status', 'aberto')
-        .order('criado_em', { ascending: false })
-        .limit(1); 
+        .order('criado_em', { ascending: false }); 
         
-      let caixaData = caixasAbertos && caixasAbertos.length > 0 ? caixasAbertos[0] : null;
+      let caixasAbertos = (todosCaixas || []).filter(c => c.status === 'aberto');
+      let caixaData = caixasAbertos.length > 0 ? caixasAbertos[0] : null;
       
       const { data: comData } = await supabase.from('comandas').select('*, produtos:comanda_produtos(*), pagamentos(*)').eq('empresa_id', sessao.empresa_id).order('id', { ascending: false }).limit(3000);
-      if (comData) setComandas(comData.reverse());
+      
+      let comandasMapeadas = [];
+      if (comData) {
+          // NORMALIZA TODAS AS COMANDAS DO BANCO PARA SUA DATA DE CICLO
+          comandasMapeadas = normalizarComandas(comData, todosCaixas || []).reverse();
+          setComandas(comandasMapeadas);
+      }
 
       const hoje = getHoje();
       let hasPendencia = false;
@@ -461,7 +487,7 @@ export default function Home() {
         hasPendencia = true;
       }
       
-      const comandasPendentes = comData ? comData.filter(c => c.status === 'aberta' && c.data && c.data < hoje) : [];
+      const comandasPendentes = comandasMapeadas ? comandasMapeadas.filter(c => c.status === 'aberta' && c.data && c.data < hoje) : [];
       if (comandasPendentes.length > 0) {
         hasPendencia = true;
       }
@@ -486,51 +512,46 @@ export default function Home() {
   const fetchApenasAtualizacoes = async () => {
     if (!sessao?.empresa_id) return;
     try {
-      // 🛡️ VERIFICAÇÃO DE SEGURANÇA PROFISSIONAL: Trava de Inadimplência/Bloqueio
       const { data: statusConta } = await supabase.from('empresas').select('ativo, validade_plano').eq('id', sessao.empresa_id).single();
-      
       if (statusConta) {
         const agora = new Date();
         const planoExpirado = statusConta.validade_plano ? new Date(statusConta.validade_plano) < agora : false;
-        
         if (statusConta.ativo === false || planoExpirado) {
-          mostrarAlerta(
-            "Conta suspensa", 
-            statusConta.ativo === false 
-              ? "Sua conta foi temporariamente suspensa pelo administrador." 
-              : "Seu plano expirou. Regularize sua assinatura para continuar."
-          );
-
-          setTimeout(() => {
-            fazerLogout(true);
-          }, 4000);
+          mostrarAlerta("Conta suspensa", statusConta.ativo === false ? "Sua conta foi temporariamente suspensa pelo administrador." : "Seu plano expirou. Regularize sua assinatura.");
+          setTimeout(() => { fazerLogout(true); }, 4000);
           return; 
         }
       }
 
-      const { data: caixasAbertos } = await supabase.from('caixas')
-        .select('*')
+      const { data: todosCaixas } = await supabase.from('caixas')
+        .select('id, data_abertura, data_fechamento, criado_em, status')
         .eq('empresa_id', sessao.empresa_id)
-        .eq('status', 'aberto')
-        .order('criado_em', { ascending: false })
-        .limit(1); 
-      
-      if (caixasAbertos && caixasAbertos.length > 0) {
-          setCaixaAtual(caixasAbertos[0]); 
+        .order('criado_em', { ascending: false }); 
+        
+      let caixasAbertos = (todosCaixas || []).filter(c => c.status === 'aberto');
+      let caixaAtivo = caixasAbertos.length > 0 ? caixasAbertos[0] : null;
+      setCaixaAtual(caixaAtivo); 
+
+      let queryComandas = supabase.from('comandas')
+          .select('*, produtos:comanda_produtos(*), pagamentos(*)')
+          .eq('empresa_id', sessao.empresa_id);
+
+      if (caixaAtivo) {
+          queryComandas = queryComandas.or(`caixa_id.eq.${caixaAtivo.id},status.eq.aberta,data.eq.${getHoje()}`);
       } else {
-          setCaixaAtual(null); 
+          queryComandas = queryComandas.or(`status.eq.aberta,data.eq.${getHoje()}`);
       }
 
-      const { data: comDataHoje } = await supabase.from('comandas')
-        .select('*, produtos:comanda_produtos(*), pagamentos(*)')
-        .eq('empresa_id', sessao.empresa_id)
-        .or(`status.eq.aberta,data.eq.${getHoje()}`);
+      const { data: comDataHoje } = await queryComandas;
 
       if (comDataHoje) {
+        // NORMALIZA OS DADOS NOVOS ANTES DE JOGAR NO STATE
+        const comandasNorm = normalizarComandas(comDataHoje, todosCaixas || []);
+        
         setComandas(comandasAntigas => {
-          const historicoIntacto = comandasAntigas.filter(c => c.status === 'fechada' && c.data !== getHoje());
-          const novoEstado = [...historicoIntacto, ...comDataHoje.reverse()];
-          return novoEstado.sort((a, b) => a.id - b.id);
+          const idsAtualizados = comandasNorm.map(c => c.id);
+          const historicoIntacto = comandasAntigas.filter(c => !idsAtualizados.includes(c.id));
+          return [...historicoIntacto, ...comandasNorm.reverse()].sort((a, b) => a.id - b.id);
         });
       }
     } catch (err) {}
@@ -650,8 +671,22 @@ export default function Home() {
 
   const adicionarComanda = async (tipo) => {
     if (modoExclusao || !sessao?.empresa_id) return;
-    const qtdHoje = comandas.filter(c => c.data === getHoje()).length;
-    const novaComanda = { nome: `Comanda ${qtdHoje + 1}`, tipo, data: getHoje(), hora_abertura: new Date().toISOString(), status: 'aberta', tags: [], empresa_id: sessao.empresa_id };
+    
+    const dataOperacional = caixaAtual?.status === 'aberto' ? caixaAtual.data_abertura : getHoje();
+    const caixaId = caixaAtual?.status === 'aberto' ? caixaAtual.id : null;
+
+    const qtdHoje = comandas.filter(c => c.data === dataOperacional).length;
+    const novaComanda = { 
+       nome: `Comanda ${qtdHoje + 1}`, 
+       tipo, 
+       data: dataOperacional, // Salvando direto no dia do ciclo!
+       hora_abertura: new Date().toISOString(), 
+       status: 'aberta', 
+       tags: [], 
+       empresa_id: sessao.empresa_id,
+       caixa_id: caixaId
+    };
+    
     const { data, error } = await supabase.from('comandas').insert([novaComanda]).select().single();
     if (data && !error) { setComandas([...comandas, { ...data, produtos: [], pagamentos: [] }]); setIdSelecionado(data.id); }
   };
@@ -767,7 +802,12 @@ export default function Home() {
     }
     
     const todosPagos = novosProdutos.length > 0 && novosProdutos.every(p => p.pago);
-    let formasParaInserir = Array.isArray(formaPagamento) ? formaPagamento.map(p => ({ comanda_id: idSelecionado, valor: isFidelidade ? 0 : p.valor, forma: String(p.forma), data: getHoje(), empresa_id: sessao.empresa_id })) : [{ comanda_id: idSelecionado, valor: isFidelidade ? 0 : valorFinal, forma: String(formaPagamento || 'Dinheiro'), data: getHoje(), empresa_id: sessao.empresa_id }];
+
+    const dataDoCiclo = caixaAtual?.status === 'aberto' ? caixaAtual.data_abertura : (comandaAtiva?.data || getHoje());
+
+    let formasParaInserir = Array.isArray(formaPagamento) 
+      ? formaPagamento.map(p => ({ comanda_id: idSelecionado, valor: isFidelidade ? 0 : p.valor, forma: String(p.forma), data: dataDoCiclo, empresa_id: sessao.empresa_id })) 
+      : [{ comanda_id: idSelecionado, valor: isFidelidade ? 0 : valorFinal, forma: String(formaPagamento || 'Dinheiro'), data: dataDoCiclo, empresa_id: sessao.empresa_id }];
     
     const { data: pgDataArray, error: errPg } = await supabase.from('pagamentos').insert(formasParaInserir).select();
     
@@ -980,7 +1020,6 @@ export default function Home() {
             ${temaNoturno ? 'bg-[#09090b] text-zinc-100 selection:bg-white/20 selection:text-white' : 'bg-[#fafafa] text-zinc-900'}
           `}>
             
-            {/* PASSANDO statusPresenca PARA A SIDEBAR AQUI */}
             <Sidebar
               menuMobileAberto={menuMobileAberto} setMenuMobileAberto={setMenuMobileAberto} temaNoturno={temaNoturno}
               setTemaNoturno={setTemaNoturno} logoEmpresa={logoEmpresa} sessao={sessao} nomeEmpresa={nomeEmpresa}
@@ -1011,7 +1050,7 @@ export default function Home() {
                   ) : abaAtiva === 'fechadas' ? (
                     <TabFechadas temaNoturno={temaNoturno} comandasFechadas={comandas.filter(c => c.status === 'fechada')} reabrirComandaFechada={reabrirComandaFechada} excluirComandaFechada={excluirComandaFechada} getHoje={getHoje} />
                   ) : abaAtiva === 'faturamento' ? (
-                    <TabFaturamento temaNoturno={temaNoturno} filtroTempo={filtroTempo} setFiltroTempo={setFiltroTempo} getHoje={getHoje} getMesAtual={getMesAtual} getAnoAtual={getAnoAtual} faturamentoTotal={faturamentoTotal} lucroEstimado={lucroEstimado} dadosPizza={dadosPizza} rankingProdutos={rankingProdutos} comandasFiltradas={comandasFiltradas} comandas={comandas} />
+                    <TabFaturamento temaNoturno={temaNoturno} filtroTempo={filtroTempo} setFiltroTempo={setFiltroTempo} getHoje={getHoje} getMesAtual={getMesAtual} getAnoAtual={getAnoAtual} faturamentoTotal={faturamentoTotal} lucroEstimado={lucroEstimado} dadosPizza={dadosPizza} rankingProdutos={rankingProdutos} comandasFiltradas={comandasFiltradas} comandas={comandas} caixaAtual={caixaAtual} />
                   ) : abaAtiva === 'caixa' ? (
                     <TabFechamentoCaixa temaNoturno={temaNoturno} sessao={sessao} caixaAtual={caixaAtual} comandas={comandas} fetchData={fetchApenasAtualizacoes} mostrarAlerta={mostrarAlerta} mostrarConfirmacao={mostrarConfirmacao} />
                   ) : abaAtiva === 'fidelidade' ? (

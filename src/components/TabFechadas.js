@@ -1,4 +1,3 @@
-// src/components/TabFechadas.js
 'use client';
 import { useState } from 'react';
 
@@ -7,10 +6,15 @@ export default function TabFechadas({
   comandasFechadas,
   reabrirComandaFechada,
   excluirComandaFechada,
-  getHoje
+  getHoje,
+  caixaAtual
 }) {
-  const hoje = getHoje ? getHoje() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-  const [dataFiltro, setDataFiltro] = useState(hoje);
+  const hojeCalendario = getHoje ? getHoje() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  
+  const cicloAtualData = (caixaAtual?.status === 'aberto' && caixaAtual?.data_abertura) ? caixaAtual.data_abertura : hojeCalendario;
+  const isCicloAtrasado = caixaAtual?.status === 'aberto' && caixaAtual?.data_abertura && caixaAtual.data_abertura < hojeCalendario;
+
+  const [dataFiltro, setDataFiltro] = useState(cicloAtualData);
 
   const mudarDia = (quantidadeDias) => {
     const [ano, mes, dia] = dataFiltro.split('-').map(Number);
@@ -30,12 +34,11 @@ export default function TabFechadas({
   });
 
   const renderDataLabel = () => {
-    if (dataFiltro === hoje) return 'Hoje';
+    if (dataFiltro === hojeCalendario) return 'Hoje';
     const dataObj = new Date(dataFiltro + 'T12:00:00');
     return dataObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace(' de ', ' ');
   };
 
-  // Cores Base AROX
   const bgPrincipal = temaNoturno ? 'bg-[#050505]' : 'bg-[#FAFAFA]';
   const surfaceBase = temaNoturno ? 'bg-[#0A0A0A]' : 'bg-white/80 backdrop-blur-xl';
   const bordaBase = temaNoturno ? 'border-white/[0.04]' : 'border-black/[0.04]';
@@ -43,9 +46,24 @@ export default function TabFechadas({
   const textSecundario = temaNoturno ? 'text-zinc-500' : 'text-zinc-500';
 
   return (
-    <div className={`w-full max-w-full font-sans arox-cinematic pb-20 ${bgPrincipal}`}>
+    <div className={`w-full max-w-full font-sans arox-cinematic pb-20 px-4 md:px-0 ${bgPrincipal}`}>
       
-      {/* 1. HEADER OPERACIONAL PREMIUM */}
+      {/* BANNER PADRÃO - CICLO ATRASADO */}
+      {isCicloAtrasado && (
+        <div className={`w-full mb-6 p-4 rounded-2xl border shadow-sm flex items-center gap-4 arox-cinematic transition-colors ${temaNoturno ? 'bg-[#18181b]/60 border-amber-500/20 shadow-black/50 backdrop-blur-md' : 'bg-white/80 border-amber-300/50 shadow-sm backdrop-blur-md'}`}>
+          <div className={`flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0 ${temaNoturno ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-600'}`}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </div>
+          <div className="flex-1">
+            <h3 className={`text-[14px] font-bold tracking-tight ${temaNoturno ? 'text-amber-400' : 'text-amber-700'}`}>Ciclo Operacional Estendido</h3>
+            <p className={`text-[12px] mt-0.5 font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              O caixa do dia <strong className={temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}>{caixaAtual?.data_abertura?.split('-').reverse().join('/')}</strong> permanece ativo. Os lançamentos atuais estão sendo integrados a este período.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* HEADER OPERACIONAL PREMIUM */}
       <div className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 w-full pb-6 border-b transition-colors duration-300 ${bordaDestaque}`}>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-3">
@@ -60,7 +78,6 @@ export default function TabFechadas({
             </div>
           </div>
           
-          {/* Navegador de Data Padrão AROX */}
           <div className={`flex items-center p-1.5 rounded-xl border shadow-sm ${surfaceBase} ${bordaDestaque}`}>
              <button onClick={() => mudarDia(-1)} className={`p-2.5 rounded-lg transition-colors active:scale-95 ${temaNoturno ? 'hover:bg-white/[0.08] text-zinc-400 hover:text-white' : 'hover:bg-black/[0.05] text-zinc-500 hover:text-black'}`}>
                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
@@ -70,7 +87,7 @@ export default function TabFechadas({
                <input 
                  type="date" 
                  value={dataFiltro}
-                 max={hoje}
+                 max={hojeCalendario}
                  onChange={(e) => setDataFiltro(e.target.value)}
                  className={`absolute inset-0 w-full h-full opacity-0 cursor-pointer ${temaNoturno ? '[color-scheme:dark]' : ''}`} 
                />
@@ -79,7 +96,7 @@ export default function TabFechadas({
                </span>
              </div>
 
-             <button onClick={() => mudarDia(1)} disabled={dataFiltro >= hoje} className={`p-2.5 rounded-lg transition-colors active:scale-95 disabled:opacity-20 disabled:hover:bg-transparent disabled:active:scale-100 ${temaNoturno ? 'hover:bg-white/[0.08] text-zinc-400 hover:text-white' : 'hover:bg-black/[0.05] text-zinc-500 hover:text-black'}`}>
+             <button onClick={() => mudarDia(1)} disabled={dataFiltro >= hojeCalendario} className={`p-2.5 rounded-lg transition-colors active:scale-95 disabled:opacity-20 disabled:hover:bg-transparent disabled:active:scale-100 ${temaNoturno ? 'hover:bg-white/[0.08] text-zinc-400 hover:text-white' : 'hover:bg-black/[0.05] text-zinc-500 hover:text-black'}`}>
                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" /></svg>
              </button>
           </div>
@@ -88,7 +105,6 @@ export default function TabFechadas({
       <div className="flex-1 flex flex-col min-w-0 mx-auto w-full">
         {comandasOrdenadas.length === 0 ? (
           
-          /* EMPTY STATE PREMIUM */
           <div className={`w-full py-32 flex flex-col items-center justify-center rounded-3xl border border-dashed transition-colors ${temaNoturno ? 'border-white/[0.08] bg-white/[0.01]' : 'border-black/[0.08] bg-black/[0.01]'}`}>
             <p className={`text-[15px] font-bold tracking-tight mb-2 ${temaNoturno ? 'text-zinc-300' : 'text-zinc-700'}`}>Radar Limpo</p>
             <p className={`text-[13px] ${textSecundario}`}>
@@ -98,16 +114,33 @@ export default function TabFechadas({
 
         ) : (
           
-          /* GRID PRINCIPAL DE HISTÓRICO */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
             {comandasOrdenadas.map((c, idx) => {
               const valorTotalComanda = c.pagamentos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
               const isDelivery = c.tipo === 'Delivery';
               
+              // LÓGICA DE DIA DIFERENTE (MADRUGADA)
+              let isDiaDiferente = false;
+              let dataHoraAberturaStr = '';
+              if (c.hora_abertura || c.created_at) {
+                const dataObj = new Date(c.hora_abertura || c.created_at);
+                const isoReal = dataObj.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+                isDiaDiferente = isoReal !== c.data;
+                dataHoraAberturaStr = `${dataObj.toLocaleDateString('pt-BR', {day:'2-digit', month:'short'}).replace(' de ', ' ')}, `;
+              }
+
+              // Estilo Premium Diferenciado para Madrugada
+              const cardBg = isDiaDiferente 
+                ? (temaNoturno ? 'bg-indigo-500/[0.02] border-indigo-500/20 hover:border-indigo-500/40' : 'bg-indigo-50/50 border-indigo-200 hover:border-indigo-300')
+                : (temaNoturno ? 'bg-[#0A0A0A] border-white/[0.04] hover:border-white/[0.08]' : 'bg-white border-black/[0.04] hover:border-black/[0.08]');
+
+              const textHoraColor = isDiaDiferente 
+                ? (temaNoturno ? 'text-indigo-400' : 'text-indigo-600')
+                : textSecundario;
+
               return (
-                <div key={c.id} className={`relative flex flex-col rounded-3xl border p-5 transition-all duration-300 ease-out group overflow-hidden arox-cinematic w-full ${surfaceBase} hover:shadow-lg hover:-translate-y-1 ${temaNoturno ? 'border-white/[0.06] hover:border-white/[0.12]' : 'border-black/[0.04] hover:border-black/[0.08]'}`} style={{ animationDelay: `${idx * 20}ms` }}>
+                <div key={c.id} className={`relative flex flex-col rounded-3xl border p-5 transition-all duration-300 ease-out group overflow-hidden arox-cinematic w-full hover:shadow-lg hover:-translate-y-1 ${cardBg}`} style={{ animationDelay: `${idx * 20}ms` }}>
                   
-                  {/* IDENTIDADE LOGÍSTICA SUTIL (Dot / Canto) */}
                   {isDelivery && (
                     <div className="absolute top-0 right-0 w-16 h-16 pointer-events-none overflow-hidden rounded-tr-3xl">
                        <div className="absolute top-[-20px] right-[-20px] w-10 h-10 bg-amber-500/20 blur-xl"></div>
@@ -115,10 +148,14 @@ export default function TabFechadas({
                     </div>
                   )}
 
-                  {/* HEADER DO CARD */}
+                  {/* Sutil indicador lateral para madrugadas */}
+                  {isDiaDiferente && (
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${temaNoturno ? 'bg-indigo-500/50' : 'bg-indigo-400'}`}></div>
+                  )}
+
                   <div className="flex justify-between items-start gap-3 w-full relative z-10">
                     <div className="flex flex-col min-w-0 gap-1.5 w-full pr-4">
-                      <h3 className={`text-[15px] font-bold truncate tracking-tight w-full group-hover:text-emerald-500 transition-colors duration-300 ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                      <h3 className={`text-[15px] font-bold truncate tracking-tight w-full transition-colors duration-300 ${isDiaDiferente ? (temaNoturno ? 'text-indigo-100 group-hover:text-indigo-300' : 'text-indigo-900 group-hover:text-indigo-700') : (temaNoturno ? 'text-zinc-100 group-hover:text-emerald-500' : 'text-zinc-900 group-hover:text-emerald-500')}`}>
                         {c.nome}
                       </h3>
                       <div className="flex items-center gap-2">
@@ -131,7 +168,8 @@ export default function TabFechadas({
                         </span>
                         
                         {c.hora_fechamento && (
-                           <span className={`text-[10px] font-bold tracking-wider flex items-center gap-1 ${textSecundario}`}>
+                           <span className={`text-[10px] font-bold tracking-wider flex items-center gap-1 ${textHoraColor}`}>
+                             {isDiaDiferente && dataHoraAberturaStr}
                              {new Date(c.hora_fechamento).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}
                            </span>
                         )}
@@ -139,7 +177,6 @@ export default function TabFechadas({
                     </div>
                   </div>
 
-                  {/* CORPO DO CARD (Resumo Sintético) */}
                   <div className="mt-5 flex-1 relative z-10">
                     <p className={`text-[12px] font-medium line-clamp-2 leading-relaxed ${textSecundario}`}>
                       {c.produtos?.length > 0 ? c.produtos.map(p => p.nome).join(', ') : 'Sem itens registrados'}
@@ -149,7 +186,6 @@ export default function TabFechadas({
                     </p>
                   </div>
 
-                  {/* ZONA DE PAGAMENTO E VALOR */}
                   <div className={`mt-5 pt-4 border-t flex justify-between items-end relative z-10 ${bordaBase}`}>
                     <div className="flex flex-col gap-1 mb-0.5 w-full">
                       <span className={`text-[9px] font-bold uppercase tracking-widest ${textSecundario}`}>
@@ -176,7 +212,6 @@ export default function TabFechadas({
                     </div>
                   </div>
 
-                  {/* FOOTER DE AÇÕES (Alta Fidelidade) */}
                   <div className={`flex gap-2 mt-5 pt-4 border-t relative z-10 ${bordaBase}`}>
                     <button 
                       onClick={() => reabrirComandaFechada(c.id)} 

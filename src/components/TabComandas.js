@@ -21,6 +21,9 @@ export default function TabComandas({
     setDataHoje(hoje);
   }, []);
 
+  // --- BLINDAGEM DO CICLO ---
+  const isCicloAtrasado = caixaAtual?.status === 'aberto' && caixaAtual?.data_abertura && caixaAtual.data_abertura < dataHoje;
+
   // === FIX ABA FANTASMA: Se o usuário clica na Sidebar para ir para outra aba, fecha a comanda aberta ===
   useEffect(() => {
     if (abaAtiva !== 'comandas') {
@@ -104,8 +107,24 @@ export default function TabComandas({
   return (
     <div className={`w-full h-full flex flex-col font-sans overflow-hidden arox-cinematic pb-20`}>
       
+      {/* BANNER PADRÃO - CICLO ATRASADO */}
+      {isCicloAtrasado && caixaAtual?.status === 'aberto' && (
+        <div className={`w-full mb-6 p-4 rounded-2xl border shadow-sm flex items-center gap-4 arox-cinematic transition-colors ${temaNoturno ? 'bg-[#18181b]/60 border-amber-500/20 shadow-black/50 backdrop-blur-md' : 'bg-white/80 border-amber-300/50 shadow-sm backdrop-blur-md'}`}>
+          <div className={`flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0 ${temaNoturno ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-600'}`}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </div>
+          <div className="flex-1">
+            <h3 className={`text-[14px] font-bold tracking-tight ${temaNoturno ? 'text-amber-400' : 'text-amber-700'}`}>Ciclo Operacional Estendido</h3>
+            <p className={`text-[12px] mt-0.5 font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              O caixa do dia <strong className={temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}>{caixaAtual?.data_abertura?.split('-').reverse().join('/')}</strong> permanece ativo. Os lançamentos atuais estão sendo integrados a este período.
+            </p>
+          </div>
+        </div>
+      )}
+      
       {/* 1. HEADER OPERACIONAL */}
       {caixaAtual?.status === 'aberto' && (
+        
         <div className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 w-full border-b pb-6 transition-colors duration-300 ${temaNoturno ? 'border-white/[0.08]' : 'border-black/[0.04]'}`}>
             
             {/* Esquerda: Identidade e Métricas */}

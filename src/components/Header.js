@@ -32,6 +32,7 @@ export default function Header({
   // === LÓGICA DE STATUS OPERACIONAL BASE ===
   const isOperacaoAtiva = caixaAtual?.status === 'aberto';
   let statusOperacao = isOperacaoAtiva ? 'ativa' : 'inativa';
+  let dataPendenteFormatada = ''; // Variável para armazenar a data elegante
   
   if (isOperacaoAtiva && caixaAtual?.data_abertura) {
     const dataAberturaDB = String(caixaAtual.data_abertura).substring(0, 10);
@@ -40,6 +41,9 @@ export default function Header({
     
     if (dataAberturaDB < hoje && agora.getHours() >= 5) {
       statusOperacao = 'pendente';
+      // Extrai a data e formata como DD/MM
+      const [ano, mes, dia] = dataAberturaDB.split('-');
+      dataPendenteFormatada = `${dia}/${mes}`;
     }
   }
 
@@ -100,8 +104,8 @@ export default function Header({
         : (isDark ? 'bg-white/5 ring-white/10 text-zinc-400 hover:bg-white/10' : 'bg-black/5 ring-black/5 text-zinc-600 hover:bg-black/10'),
       dot: statusOperacao === 'pendente' ? 'bg-amber-500/80 shadow-[0_0_8px_rgba(245,158,11,0.4)]' : 'bg-zinc-500/50',
       ping: statusOperacao === 'pendente' ? 'bg-amber-500/40 animate-[pulse_3s_ease-in-out_infinite]' : 'hidden',
-      label: statusOperacao === 'pendente' ? 'Ciclo pendente' : 'Sistema inativo',
-      mobileLabel: statusOperacao === 'pendente' ? 'Pendente' : 'Inativo',
+      label: statusOperacao === 'pendente' ? `Ciclo pendente • ${dataPendenteFormatada}` : 'Sistema inativo',
+      mobileLabel: statusOperacao === 'pendente' ? `Pendente • ${dataPendenteFormatada}` : 'Inativo',
       msgText: ''
     };
 
@@ -452,7 +456,7 @@ export default function Header({
                               <div className="flex items-center gap-3">
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-semibold text-[13px] ${isDark ? 'bg-white/5 text-zinc-300 ring-1 ring-inset ring-white/10' : 'bg-white text-zinc-700 ring-1 ring-inset ring-black/10 shadow-sm'}`}>
                                   {c.nome.charAt(0).toUpperCase()}
-                                </div>
+                                 </div>
                                 <div className="flex flex-col">
                                   <span className={`text-[13px] font-semibold tracking-tight leading-none ${isDark ? 'text-zinc-200' : 'text-zinc-900'}`}>{c.nome}</span>
                                   <span className={`text-[10px] font-medium mt-1 uppercase tracking-wider ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>

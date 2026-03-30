@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ResponsiveContainer, BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, AlertTriangle, DollarSign, Zap, Clock, GripHorizontal, Award, BarChart2, Activity } from 'lucide-react';
+import {TrendingUp, AlertTriangle,  DollarSign, Zap, Clock, GripHorizontal, Award, BarChart2, Activity } from 'lucide-react';
 
 import { 
   DndContext, 
@@ -23,10 +23,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// Constante global para evitar perda de referência no useMemo e loop infinito
 const ARRAY_VAZIO = [];
 
-// --- COMPONENTE SORTABLE (Grid Integrado) ---
 const SortableItem = ({ id, children, temaNoturno, isOverlay, index }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
@@ -66,7 +64,8 @@ const SortableItem = ({ id, children, temaNoturno, isOverlay, index }) => {
 
 export default function TabFaturamento({
   temaNoturno, filtroTempo, setFiltroTempo, getHoje, getMesAtual, getAnoAtual,
-  faturamentoTotal, lucroEstimado, dadosPizza, rankingProdutos, comandasFiltradas, comandas
+  faturamentoTotal, lucroEstimado, dadosPizza, rankingProdutos, comandasFiltradas, comandas,
+  caixaAtual 
 }) {
 
   const [mostrarMenuPersonalizar, setMostrarMenuPersonalizar] = useState(false);
@@ -79,8 +78,9 @@ export default function TabFaturamento({
   const [insightAtivo, setInsightAtivo] = useState(0);
   const [activeId, setActiveId] = useState(null); 
 
-  // --- BLINDAGEM 1: Extração de valores primitivos para evitar recálculo por perda de referência ---
-  const strHoje = getHoje?.() || '';
+  const strHoje = getHoje?.() || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const isCicloAtrasado = caixaAtual?.status === 'aberto' && caixaAtual?.data_abertura && caixaAtual.data_abertura < strHoje;
+
   const strMesAtual = getMesAtual?.() || '';
   const strAnoAtual = getAnoAtual?.() || '';
   
@@ -94,7 +94,6 @@ export default function TabFaturamento({
   const totalComandas = (comandasFiltradas || []).length;
   const ticketMedio = totalComandas > 0 ? (fatTotalSafe / totalComandas) : 0;
 
-  // --- BLINDAGEM 2: Memoização do ranking para não gerar novo array a cada renderização ---
   const rankingMaiusculo = useMemo(() => {
     return (rankingProdutos || []).map(p => ({ 
       ...p, 
@@ -152,7 +151,6 @@ export default function TabFaturamento({
     return false; 
   };
 
-  // --- BLINDAGEM 3: Arrays de dependências ajustados usando apenas as strings extraídas ---
   const { diffAbsoluta, percentualReal, percentualBarra, bateuMeta, semHistorico, diferenca, mediaHistorica } = useMemo(() => {
     const defaultMetrics = { mediaHistorica: 0, diferenca: 0, diffAbsoluta: 0, percentualReal: 0, percentualBarra: 0, bateuMeta: false, semHistorico: true };
     if (!comandas || !Array.isArray(comandas) || comandas.length === 0) return defaultMetrics;
@@ -370,7 +368,7 @@ export default function TabFaturamento({
       if (maxVolHoje > 0) {
         frases.push({ 
           tipo: 'info', icone: <Zap className="w-5 h-5 text-amber-500" />, 
-          titulo: 'Previsão Operacional', texto: `Atenção: com base no seu histórico, prepare a operação para um maior fluxo esperado próximo às ${horaPicoHoje}h.` 
+          titulo: 'Previsão Operacional', texto: `Com base no seu histórico, prepare a operação para um maior fluxo esperado próximo às ${horaPicoHoje}h.` 
         });
       } else {
         frases.push({ 
@@ -561,7 +559,6 @@ export default function TabFaturamento({
             </div>
             
             {dadosGraficoAcumulado.length > 0 ? (
-              // BLINDAGEM 4: Adicionado debounce={50} para evitar loop de estado por redimensionamento
               <div className="w-full h-[140px] min-h-[140px] mt-4 -ml-4 relative z-10 overflow-hidden">
                 <ResponsiveContainer width="100%" height="100%" minHeight={140} minWidth={200} debounce={50}>
                   <AreaChart data={dadosGraficoAcumulado} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -611,7 +608,7 @@ export default function TabFaturamento({
                                           <span className={`font-bold tabular-nums ${temaNoturno ? 'text-zinc-100' : 'text-zinc-900'}`}>R$ {atualV.toFixed(2)}</span>
                                         </div>
                                       ) : (
-                                        <p className="text-[10px] text-zinc-500 italic pb-1">Ainda sem volume para este horário hoje.</p>
+                                        <p className="text-[10px] text-zinc-500 italic pb-1">Ainda sem volume para este horário.</p>
                                       )}
                                       <div className="flex justify-between items-center gap-4">
                                         <span className="flex items-center gap-1.5 font-bold text-[11px] uppercase tracking-wider text-zinc-500">
@@ -750,7 +747,6 @@ export default function TabFaturamento({
               </h3>
             </div>
             {rankingMaiusculo && rankingMaiusculo.length > 0 ? (
-              // BLINDAGEM 4: Adicionado debounce={50} no ResponsiveContainer
               <div className="w-full h-[160px] min-h-[160px] overflow-hidden">
                 <ResponsiveContainer width="100%" height="100%" minHeight={160} minWidth={200} debounce={50}>
                   <BarChart data={rankingMaiusculo} layout="vertical" margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
@@ -862,15 +858,30 @@ export default function TabFaturamento({
   const btnAROXSecundario = `px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 border ${temaNoturno ? 'bg-[#18181B] border-white/10 text-white hover:bg-zinc-800' : 'bg-white border-black/10 text-zinc-900 hover:bg-zinc-50'}`;
 
   return (
-    <div className={`w-full max-w-full pb-8 mt-4 font-sans ${temaNoturno ? 'text-zinc-100 selection:bg-zinc-800' : 'text-zinc-900 selection:bg-zinc-200'}`}>
+    <div className={`w-full max-w-full pb-8 mt-4 font-sans px-4 md:px-0 ${temaNoturno ? 'text-zinc-100 selection:bg-zinc-800' : 'text-zinc-900 selection:bg-zinc-200'}`}>
       
+      {/* BANNER PADRÃO - CICLO ATRASADO */}
+      {isCicloAtrasado && (
+        <div className={`w-full mb-6 p-4 rounded-2xl border shadow-sm flex items-center gap-4 arox-cinematic transition-colors ${temaNoturno ? 'bg-[#18181b]/60 border-amber-500/20 shadow-black/50 backdrop-blur-md' : 'bg-white/80 border-amber-300/50 shadow-sm backdrop-blur-md'}`}>
+          <div className={`flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0 ${temaNoturno ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-600'}`}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </div>
+          <div className="flex-1">
+            <h3 className={`text-[14px] font-bold tracking-tight ${temaNoturno ? 'text-amber-400' : 'text-amber-700'}`}>Ciclo Operacional Estendido</h3>
+            <p className={`text-[12px] mt-0.5 font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              O caixa do dia <strong className={temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}>{caixaAtual?.data_abertura?.split('-').reverse().join('/')}</strong> permanece ativo. Os lançamentos atuais estão sendo integrados a este período.
+            </p>
+          </div>
+        </div>
+      )}
+
       <style dangerouslySetInnerHTML={{__html: `
         .arox-cinematic { animation: arox-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(10px); }
         @keyframes arox-fade-up { 100% { opacity: 1; transform: translateY(0); } }
       `}} />
 
       {/* HEADER DE CONTROLES */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full mb-6 px-4 md:px-0">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full mb-6">
          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
             <div className={`flex p-1.5 rounded-xl border shadow-sm w-full sm:w-auto ${temaNoturno ? 'bg-[#0A0A0A]/80 backdrop-blur-md border-white/10' : 'bg-white/80 backdrop-blur-md border-black/10'}`}>
               {['dia', '7 dias', 'mes', 'ano', 'periodo'].map(t => (
@@ -917,7 +928,7 @@ export default function TabFaturamento({
       <AnimatePresence>
         {mostrarMenuPersonalizar && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden w-full">
-            <div className={`p-5 rounded-[24px] border mb-6 flex flex-wrap gap-3 px-5 md:px-6 mx-4 md:mx-0 w-full shadow-sm ${temaNoturno ? 'bg-[#0A0A0A]/80 backdrop-blur-xl border-white/10' : 'bg-white/80 backdrop-blur-xl border-black/10'}`}>
+            <div className={`p-5 rounded-[24px] border mb-6 flex flex-wrap gap-3 w-full shadow-sm ${temaNoturno ? 'bg-[#0A0A0A]/80 backdrop-blur-xl border-white/10' : 'bg-white/80 backdrop-blur-xl border-black/10'}`}>
               {[
                 { id: 'insights', label: 'IA Storytelling' }, { id: 'bruto', label: 'Bruto' }, { id: 'lucro', label: 'Lucro' }, { id: 'ticket', label: 'Ticket' },
                 { id: 'termometro', label: 'Crescimento' }, { id: 'linhaTemporal', label: 'Linha Temporal' }, { id: 'pagamentos', label: 'Pagamentos' }, { id: 'produtos', label: 'Rentabilidade' }, { id: 'mapaCalor', label: 'Calor' }, { id: 'combo', label: 'Combos' }
@@ -935,7 +946,7 @@ export default function TabFaturamento({
         )}
       </AnimatePresence>
 
-      <div className="flex flex-col gap-5 px-4 md:px-0 w-full">
+      <div className="flex flex-col gap-5 w-full">
         
         {/* NARRATIVA DE DADOS */}
         {widgets?.insights && insightsDinamicos && insightsDinamicos.length > 0 && (
