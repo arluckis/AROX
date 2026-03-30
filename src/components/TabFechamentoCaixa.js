@@ -2,6 +2,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
+// HELPER: Garante precisão decimal exata (evita bugs de 0.3000000004 do JavaScript)
+const arredondar = (valor) => Math.round((parseFloat(String(valor).replace(',', '.')) || 0) * 100) / 100;
+
 export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, comandas, fetchData, mostrarAlerta, mostrarConfirmacao }) {
   const [abaInterna, setAbaInterna] = useState('atual'); 
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -75,17 +78,11 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
     const { data: bairrosData } = await supabase.from('bairros_entrega').select('*').eq('empresa_id', sessao.empresa_id);
     if (bairrosData) setBairros(bairrosData);
 
-    const dataCaixa = caixaAtual?.data_abertura?.substring(0, 10);
-    if (dataCaixa) {
-      const { data: caixasDoDia } = await supabase.from('caixas').select('id').eq('empresa_id', sessao.empresa_id).eq('data_abertura', dataCaixa);
-      if (caixasDoDia && caixasDoDia.length > 0) {
-        const ids = caixasDoDia.map(c => c.id);
-        const { data: movsDia } = await supabase.from('caixa_movimentacoes').select('valor, descricao').eq('tipo', 'sangria').in('caixa_id', ids);
-        if (movsDia) {
-          const pagoHoje = movsDia.filter(m => m.descricao && m.descricao.includes('Motoboy')).reduce((acc, m) => acc + parseFloat(m.valor), 0);
-          setTotalPagoMotoboysDia(pagoHoje);
-        }
-      }
+    // Soma apenas as sangrias feitas para motoboys neste exato turno (caixaAtual)
+    const { data: movsDia } = await supabase.from('caixa_movimentacoes').select('valor, descricao').eq('tipo', 'sangria').eq('caixa_id', caixaAtual.id);
+    if (movsDia) {
+      const pagoHoje = arredondar(movsDia.filter(m => m.descricao && m.descricao.includes('Logística') || m.descricao.includes('Motoboy')).reduce((acc, m) => acc + arredondar(m.valor), 0));
+      setTotalPagoMotoboysDia(pagoHoje);
     }
   };
 
@@ -126,7 +123,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
   };
 
   const handleSalvarMovimentacao = async () => {
-    const val = parseFloat(movModal.valor.replace(',', '.'));
+    const val = arredondar(movModal.valor);
     if (isNaN(val) || val <= 0) return mostrarAlerta("Valor Inválido", "Informe um valor numérico válido e superior a zero.");
     if (!movModal.descricao.trim()) return mostrarAlerta("Campo Obrigatório", "A justificativa é obrigatória para a trilha de auditoria.");
 
@@ -178,18 +175,56 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
     }
   };
 
+  // LÓGICA CORE CORRIGIDA: Filtra TUDO baseado no Timestamp Exato de abertura e fechamento (seja meia noite ou não)
+  const getPagamentosDoTurno = () => {
+    if (!comandas || !caixaAtual) return [];
+    
+    const timeAbertura = new Date(caixaAtual.data_abertura).getTime();
+    const timeFechamento = caixaAtual.data_fechamento ? new Date(caixaAtual.data_fechamento).getTime() : Date.now() + 9999999;
+
+    return comandas
+      .flatMap(c => c.pagamentos || [])
+      .filter(p => {
+        // Se a comanda salva já possuir a dupla verificação (caixa_id) gravada
+        if (p.caixa_id) return String(p.caixa_id) === String(caixaAtual.id);
+        
+        // Se não, fazemos a checagem temporal blindada
+        if (!p.data) return false;
+        const timePagamento = new Date(p.data).getTime();
+        return timePagamento >= timeAbertura && timePagamento <= timeFechamento;
+      });
+  };
+
+  const pagamentosDoTurno = getPagamentosDoTurno();
+
   const calcularPendenteMotoboy = () => {
-    if (!comandas || comandas.length === 0) return 0;
-    const dataCaixa = caixaAtual?.data_abertura?.substring(0, 10);
-    const totalTaxas = comandas.filter(c => c.status === 'fechada' && (c.pagamentos?.some(p => p.data?.substring(0, 10) === dataCaixa) || c.data?.substring(0, 10) === dataCaixa)).reduce((acc, c) => {
-        let taxa = parseFloat(c.taxa_entrega || 0);
+    if (!comandas || comandas.length === 0 || !caixaAtual) return 0;
+    
+    const timeAbertura = new Date(caixaAtual.data_abertura).getTime();
+    const timeFechamento = caixaAtual.data_fechamento ? new Date(caixaAtual.data_fechamento).getTime() : Date.now() + 9999999;
+
+    const totalTaxas = comandas.filter(c => {
+        if(c.status !== 'fechada') return false; 
+        
+        // Verifica se houve qualquer pagamento efetuado DENTRO da vida útil deste caixa
+        const pagouNesteCaixa = (c.pagamentos || []).some(p => {
+          if (p.caixa_id) return String(p.caixa_id) === String(caixaAtual.id);
+          if (!p.data) return false;
+          const timePagamento = new Date(p.data).getTime();
+          return timePagamento >= timeAbertura && timePagamento <= timeFechamento;
+        });
+
+        return pagouNesteCaixa;
+      }).reduce((acc, c) => {
+        let taxa = arredondar(c.taxa_entrega || 0);
         if (taxa === 0 && c.bairro_id && bairros.length > 0) {
           const b = bairros.find(b => String(b.id) === String(c.bairro_id));
-          if (b) taxa = parseFloat(b.taxa || 0);
+          if (b) taxa = arredondar(b.taxa || 0);
         }
         return acc + taxa;
       }, 0);
-    return Math.max(0, totalTaxas - totalPagoMotoboysDia);
+
+    return Math.max(0, arredondar(totalTaxas - totalPagoMotoboysDia));
   };
   const pendenteMotoboy = calcularPendenteMotoboy();
 
@@ -198,29 +233,34 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
     const { data, error } = await supabase.from('caixa_movimentacoes').insert([payload]).select();
     if (data && !error) { 
       setMovimentacoes(prev => [...prev, ...data]); 
-      setTotalPagoMotoboysDia(prev => prev + pendenteMotoboy); 
+      setTotalPagoMotoboysDia(prev => arredondar(prev + pendenteMotoboy)); 
     }
   };
 
   const abrirConfirmacaoMotoboy = () => mostrarConfirmacao('Autorização de Repasse', `Confirma a liquidação logística no valor de R$ ${pendenteMotoboy.toFixed(2)} aos parceiros?`, pagarMotoboysConfirmado);
 
-  const pagamentosDoTurno = comandas.filter(c => c.status === 'fechada').flatMap(c => c.pagamentos || []).filter(p => p.data?.substring(0, 10) === caixaAtual?.data_abertura?.substring(0, 10));
-  const totalSistemaDinheiro = pagamentosDoTurno.filter(p => p.forma === 'Dinheiro').reduce((acc, p) => acc + parseFloat(p.valor), 0);
-  const totalSistemaCartao = pagamentosDoTurno.filter(p => p.forma === 'Cartão').reduce((acc, p) => acc + parseFloat(p.valor), 0);
-  const totalSistemaPix = pagamentosDoTurno.filter(p => p.forma === 'Pix').reduce((acc, p) => acc + parseFloat(p.valor), 0);
-  const totalSuprimentos = movimentacoes.filter(m => m.tipo === 'suprimento').reduce((acc, m) => acc + parseFloat(m.valor), 0);
-  const totalSangrias = movimentacoes.filter(m => m.tipo === 'sangria').reduce((acc, m) => acc + parseFloat(m.valor), 0);
-  const saldoInicial = parseFloat(caixaAtual?.saldo_inicial || 0);
-  const saldoGavetaEsperado = saldoInicial + totalSistemaDinheiro + totalSuprimentos - totalSangrias;
+  const totalSistemaDinheiro = arredondar(pagamentosDoTurno.filter(p => p.forma === 'Dinheiro').reduce((acc, p) => acc + arredondar(p.valor), 0));
+  const totalSistemaCartao = arredondar(pagamentosDoTurno.filter(p => p.forma === 'Cartão' || p.forma === 'Crédito' || p.forma === 'Débito').reduce((acc, p) => acc + arredondar(p.valor), 0));
+  const totalSistemaPix = arredondar(pagamentosDoTurno.filter(p => p.forma === 'Pix').reduce((acc, p) => acc + arredondar(p.valor), 0));
+  const totalSuprimentos = arredondar(movimentacoes.filter(m => m.tipo === 'suprimento').reduce((acc, m) => acc + arredondar(m.valor), 0));
+  const totalSangrias = arredondar(movimentacoes.filter(m => m.tipo === 'sangria').reduce((acc, m) => acc + arredondar(m.valor), 0));
+  const saldoInicial = arredondar(caixaAtual?.saldo_inicial || 0);
+  
+  const saldoGavetaEsperado = arredondar((saldoInicial + totalSistemaDinheiro + totalSuprimentos) - totalSangrias);
 
   const encerrarCaixaConfirmado = async () => {
     setIsConsolidating(true);
 
-    const diferencaDinheiro = parseFloat(valorInformadoDinheiro || 0) - saldoGavetaEsperado;
+    const valInfoDinheiro = arredondar(valorInformadoDinheiro);
+    const valInfoCartao = arredondar(valorInformadoCartao);
+    const valInfoPix = arredondar(valorInformadoPix);
+
+    const diferencaDinheiro = arredondar(valInfoDinheiro - saldoGavetaEsperado);
+    
     const relatorioFinal = {
-      informadoDinheiro: parseFloat(valorInformadoDinheiro || 0), 
-      informadoCartao: parseFloat(valorInformadoCartao || 0), 
-      informadoPix: parseFloat(valorInformadoPix || 0), 
+      informadoDinheiro: valInfoDinheiro, 
+      informadoCartao: valInfoCartao, 
+      informadoPix: valInfoPix, 
       esperadoDinheiro: saldoGavetaEsperado, 
       esperadoCartao: totalSistemaCartao, 
       esperadoPix: totalSistemaPix, 
@@ -245,8 +285,18 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
   };
 
   const salvarEdicaoFechamento = async () => {
-    const valDinheiro = parseFloat(modalEdicao.dinheiro || 0); const valCartao = parseFloat(modalEdicao.cartao || 0); const valPix = parseFloat(modalEdicao.pix || 0);
-    const novoRelatorio = { ...caixaEditando.relatorio_fechamento, informadoDinheiro: valDinheiro, informadoCartao: valCartao, informadoPix: valPix, diferencaDinheiro: valDinheiro - (caixaEditando.relatorio_fechamento.esperadoDinheiro || 0) };
+    const valDinheiro = arredondar(modalEdicao.dinheiro); 
+    const valCartao = arredondar(modalEdicao.cartao); 
+    const valPix = arredondar(modalEdicao.pix);
+
+    const novoRelatorio = { 
+      ...caixaEditando.relatorio_fechamento, 
+      informadoDinheiro: valDinheiro, 
+      informadoCartao: valCartao, 
+      informadoPix: valPix, 
+      diferencaDinheiro: arredondar(valDinheiro - (caixaEditando.relatorio_fechamento.esperadoDinheiro || 0)) 
+    };
+    
     const { error } = await supabase.from('caixas').update({ relatorio_fechamento: novoRelatorio }).eq('id', caixaEditando.id).eq('empresa_id', sessao.empresa_id);
     if (!error) { 
        setModalEdicao({ visivel: false, dinheiro: '', cartao: '', pix: '' }); 

@@ -40,7 +40,7 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
   const [etapaWizard, setEtapaWizard] = useState(1);
   const [cinematicText, setCinematicText] = useState('');
   const [progressoCinematic, setProgressoCinematic] = useState(0);
-  const [dadosEdicao, setDadosEdicao] = useState({ nomeRestaurante: '', nomeDono: '', email: '', novaSenhaTemporaria: '', usuarioId: null, plano: 'free' });
+  const [dadosEdicao, setDadosEdicao] = useState({ nomeRestaurante: '', nomeDono: '', email: '', novaSenhaTemporaria: '', usuarioId: null, plano: 'free', data_inicio_plano: '', validade_plano: '' });
   const [formData, setFormData] = useState({ 
     nomeRestaurante: '', nomeDono: '', email: '', senha: '', tipoPlano: 'free', ciclo: 'mensal', cidade: '', abertura: '', fechamento: '', tipoOperacao: 'hibrido', codigoIntegracao: ''
   });
@@ -203,6 +203,22 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
     else setEtapaWizard(etapaWizard - 1);
   };
 
+  // Função para calcular Validade Automaticamente
+  const calcularValidade = (planoId) => {
+    if (planoId === 'free') {
+       const d = new Date(); d.setDate(d.getDate() + 7); // 7 dias de trial padrão
+       return d.toISOString();
+    }
+    const ciclo = CICLOS_PREMIUM.find(c => c.id === planoId);
+    if (ciclo) {
+       const d = new Date(); 
+       const meses = ciclo.id === 'mensal' ? 1 : ciclo.id === 'bimestral' ? 2 : ciclo.id === 'trimestral' ? 3 : ciclo.id === 'semestral' ? 6 : ciclo.id === 'anual' ? 12 : 1;
+       d.setMonth(d.getMonth() + meses);
+       return d.toISOString();
+    }
+    return null;
+  };
+
   // --- PROVISIONAMENTO CINEMATOGRÁFICO ---
   const iniciarProvisionamento = (e) => {
     e.preventDefault();
@@ -234,9 +250,14 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
   const executarCriacaoSupabase = async () => {
     try {
       const planoFinal = formData.tipoPlano === 'free' ? 'free' : formData.ciclo;
+      const dataHoje = new Date().toISOString();
+      const validade = calcularValidade(planoFinal);
+
       const payloadEmpresa = { 
         nome: formData.nomeRestaurante, ativo: true, plano: planoFinal, cidade: formData.cidade,
-        horario_abertura: formData.abertura || '08:00:00', horario_fechamento: formData.fechamento || '23:00:00', tipo_operacao: formData.tipoOperacao, codigo_integracao: formData.codigoIntegracao
+        horario_abertura: formData.abertura || '08:00:00', horario_fechamento: formData.fechamento || '23:00:00', 
+        tipo_operacao: formData.tipoOperacao, codigo_integracao: formData.codigoIntegracao,
+        data_inicio_plano: dataHoje, validade_plano: validade
       };
 
       const { data: novaEmpresa, error: errEmp } = await supabase.from('empresas').insert([payloadEmpresa]).select().single();
@@ -258,16 +279,34 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
     } 
   };
 
+  const formatForInput = (isoString) => isoString ? new Date(isoString).toISOString().split('T')[0] : '';
+
   const abrirModalEdicao = (empresa, dono) => {
     setEmpresaEditando(empresa.id);
-    setDadosEdicao({ nomeRestaurante: empresa.nome, plano: empresa.plano || 'free', nomeDono: dono?.nome_usuario || '', email: dono?.email || '', novaSenhaTemporaria: '', usuarioId: dono?.id || null });
+    setDadosEdicao({ 
+      nomeRestaurante: empresa.nome, 
+      plano: empresa.plano || 'free', 
+      nomeDono: dono?.nome_usuario || '', 
+      email: dono?.email || '', 
+      novaSenhaTemporaria: '', 
+      usuarioId: dono?.id || null,
+      data_inicio_plano: formatForInput(empresa.data_inicio_plano),
+      validade_plano: formatForInput(empresa.validade_plano)
+    });
     setModalEdicaoAberto(true);
   };
 
   const salvarEdicao = async () => {
     setLoading(true);
     try {
-      const { error: errE } = await supabase.from('empresas').update({ nome: dadosEdicao.nomeRestaurante, plano: dadosEdicao.plano }).eq('id', empresaEditando);
+      const payloadEmpresa = { 
+        nome: dadosEdicao.nomeRestaurante, 
+        plano: dadosEdicao.plano,
+        data_inicio_plano: dadosEdicao.data_inicio_plano ? new Date(dadosEdicao.data_inicio_plano + 'T12:00:00Z').toISOString() : null,
+        validade_plano: dadosEdicao.validade_plano ? new Date(dadosEdicao.validade_plano + 'T12:00:00Z').toISOString() : null
+      };
+
+      const { error: errE } = await supabase.from('empresas').update(payloadEmpresa).eq('id', empresaEditando);
       if (errE) throw new Error("Erro ao atualizar workspace.");
       
       if (dadosEdicao.usuarioId) {
@@ -736,6 +775,19 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
                   {CICLOS_PREMIUM.map(c => <option key={c.id} value={c.id}>Premium - {c.nome}</option>)}
                 </select>
               </div>
+
+              {/* CONTROLE DE VALIDADE E PLANO */}
+              <div className="grid grid-cols-2 gap-4">
+                 <div>
+                   <label className={`block text-[11px] font-bold uppercase tracking-widest mb-1.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Início do Plano</label>
+                   <input type="date" name="data_inicio_plano" value={dadosEdicao.data_inicio_plano} onChange={handleChangeEdicao} className={`w-full p-3.5 rounded-xl border outline-none font-semibold text-[13px] transition-all focus:border-indigo-500 ${temaNoturno ? 'bg-[#1A1A1A] border-white/10 text-white' : 'bg-white border-black/10 text-slate-900 shadow-sm'}`} />
+                 </div>
+                 <div>
+                   <label className={`block text-[11px] font-bold uppercase tracking-widest mb-1.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Expira em</label>
+                   <input type="date" name="validade_plano" value={dadosEdicao.validade_plano} onChange={handleChangeEdicao} className={`w-full p-3.5 rounded-xl border outline-none font-semibold text-[13px] transition-all focus:border-indigo-500 ${temaNoturno ? 'bg-[#1A1A1A] border-white/10 text-white' : 'bg-white border-black/10 text-slate-900 shadow-sm'}`} />
+                 </div>
+              </div>
+
               <div>
                 <label className={`block text-[11px] font-bold uppercase tracking-widest mb-1.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Nome do Restaurante</label>
                 <input type="text" name="nomeRestaurante" value={dadosEdicao.nomeRestaurante} onChange={handleChangeEdicao} className={`w-full p-3.5 rounded-xl border outline-none font-semibold text-[13px] transition-all focus:border-indigo-500 ${temaNoturno ? 'bg-[#1A1A1A] border-white/10 text-white' : 'bg-white border-black/10 text-slate-900 shadow-sm'}`} />

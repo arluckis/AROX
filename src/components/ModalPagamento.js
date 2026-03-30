@@ -12,6 +12,9 @@ const Icons = {
   Remover: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
 };
 
+// HELPER: Garante precisão decimal exata (evita bugs de 0.3000000004 do JavaScript)
+const arredondar = (valor) => Math.round((parseFloat(String(valor).replace(',', '.')) || 0) * 100) / 100;
+
 export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaNoturno, clientesFidelidade, metaFidelidade }) {
   const [pagamentos, setPagamentos] = useState([]);
   const [desconto, setDesconto] = useState('');
@@ -42,27 +45,27 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
   }, [comanda.empresa_id, comanda.tipo]);
 
   const bairroObj = bairros.find(b => String(b.id) === String(bairroSelecionado));
-  const taxaEntrega = bairroObj ? parseFloat(bairroObj.taxa) : 0;
+  const taxaEntrega = bairroObj ? arredondar(bairroObj.taxa) : 0;
 
   const clienteFidelizado = clientesFidelidade?.find(c => c.nome.toLowerCase() === comanda.nome.toLowerCase());
   const temPontosParaResgate = clienteFidelizado && clienteFidelizado.pontos >= metaFidelidade?.pontos_necessarios;
   const isFidelidade = pagamentos.some(p => p.forma === 'Fidelidade');
 
   const itensPendentes = comanda.produtos.filter(p => !p.pago);
-  const totalPendente = itensPendentes.reduce((acc, p) => acc + p.preco, 0);
+  const totalPendente = arredondar(itensPendentes.reduce((acc, p) => acc + p.preco, 0));
   
   const subtotalItens = modoDivisao 
-    ? comanda.produtos.filter(p => itensSelecionados.includes(p.id)).reduce((acc, p) => acc + p.preco, 0)
+    ? arredondar(comanda.produtos.filter(p => itensSelecionados.includes(p.id)).reduce((acc, p) => acc + p.preco, 0))
     : totalPendente;
 
-  const subtotal = subtotalItens + taxaEntrega;
-  const valorDesconto = parseFloat(desconto) || 0;
+  const subtotal = arredondar(subtotalItens + taxaEntrega);
+  const valorDesconto = arredondar(desconto);
   
-  const valorFinal = isFidelidade ? 0 : Math.max(0, subtotal - valorDesconto);
-  const totalPago = pagamentos.reduce((acc, p) => acc + parseFloat(p.valor || 0), 0);
+  const valorFinal = isFidelidade ? 0 : Math.max(0, arredondar(subtotal - valorDesconto));
+  const totalPago = arredondar(pagamentos.reduce((acc, p) => acc + arredondar(p.valor), 0));
   
-  const restante = isFidelidade ? 0 : Math.max(0, valorFinal - totalPago);
-  const troco = Math.max(0, totalPago - valorFinal);
+  const restante = isFidelidade ? 0 : Math.max(0, arredondar(valorFinal - totalPago));
+  const troco = Math.max(0, arredondar(totalPago - valorFinal));
 
   const adicionarPagamento = useCallback((forma) => {
     setListaItensExpandida(false); 
@@ -71,8 +74,8 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
       if (forma === 'Fidelidade') return [{ id: Date.now(), forma: 'Fidelidade', valor: valorFinal }];
       
       let novosPagamentos = prev.filter(p => p.forma !== 'Fidelidade');
-      let pagoAtual = novosPagamentos.reduce((acc, p) => acc + parseFloat(p.valor || 0), 0);
-      let falta = valorFinal - pagoAtual;
+      let pagoAtual = arredondar(novosPagamentos.reduce((acc, p) => acc + arredondar(p.valor), 0));
+      let falta = arredondar(valorFinal - pagoAtual);
 
       if (falta > 0 || novosPagamentos.length === 0) {
         const newId = Date.now();
@@ -85,7 +88,7 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
     });
   }, [valorFinal]);
 
-  const atualizarValorPagamento = (id, novoValor) => { setPagamentos(prev => prev.map(p => p.id === id ? { ...p, valor: novoValor } : p)); };
+  const atualizarValorPagamento = (id, novoValor) => { setPagamentos(prev => prev.map(p => p.id === id ? { ...p, valor: String(novoValor).replace(',', '.') } : p)); };
   const removerPagamento = (id) => { setPagamentos(prev => prev.filter(p => p.id !== id)); };
 
   const toggleModoDivisao = (dividir) => {
@@ -115,9 +118,9 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
   const handleInputValorKeyDown = (e, pagId) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const valDigitado = parseFloat(e.target.value) || 0;
-      const somaOutros = pagamentos.filter(p => p.id !== pagId).reduce((acc, p) => acc + parseFloat(p.valor||0), 0);
-      if ((somaOutros + valDigitado) >= valorFinal) { setTimeout(() => { descontoRef.current?.focus(); descontoRef.current?.select(); }, 50); } else { e.target.blur(); }
+      const valDigitado = arredondar(e.target.value);
+      const somaOutros = arredondar(pagamentos.filter(p => p.id !== pagId).reduce((acc, p) => acc + arredondar(p.valor), 0));
+      if (arredondar(somaOutros + valDigitado) >= valorFinal) { setTimeout(() => { descontoRef.current?.focus(); descontoRef.current?.select(); }, 50); } else { e.target.blur(); }
     }
   };
 
@@ -127,7 +130,7 @@ export default function ModalPagamento({ comanda, onConfirmar, onCancelar, temaN
   };
 
   const descontoInvalido = !isFidelidade && (valorDesconto > subtotal);
-  const totalValido = totalPago >= (valorFinal - 0.01);
+  const totalValido = totalPago >= arredondar(valorFinal - 0.01);
   const nadaSelecionado = modoDivisao && itensSelecionados.length === 0;
 
   const btnFinalizarDesabilitado = pagamentos.length === 0 || (!isFidelidade && !totalValido) || descontoInvalido || nadaSelecionado || (precisaBairro && !bairroSelecionado) || (isFidelidade && !temPontosParaResgate);

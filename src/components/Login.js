@@ -181,15 +181,27 @@ export default function Login({ getHoje, setSessao, setScenePhase }) {
     setLoadingLogin(true); setErro('');
     if(setScenePhase) setScenePhase('sync'); 
 
-    const { data, error } = await supabase.from('usuarios').select('*, empresas ( ativo, nome, logo_url )').eq('email', emailBusca.trim()).eq('senha', senhaBusca).single();
+    // ATUALIZAÇÃO: Inclusão do validade_plano na query para garantir a segurança em tempo de login
+    const { data, error } = await supabase.from('usuarios').select('*, empresas ( ativo, nome, logo_url, validade_plano )').eq('email', emailBusca.trim()).eq('senha', senhaBusca).single();
 
     if (data && !error) { 
-      if (data.role !== 'super_admin' && data.empresas && data.empresas.ativo === false) {
-        setErro("Acesso restrito. Consulte a administração do sistema.");
-        setLoadingLogin(false);
-        if(setScenePhase) setScenePhase('reveal');
-        return;
+      if (data.role !== 'super_admin' && data.empresas) {
+         const agora = new Date();
+         const expirou = data.empresas.validade_plano ? new Date(data.empresas.validade_plano) < agora : false;
+
+         if (data.empresas.ativo === false) {
+            setErro("Conta temporariamente bloqueada. Consulte o suporte do sistema para mais informações.");
+            setLoadingLogin(false);
+            if(setScenePhase) setScenePhase('reveal');
+            return;
+         } else if (expirou) {
+            setErro("Seu plano expirou. Regularize sua assinatura para acessar.");
+            setLoadingLogin(false);
+            if(setScenePhase) setScenePhase('reveal');
+            return;
+         }
       }
+
       if (data.primeiro_login === true) {
         setTempUser(data);
         setStepTrocaSenha(true);

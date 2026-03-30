@@ -29,7 +29,7 @@ export default function Header({
   const isPlanetVisible = abaAtiva === 'comandas' && (!caixaAtual || caixaAtual.status !== 'aberto');
   const isDark = isPlanetVisible ? true : temaNoturno;
 
-  // === LÓGICA DE STATUS OPERACIONAL ===
+  // === LÓGICA DE STATUS OPERACIONAL BASE ===
   const isOperacaoAtiva = caixaAtual?.status === 'aberto';
   let statusOperacao = isOperacaoAtiva ? 'ativa' : 'inativa';
   
@@ -42,6 +42,124 @@ export default function Header({
       statusOperacao = 'pendente';
     }
   }
+
+  // 🧠 === SISTEMA DE ESTADO OPERACIONAL INTELIGENTE (TENSÃO PROGRESSIVA) === 🧠
+  const [horarioFechamento, setHorarioFechamento] = useState('23:00:00');
+  const [tensaoEstado, setTensaoEstado] = useState('normal');
+
+  useEffect(() => {
+    const fetchConfigEmpresa = async () => {
+      if (!sessao?.empresa_id) return;
+      const { data } = await supabase.from('empresas').select('horario_fechamento').eq('id', sessao.empresa_id).single();
+      if (data?.horario_fechamento) {
+        setHorarioFechamento(data.horario_fechamento);
+      }
+    };
+    fetchConfigEmpresa();
+  }, [sessao?.empresa_id]);
+
+  useEffect(() => {
+    if (statusOperacao !== 'ativa') {
+      setTensaoEstado('normal');
+      return;
+    }
+
+    const calcularTensao = () => {
+      const agoraStr = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+      const agora = new Date(agoraStr);
+      const agoraMinutos = agora.getHours() * 60 + agora.getMinutes();
+
+      const [fHourStr, fMinStr] = horarioFechamento.split(':');
+      const fHour = parseInt(fHourStr);
+      const fMin = parseInt(fMinStr);
+      let fechamentoMinutos = fHour * 60 + fMin;
+
+      if (fHour < 5 && agora.getHours() >= 12) fechamentoMinutos += 24 * 60;
+      let minAtuaisParaCalculo = agoraMinutos;
+      if (agora.getHours() < 5 && fHour >= 12) minAtuaisParaCalculo += 24 * 60;
+
+      const diff = fechamentoMinutos - minAtuaisParaCalculo;
+
+      if (diff > 10) setTensaoEstado('normal');
+      else if (diff <= 10 && diff > 0) setTensaoEstado('pre-fechamento');
+      else if (diff <= 0 && diff > -30) setTensaoEstado('atraso');
+      else setTensaoEstado('critico');
+    };
+
+    calcularTensao();
+    const tickInterval = setInterval(calcularTensao, 60000);
+    return () => clearInterval(tickInterval);
+  }, [statusOperacao, horarioFechamento]);
+
+  // 🎨 === ESTILOS CONDICIONAIS DE TENSÃO (SISTEMA DE CÁPSULA AROX) ===
+  const getThemeStyles = () => {
+    if (statusOperacao !== 'ativa') return { 
+      headerBg: isDark ? 'bg-[#09090b]/70 shadow-[inset_0_-1px_0_0_rgba(255,255,255,0.03)]' : 'bg-white/70 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.04)]',
+      btnBg: statusOperacao === 'pendente' 
+        ? (isDark ? 'bg-amber-500/10 ring-amber-500/20 text-amber-400 hover:bg-amber-500/15' : 'bg-amber-500/10 ring-amber-500/20 text-amber-700 hover:bg-amber-500/15')
+        : (isDark ? 'bg-white/5 ring-white/10 text-zinc-400 hover:bg-white/10' : 'bg-black/5 ring-black/5 text-zinc-600 hover:bg-black/10'),
+      dot: statusOperacao === 'pendente' ? 'bg-amber-500/80 shadow-[0_0_8px_rgba(245,158,11,0.4)]' : 'bg-zinc-500/50',
+      ping: statusOperacao === 'pendente' ? 'bg-amber-500/40 animate-[pulse_3s_ease-in-out_infinite]' : 'hidden',
+      label: statusOperacao === 'pendente' ? 'Ciclo pendente' : 'Sistema inativo',
+      mobileLabel: statusOperacao === 'pendente' ? 'Pendente' : 'Inativo',
+      msgText: ''
+    };
+
+    switch (tensaoEstado) {
+      case 'pre-fechamento':
+        return {
+          headerBg: isDark ? 'bg-[#09090b]/75 shadow-[inset_0_-1px_0_0_rgba(255,255,255,0.03)]' : 'bg-white/75 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.04)]',
+          btnBg: isDark 
+            ? 'bg-amber-500/10 ring-amber-500/20 text-amber-400/90 shadow-[inset_0_1px_4px_rgba(245,158,11,0.05)] hover:bg-amber-500/15' 
+            : 'bg-amber-500/10 ring-amber-500/20 text-amber-700 shadow-[inset_0_1px_4px_rgba(245,158,11,0.05)] hover:bg-amber-500/15',
+          dot: 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.4)]', 
+          ping: 'bg-amber-400/40 animate-[pulse_4s_ease-in-out_infinite]',
+          label: 'Finalizar ciclo',
+          mobileLabel: 'Finalizar',
+          msgText: 'Janela operacional'
+        };
+      case 'atraso':
+        return {
+          headerBg: isDark ? 'bg-[#09090b]/80 shadow-[inset_0_-1px_0_0_rgba(255,255,255,0.04)]' : 'bg-white/80 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.05)]',
+          btnBg: isDark 
+            ? 'bg-orange-500/10 ring-orange-500/20 text-orange-400/90 shadow-[inset_0_1px_6px_rgba(249,115,22,0.05)] hover:bg-orange-500/15' 
+            : 'bg-orange-500/10 ring-orange-500/20 text-orange-700 shadow-[inset_0_1px_6px_rgba(249,115,22,0.05)] hover:bg-orange-500/15',
+          dot: 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]', 
+          ping: 'bg-orange-500/40 animate-[pulse_3s_ease-in-out_infinite]',
+          label: 'Encerramento pendente',
+          mobileLabel: 'Pendente',
+          msgText: 'Operação estendida'
+        };
+      case 'critico':
+        return {
+          headerBg: isDark 
+            ? 'bg-gradient-to-b from-rose-950/10 to-[#09090b]/90 shadow-[inset_0_-1px_0_0_rgba(225,29,72,0.08)]' 
+            : 'bg-gradient-to-b from-rose-50/50 to-white/90 shadow-[inset_0_-1px_0_0_rgba(225,29,72,0.08)]',
+          btnBg: isDark 
+            ? 'bg-rose-500/10 ring-rose-500/20 text-rose-400/90 shadow-[inset_0_0_12px_rgba(225,29,72,0.1)] hover:bg-rose-500/15 transition-all duration-500' 
+            : 'bg-rose-500/10 ring-rose-500/20 text-rose-700 shadow-[inset_0_0_12px_rgba(225,29,72,0.08)] hover:bg-rose-500/15 transition-all duration-500',
+          dot: 'bg-rose-500 shadow-[0_0_10px_rgba(225,29,72,0.6)]', 
+          ping: 'bg-rose-500/40 animate-[pulse_2s_ease-in-out_infinite]',
+          label: 'Encerrar operação',
+          mobileLabel: 'Encerrar',
+          msgText: 'Ciclo excedido'
+        };
+      default:
+        return {
+          headerBg: isDark ? 'bg-[#09090b]/70 shadow-[inset_0_-1px_0_0_rgba(255,255,255,0.03)]' : 'bg-white/70 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.04)]',
+          btnBg: isDark 
+            ? 'bg-emerald-500/10 ring-emerald-500/20 text-emerald-400/90 hover:bg-emerald-500/15' 
+            : 'bg-emerald-500/10 ring-emerald-500/20 text-emerald-700 hover:bg-emerald-500/15',
+          dot: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]', 
+          ping: 'bg-emerald-500/30 animate-[pulse_4s_ease-in-out_infinite]',
+          label: 'Sistema ativo',
+          mobileLabel: 'Ativo',
+          msgText: ''
+        };
+    }
+  };
+
+  const currentStyle = getThemeStyles();
 
   const matchMesaAtiva = (comandaAtiva?.nome || '').match(/^\[Mesa\s(\d+)\]/);
   const mesaAtivaVisivel = comandaAtiva?.mesa || (matchMesaAtiva ? matchMesaAtiva[1] : null);
@@ -202,13 +320,13 @@ export default function Header({
 
   return (
     <header 
-      className={`flex items-center justify-between px-3 sm:px-6 h-[72px] shrink-0 sticky top-0 z-50 transition-colors duration-500 ease-in-out backdrop-blur-2xl ${isDark ? 'bg-[#09090b]/70 shadow-[inset_0_-1px_0_0_rgba(255,255,255,0.03)]' : 'bg-white/70 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.04)]'}`}
+      className={`flex items-center justify-between px-3 sm:px-6 h-[72px] shrink-0 sticky top-0 z-50 transition-all duration-[800ms] ease-out backdrop-blur-2xl ${currentStyle.headerBg}`}
     >
       
       {/* Esquerda: Identidade & Navegação */}
       <div className="flex items-center gap-3 sm:gap-4 shrink-0 relative z-20 w-auto sm:w-[280px]">
         
-        {/* AROX - 100% Estático, primeiro elemento à esquerda */}
+        {/* AROX - 100% Estático */}
         <div className="flex items-center cursor-default shrink-0">
           <span className={`font-black tracking-tighter text-[17px] leading-none select-none flex items-center ${isDark ? 'text-white' : 'text-zinc-900'}`}>
             AROX
@@ -247,7 +365,7 @@ export default function Header({
         
       </div>
 
-      {/* Título Centralizado Absoluto (Quando não há comanda) */}
+      {/* Título Centralizado Absoluto */}
       {!comandaAtiva && (
         <div className="absolute left-1/2 -translate-x-1/2 top-0 h-full flex justify-center items-center pointer-events-none z-0 w-full px-4">
           <motion.h1 
@@ -270,7 +388,8 @@ export default function Header({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.95 }}
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                className={`flex items-center h-11 sm:h-12 rounded-full px-1.5 sm:px-2 w-auto sm:w-full max-w-[760px] transition-colors duration-300 ${isDark ? 'bg-[#18181b]/80 ring-1 ring-white/10 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)] backdrop-blur-3xl' : 'bg-white/90 ring-1 ring-black/[0.04] shadow-[0_8px_30px_-8px_rgba(0,0,0,0.08)] backdrop-blur-2xl'}`}
+                // CORREÇÃO 1: Sombra e densidade da ilha refinada
+                className={`flex items-center h-11 sm:h-12 rounded-full px-1.5 sm:px-2 w-auto sm:w-full max-w-[760px] transition-colors duration-300 ${isDark ? 'bg-[#18181b]/80 ring-1 ring-white/10 shadow-[0_16px_32px_-12px_rgba(0,0,0,0.3),inset_0_1px_0_0_rgba(255,255,255,0.05)] backdrop-blur-3xl' : 'bg-white/90 ring-1 ring-black/[0.04] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.06),inset_0_1px_0_0_rgba(255,255,255,0.4)] backdrop-blur-2xl'}`}
               >
                 
                 {/* 1. Editor de Nome */}
@@ -317,11 +436,12 @@ export default function Header({
                   <AnimatePresence>
                     {mostrarDropdownCliente && clientesFiltrados.length > 0 && (
                       <motion.div 
-                        initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                        // CORREÇÃO 2: Motion suave (Apple-like) e Sombras difusas
+                        initial={{ opacity: 0, y: 4, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 4, scale: 0.98 }}
-                        transition={{ duration: 0.2 }}
-                        className={`absolute top-[calc(100%+16px)] left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 w-[300px] sm:w-[140%] sm:min-w-[320px] rounded-2xl ring-1 shadow-2xl z-50 overflow-hidden p-1.5 backdrop-blur-3xl ${isDark ? 'bg-[#18181b]/95 ring-white/10 shadow-black/80' : 'bg-white/95 ring-black/5 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.15)]'}`}
+                        exit={{ opacity: 0, y: 2, scale: 0.99 }}
+                        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                        className={`absolute top-[calc(100%+16px)] left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 w-[300px] sm:w-[140%] sm:min-w-[320px] rounded-2xl ring-1 z-50 overflow-hidden p-1.5 backdrop-blur-3xl ${isDark ? 'bg-[#18181b]/95 ring-white/10 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.05)]' : 'bg-white/95 ring-black/5 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.1)]'}`}
                       >
                         <div className="flex flex-col gap-0.5">
                           {clientesFiltrados.map((c, idx) => (
@@ -368,11 +488,12 @@ export default function Header({
                   <AnimatePresence>
                     {mostrarDropdownMesa && (
                       <motion.div 
-                        initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                        // CORREÇÃO 2: Motion suave (Apple-like) e Sombras difusas
+                        initial={{ opacity: 0, y: 4, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 4, scale: 0.98 }}
-                        transition={{ duration: 0.2 }}
-                        className={`absolute top-[calc(100%+16px)] right-0 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 w-[280px] sm:w-[320px] rounded-2xl ring-1 shadow-2xl z-50 overflow-hidden p-3 backdrop-blur-3xl ${isDark ? 'bg-[#18181b]/95 ring-white/10 shadow-black/80' : 'bg-white/95 ring-black/5 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.15)]'}`}
+                        exit={{ opacity: 0, y: 2, scale: 0.99 }}
+                        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                        className={`absolute top-[calc(100%+16px)] right-0 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 w-[280px] sm:w-[320px] rounded-2xl ring-1 z-50 overflow-hidden p-3 backdrop-blur-3xl ${isDark ? 'bg-[#18181b]/95 ring-white/10 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.05)]' : 'bg-white/95 ring-black/5 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.1)]'}`}
                       >
                         <div className="flex items-center gap-2 mb-3 relative">
                           <div className="relative flex-1">
@@ -403,7 +524,16 @@ export default function Header({
                             <button 
                               key={numero} 
                               onClick={() => vincularMesa(numero)} 
-                              className={`relative overflow-hidden h-10 rounded-xl flex items-center justify-center text-[13px] font-semibold tracking-tight transition-colors ${mesaAtivaVisivel === numero ? (isDark ? 'bg-zinc-200 text-zinc-900 shadow-[0_0_12px_rgba(255,255,255,0.2)]' : 'bg-zinc-900 text-white shadow-md') : (isDark ? 'bg-transparent text-zinc-300 hover:bg-white/10 ring-1 ring-inset ring-white/5' : 'bg-white text-zinc-700 hover:bg-black/5 ring-1 ring-inset ring-black/5 shadow-sm')}`}
+                              // CORREÇÃO 3: Estado Ativo liderando sem gritar (translucidez controlada)
+                              className={`relative overflow-hidden h-10 rounded-xl flex items-center justify-center text-[13px] font-semibold tracking-tight transition-colors ${
+                                mesaAtivaVisivel === numero 
+                                  ? (isDark 
+                                      ? 'bg-white/10 ring-1 ring-inset ring-white/20 text-white shadow-[inset_0_0_12px_rgba(255,255,255,0.05)]' 
+                                      : 'bg-black/5 ring-1 ring-inset ring-black/10 text-zinc-900 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]') 
+                                  : (isDark 
+                                      ? 'bg-transparent text-zinc-300 hover:bg-white/10 ring-1 ring-inset ring-white/5' 
+                                      : 'bg-white text-zinc-700 hover:bg-black/5 ring-1 ring-inset ring-black/5 shadow-sm')
+                              }`}
                             >
                               {numero}
                             </button>
@@ -440,34 +570,45 @@ export default function Header({
         </div>
       </LayoutGroup>
       
-      {/* Direita: Status Operacional */}
+      {/* Direita: Cápsula de Estado Operacional (MOBILE & DESKTOP PREMIUM) */}
       <div className="flex justify-end items-center gap-3 shrink-0 relative z-20 w-auto sm:w-[280px]">
         {!comandaAtiva && (
           <motion.div 
             initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
-            className="flex items-center"
+            className="flex items-center gap-2 sm:gap-3"
           >
+            {/* Mensagem Premium de Tensão (Desktop) */}
+            <AnimatePresence>
+              {statusOperacao === 'ativa' && tensaoEstado !== 'normal' && (
+                <motion.div
+                  initial={{ opacity: 0, x: 15, filter: 'blur(4px)' }}
+                  animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, x: 10, filter: 'blur(4px)' }}
+                  transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                  className={`hidden xl:flex text-[11px] font-medium tracking-tight whitespace-nowrap ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}
+                >
+                  {currentStyle.msgText}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <button 
               onClick={irParaControleOperacional}
-              className={`flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all duration-300 group ring-1 ring-inset ${
-                statusOperacao === 'ativa' 
-                  ? (isDark ? 'bg-emerald-500/10 ring-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-emerald-50 ring-emerald-200 text-emerald-700 hover:bg-emerald-100')
-                  : statusOperacao === 'pendente'
-                  ? (isDark ? 'bg-amber-500/10 ring-amber-500/20 text-amber-400 hover:bg-amber-500/20' : 'bg-amber-50 ring-amber-200 text-amber-700 hover:bg-amber-100')
-                  : (isDark ? 'bg-zinc-500/10 ring-white/5 text-zinc-400 hover:bg-white/5' : 'bg-zinc-100 ring-black/5 text-zinc-600 hover:bg-black/5')
-              }`}
+              className={`flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all duration-700 ease-out group ring-1 ring-inset ${currentStyle.btnBg}`}
             >
-              <span className="relative flex h-2 w-2">
+              <span className="relative flex h-2 w-2 shrink-0">
                 {(statusOperacao === 'ativa' || statusOperacao === 'pendente') && (
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusOperacao === 'ativa' ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+                  <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${currentStyle.ping}`}></span>
                 )}
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                  statusOperacao === 'ativa' ? 'bg-emerald-500' : statusOperacao === 'pendente' ? 'bg-amber-500' : 'bg-zinc-400'
-                }`}></span>
+                <span className={`relative inline-flex rounded-full h-2 w-2 transition-colors duration-700 ${currentStyle.dot}`}></span>
               </span>
-              <span className="text-[11px] font-bold uppercase tracking-widest hidden sm:block">
-                {statusOperacao === 'ativa' ? 'Ciclo Ativo' : statusOperacao === 'pendente' ? 'Ciclo Pendente' : 'Ciclo Inativo'}
+              
+              <span className={`text-[10px] sm:text-[11px] font-semibold tracking-wide ${tensaoEstado !== 'normal' ? 'block' : 'hidden sm:block'}`}>
+                {/* Texto super compacto exclusivo para Mobile */}
+                <span className="sm:hidden">{currentStyle.mobileLabel}</span>
+                {/* Texto elegante para Desktop */}
+                <span className="hidden sm:inline">{currentStyle.label}</span>
               </span>
             </button>
           </motion.div>
