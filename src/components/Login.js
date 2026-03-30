@@ -353,10 +353,10 @@ export default function Login({ getHoje, setSessao, setScenePhase }) {
                   ))}
                 </div>
                 <div className="grid grid-cols-2 gap-y-2 gap-x-2">
-                  <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400"><CheckIcon active={hasLength} /> Mín. 8 Chars</div>
-                  <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400"><CheckIcon active={hasNumber} /> Numérico</div>
-                  <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400"><CheckIcon active={hasSpecial} /> Simbólico</div>
-                  <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400"><CheckIcon active={matchPasswords} /> Validação</div>
+                  <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400"><CheckIcon active={hasLength} /> Mínimo 8 Characteres</div>
+                  <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400"><CheckIcon active={hasNumber} /> Número(s)</div>
+                  <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400"><CheckIcon active={hasSpecial} /> Simbolo(s)</div>
+                  <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400"><CheckIcon active={matchPasswords} /> Senhas Iguais</div>
                 </div>
               </div>
 

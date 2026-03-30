@@ -263,17 +263,7 @@ export default function ModalConfigEmpresa(props) {
                   </button>
                 </div>
 
-                <div className={`mt-6 pt-6 border-t ${temaNoturno ? 'border-rose-900/30' : 'border-rose-200'}`}>
-                  <h3 className="text-[14px] font-semibold tracking-tight text-rose-500 mb-1">Zona de Perigo</h3>
-                  <p className={`text-[11px] leading-relaxed mb-4 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>A deleção apaga permanentemente todos os dados. <span className="font-bold underline">Não pode ser desfeita</span>.</p>
-                  
-                  <div className="flex flex-col gap-2">
-                    <input type="text" placeholder="Digite DELETAR-AROX" value={confirmacaoDelete} onChange={e => setConfirmacaoDelete(e.target.value)} className={`w-full px-3.5 py-2.5 rounded-lg border outline-none text-[12px] font-mono font-semibold transition-all focus:ring-1 focus:ring-offset-0 ${temaNoturno ? 'bg-rose-500/5 border-rose-500/20 focus:border-rose-500 text-rose-300 placeholder-rose-900' : 'bg-rose-50 border-rose-200 focus:border-rose-400 text-rose-900 placeholder-rose-300'}`} />
-                    <button disabled={confirmarDeleteBloqueado} onClick={deletarWorkspace} className={`w-full py-2.5 rounded-lg text-[13px] font-bold transition-all shadow-sm outline-none flex items-center justify-center gap-2 ${confirmarDeleteBloqueado ? (temaNoturno ? 'bg-white/5 text-zinc-600 cursor-not-allowed' : 'bg-black/5 text-zinc-400 cursor-not-allowed') : 'bg-rose-600 hover:bg-rose-700 text-white active:scale-[0.98]'}`}>
-                      Deletar Permanentemente
-                    </button>
-                  </div>
-                </div>
+                
               </div>
             </div>
 
