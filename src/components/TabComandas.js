@@ -1,4 +1,3 @@
-// src/components/TabComandas.js
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import CardComanda from '@/components/CardComanda';
@@ -8,7 +7,7 @@ export default function TabComandas({
   temaNoturno, comandasAbertas, modoExclusao, setModoExclusao,
   selecionadasExclusao, toggleSelecaoExclusao, confirmarExclusaoEmMassa,
   adicionarComanda, setIdSelecionado, caixaAtual, abrirCaixaManual,
-  abaAtiva // Adicionado aqui para receber a prop
+  abaAtiva
 }) {
 
   const [saldoInicial, setSaldoInicial] = useState('');
@@ -20,9 +19,6 @@ export default function TabComandas({
     const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); 
     setDataHoje(hoje);
   }, []);
-
-  // --- BLINDAGEM DO CICLO ---
-  const isCicloAtrasado = caixaAtual?.status === 'aberto' && caixaAtual?.data_abertura && caixaAtual.data_abertura < dataHoje;
 
   // === FIX ABA FANTASMA: Se o usuário clica na Sidebar para ir para outra aba, fecha a comanda aberta ===
   useEffect(() => {
@@ -74,13 +70,6 @@ export default function TabComandas({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [modoExclusao, caixaAtual, adicionarComanda, comandasAbertas, dataHoje, setIdSelecionado]);
 
-  const handleAbrirCaixa = () => {
-    abrirCaixaManual({
-      data_abertura: dataHoje,
-      saldo_inicial: parseFloat(saldoInicial || 0)
-    });
-  };
-
   const comandasHoje = comandasAbertas.filter(c => !c.data || c.data >= dataHoje);
   const comandasAntigas = comandasAbertas.filter(c => c.data && c.data < dataHoje);
   const comandasParaRenderizar = modoExclusao ? comandasAbertas : comandasHoje;
@@ -95,7 +84,6 @@ export default function TabComandas({
   };
   const volumeHoje = calcularVolumeHoje();
 
-  // Constantes de estilo AROX
   const btnPrimario = temaNoturno 
     ? 'bg-zinc-100 text-zinc-950 hover:bg-white shadow-[0_0_15px_rgba(255,255,255,0.05)]' 
     : 'bg-zinc-900 text-white hover:bg-black shadow-[0_2px_10px_rgba(0,0,0,0.1)]';
@@ -107,27 +95,10 @@ export default function TabComandas({
   return (
     <div className={`w-full h-full flex flex-col font-sans overflow-hidden arox-cinematic pb-20`}>
       
-      {/* BANNER PADRÃO - CICLO ATRASADO */}
-      {isCicloAtrasado && caixaAtual?.status === 'aberto' && (
-        <div className={`w-full mb-6 p-4 rounded-2xl border shadow-sm flex items-center gap-4 arox-cinematic transition-colors ${temaNoturno ? 'bg-[#18181b]/60 border-amber-500/20 shadow-black/50 backdrop-blur-md' : 'bg-white/80 border-amber-300/50 shadow-sm backdrop-blur-md'}`}>
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0 ${temaNoturno ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-600'}`}>
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          </div>
-          <div className="flex-1">
-            <h3 className={`text-[14px] font-bold tracking-tight ${temaNoturno ? 'text-amber-400' : 'text-amber-700'}`}>Ciclo Operacional Estendido</h3>
-            <p className={`text-[12px] mt-0.5 font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-600'}`}>
-              O caixa do dia <strong className={temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}>{caixaAtual?.data_abertura?.split('-').reverse().join('/')}</strong> permanece ativo. Os lançamentos atuais estão sendo integrados a este período.
-            </p>
-          </div>
-        </div>
-      )}
-      
-      {/* 1. HEADER OPERACIONAL */}
+      {/* HEADER OPERACIONAL */}
       {caixaAtual?.status === 'aberto' && (
-        
         <div className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 w-full border-b pb-6 transition-colors duration-300 ${temaNoturno ? 'border-white/[0.08]' : 'border-black/[0.04]'}`}>
             
-            {/* Esquerda: Identidade e Métricas */}
             <div className="flex flex-col gap-1.5">
               {!modoExclusao ? (
                 <>
@@ -167,7 +138,6 @@ export default function TabComandas({
               )}
             </div>
             
-            {/* Direita: Ações */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                 {!modoExclusao ? (
                   <>
@@ -201,7 +171,7 @@ export default function TabComandas({
 
       <div className="flex-1 flex flex-col min-w-0 mx-auto w-full">
         
-        {/* 2. BLOCO DE PENDÊNCIAS */}
+        {/* BLOCO DE PENDÊNCIAS */}
         {!modoExclusao && comandasAntigas.length > 0 && caixaAtual?.status === 'aberto' && (
           <div className="w-full mb-8 animate-in slide-in-from-top-2 duration-500">
             <button 
@@ -249,7 +219,6 @@ export default function TabComandas({
             isSistemaJaAcessado={true}
           />
         ) : (
-          /* 3. GRID PRINCIPAL (O pl-2 pt-2 dá o respiro necessário pro número não cortar) */
           <div className="flex flex-wrap gap-5 justify-start w-full pl-2 pt-2">
             
             {/* Empty State AROX */}
@@ -265,7 +234,6 @@ export default function TabComandas({
             {comandasParaRenderizar.map((comanda, index) => (
               <div key={comanda.id} className="relative group arox-cinematic transition-all" style={{ animationDelay: `${index * 30}ms` }}>
                 
-                {/* Atalho de Teclado Premium */}
                 {index < 9 && !modoExclusao && (
                   <div className="absolute -top-1 -left-1 z-20 pointer-events-none transition-all duration-300 opacity-0 group-hover:opacity-100 group-hover:scale-110">
                       <div className={`w-7 h-7 rounded-xl border flex items-center justify-center text-[12px] font-black shadow-lg backdrop-blur-md ${temaNoturno ? 'bg-zinc-800/90 border-white/10 text-zinc-300' : 'bg-white/90 border-black/10 text-zinc-700'}`}>
@@ -274,7 +242,6 @@ export default function TabComandas({
                   </div>
                 )}
 
-                {/* Checkbox de Exclusão Destrutivo */}
                 {modoExclusao && (
                   <div className="absolute top-4 right-4 z-20">
                       <div className={`w-6 h-6 rounded-lg border flex items-center justify-center cursor-pointer transition-all shadow-sm ${selecionadasExclusao.includes(comanda.id) ? 'bg-red-500 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.4)]' : (temaNoturno ? 'bg-[#111] border-white/20 hover:border-red-400' : 'bg-white border-black/20 hover:border-red-400')}`} onClick={() => toggleSelecaoExclusao(comanda.id)}>
@@ -283,7 +250,6 @@ export default function TabComandas({
                   </div>
                 )}
                 
-                {/* Container controlando a escala na exclusão */}
                 <div 
                   className={`transition-all duration-300 ease-out cursor-pointer h-full ${modoExclusao ? (selecionadasExclusao.includes(comanda.id) ? 'ring-2 ring-red-500 ring-offset-4 dark:ring-offset-[#050505] rounded-3xl scale-[0.96]' : 'opacity-40 grayscale hover:opacity-80 scale-[0.98]') : 'hover:-translate-y-1'}`} 
                   onClick={() => { if (modoExclusao) toggleSelecaoExclusao(comanda.id); }}

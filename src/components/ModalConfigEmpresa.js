@@ -23,7 +23,6 @@ const CIDADES_POPULARES = [
 ];
 
 export default function ModalConfigEmpresa(props) {
-  // Garantimos que recebemos todas as props do nível superior
   const {
     temaNoturno, sessao, setMostrarConfigEmpresa, tagsGlobais, setTagsGlobais,
     nomeEmpresaEdicao, setNomeEmpresaEdicao, logoEmpresaEdicao, setLogoEmpresaEdicao,
@@ -36,7 +35,6 @@ export default function ModalConfigEmpresa(props) {
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [mostrarSenhas, setMostrarSenhas] = useState(false);
-  const [confirmacaoDelete, setConfirmacaoDelete] = useState('');
   const [localizacao, setLocalizacao] = useState('');
   const [sugestoesLocalizacao, setSugestoesLocalizacao] = useState([]);
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
@@ -91,6 +89,11 @@ export default function ModalConfigEmpresa(props) {
     return limpa;
   };
 
+  const selecionarSugestao = (sugestao) => {
+    setLocalizacao(sugestao);
+    setMostrarSugestoes(false);
+  };
+
   const handleSalvarGeral = async () => {
     try {
       if (ID_EMPRESA_REAL) {
@@ -116,25 +119,25 @@ export default function ModalConfigEmpresa(props) {
   const nomePlano = planoUsuario?.nome?.toLowerCase() || 'free';
   const isPremium = nomePlano.includes('premium') || nomePlano.includes('pro') || nomePlano.includes('anual') || nomePlano.includes('mensal');
   const nomePlanoDisplay = planoUsuario?.nome ? (planoUsuario.nome.charAt(0).toUpperCase() + planoUsuario.nome.slice(1)) : 'Starter Plan';
-  const confirmarDeleteBloqueado = confirmacaoDelete !== 'DELETAR-AROX';
 
-  const labelArox = `text-[10px] font-bold uppercase tracking-widest block mb-1.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`;
-  const inputArox = `w-full px-3.5 py-2.5 rounded-lg border outline-none text-[13px] font-semibold transition-all shadow-sm focus:ring-1 focus:ring-offset-0 ${temaNoturno ? 'bg-white/[0.02] border-white/10 focus:border-white/20 focus:ring-white/20 text-white placeholder-zinc-600' : 'bg-black/[0.02] border-zinc-200 focus:border-zinc-300 focus:ring-zinc-200 text-zinc-900 placeholder-zinc-400'}`;
+  const labelArox = `text-[10px] font-bold uppercase tracking-widest block mb-2 ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`;
+  const inputArox = `w-full px-4 py-3 rounded-[12px] border outline-none text-[13px] font-semibold transition-all shadow-inner focus:ring-1 focus:ring-offset-0 ${temaNoturno ? 'bg-white/[0.03] border-white/10 focus:border-white/30 focus:ring-white/20 text-white placeholder-zinc-600' : 'bg-black/[0.02] border-zinc-200 focus:border-zinc-400 focus:ring-zinc-200 text-zinc-900 placeholder-zinc-400'}`;
+  const cardPanel = `p-6 sm:p-8 rounded-[24px] border ${temaNoturno ? 'bg-[#0E0E10] border-white/[0.06] shadow-md' : 'bg-white border-zinc-200 shadow-sm'} flex flex-col gap-6 w-full relative overflow-hidden`;
 
   return (
-    <div className={`fixed inset-0 z-[120] flex flex-col animate-in fade-in duration-300 ${temaNoturno ? 'bg-[#0A0A0A] text-zinc-100' : 'bg-[#FAFAFA] text-zinc-900'}`}>
+    <div className={`fixed inset-0 z-[120] flex flex-col animate-in fade-in duration-300 ${temaNoturno ? 'bg-[#050505] text-zinc-100' : 'bg-[#FAFAFA] text-zinc-900'}`}>
       
       {/* HEADER NAVEGAÇÃO SUPERIOR */}
-      <header className={`h-[68px] border-b shrink-0 flex items-center justify-between px-4 sm:px-8 overflow-x-auto scrollbar-hide ${temaNoturno ? 'bg-[#0A0A0A]/80 border-white/[0.06]' : 'bg-white/80 border-zinc-200'} backdrop-blur-xl`}>
-        <div className="flex items-center gap-6 sm:gap-10">
-          <div className="flex items-center gap-3 shrink-0 mr-4">
+      <header className={`h-[68px] border-b shrink-0 flex items-center justify-between px-4 sm:px-8 ${temaNoturno ? 'bg-[#0A0A0A]/80 border-white/[0.06]' : 'bg-white/80 border-zinc-200'} backdrop-blur-xl`}>
+        <div className="flex items-center gap-6 sm:gap-10 w-full">
+          <div className="hidden sm:flex items-center gap-3 shrink-0 mr-4">
             <div className={`p-2 rounded-lg border shadow-sm ${temaNoturno ? 'bg-white/5 border-white/10 text-zinc-300' : 'bg-zinc-50 border-zinc-200 text-zinc-700'}`}>
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             </div>
-            <h2 className="text-[16px] font-semibold tracking-tight leading-none hidden sm:block">Ajustes do Sistema</h2>
+            <h2 className="text-[16px] font-semibold tracking-tight leading-none">Ajustes do Sistema</h2>
           </div>
 
-          <nav className="flex items-center gap-1 sm:gap-2">
+          <nav className="flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-hide w-full sm:w-auto pb-1 sm:pb-0 pt-1 sm:pt-0">
             {[
               { id: 'workspace', label: 'Workspace' },
               { id: 'catalogo', label: 'Catálogo' },
@@ -143,7 +146,7 @@ export default function ModalConfigEmpresa(props) {
             ].map(tab => (
               <button 
                 key={tab.id} onClick={() => setAbaPrincipal(tab.id)}
-                className={`px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors shrink-0 ${abaPrincipal === tab.id ? (temaNoturno ? 'bg-white/10 text-white' : 'bg-black/5 text-zinc-900') : (temaNoturno ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-500 hover:text-zinc-700')}`}
+                className={`px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors shrink-0 ${abaPrincipal === tab.id ? (temaNoturno ? 'bg-white/10 text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]' : 'bg-zinc-900 text-white shadow-sm') : (temaNoturno ? 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5' : 'text-zinc-500 hover:text-zinc-700 hover:bg-black/5')}`}
               >
                 {tab.label}
               </button>
@@ -157,140 +160,151 @@ export default function ModalConfigEmpresa(props) {
       </header>
 
       {/* ÁREA DE CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 overflow-hidden flex flex-col w-full h-full relative">
-        
+      <main className="flex-1 overflow-y-auto w-full relative scrollbar-hide px-4 sm:px-8 py-6 sm:py-8">
+        <div className="max-w-6xl mx-auto w-full">
         {/* ABA: WORKSPACE */}
         {abaPrincipal === 'workspace' && (
-          <div className="flex-1 overflow-y-auto flex flex-col scrollbar-hide">
-            <div className="flex-1 flex flex-col sm:flex-row max-w-7xl mx-auto w-full">
-              
-              <div className={`p-6 sm:p-8 flex-col gap-6 w-full sm:w-1/3 sm:border-r ${temaNoturno ? 'border-white/[0.06]' : 'border-zinc-200'}`}>
-                <div className="space-y-1 mb-6">
-                  <h3 className="text-[14px] font-semibold tracking-tight">Identidade Visual</h3>
-                  <p className={`text-[12px] ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Informações da sua marca</p>
-                </div>
-                <div className="space-y-5">
-                  <div className="group">
-                    <label className={labelArox}>Nome do Estabelecimento</label>
-                    <input type="text" value={nomeEmpresaEdicao} onChange={e => setNomeEmpresaEdicao(e.target.value)} className={inputArox} />
-                  </div>
-                  <div className="group">
-                    <label className={labelArox}>Gestor Responsável</label>
-                    <input type="text" value={nomeUsuarioEdicao} onChange={e => setNomeUsuarioEdicao(e.target.value)} className={inputArox} />
-                  </div>
-                  <div className="group">
-                    <label className={labelArox}>Logotipo (URL)</label>
-                    <div className="flex gap-3 items-center">
-                      <div className={`w-11 h-11 rounded-lg border shrink-0 overflow-hidden flex items-center justify-center p-0.5 shadow-sm ${temaNoturno ? 'border-white/10 bg-[#161a20]' : 'border-zinc-200 bg-white'}`}>
-                        <img src={logoEmpresaEdicao || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'} alt="Preview" className="w-full h-full object-cover rounded-md" onError={(e) => e.target.src='https://cdn-icons-png.flaticon.com/512/3135/3135715.png'} />
-                      </div>
-                      <input type="text" placeholder="https://..." value={logoEmpresaEdicao} onChange={e => setLogoEmpresaEdicao(e.target.value)} className={inputArox} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className={`p-6 sm:p-8 flex-col gap-6 w-full sm:w-1/3 sm:border-r ${temaNoturno ? 'border-white/[0.06]' : 'border-zinc-200'}`}>
-                <div className="space-y-1 mb-6">
-                  <h3 className="text-[14px] font-semibold tracking-tight">Parâmetros Operacionais</h3>
-                  <p className={`text-[12px] ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Inteligência de clima e alertas</p>
-                </div>
-                {isCarregandoOperacao ? (
-                  <div className={`animate-pulse h-10 w-full rounded-md ${temaNoturno ? 'bg-white/5' : 'bg-black/5'}`}></div>
-                ) : (
-                  <div className="space-y-5">
-                    <div className="group relative">
-                      <label className={labelArox}>Localização (Clima)</label>
-                      <input 
-                        type="text" placeholder="Ex: Parnamirim, RN, BR" value={localizacao} onChange={handleLocalizacaoChange}
-                        onFocus={() => { if(localizacao.trim().length > 1) setMostrarSugestoes(true); }} onBlur={() => setTimeout(() => setMostrarSugestoes(false), 200)}
-                        className={inputArox} 
-                      />
-                      {mostrarSugestoes && sugestoesLocalizacao.length > 0 && (
-                        <ul className={`absolute left-0 right-0 z-50 mt-1.5 py-1.5 rounded-xl border shadow-xl overflow-hidden max-h-48 overflow-y-auto scrollbar-hide ${temaNoturno ? 'bg-[#1A1A1A] border-white/10' : 'bg-white border-zinc-200'}`}>
-                          {sugestoesLocalizacao.map((sugestao, idx) => (
-                            <li key={idx} onClick={() => selecionarSugestao(sugestao)} className={`px-3.5 py-2 text-[13px] font-medium cursor-pointer transition-colors flex items-center gap-2 ${temaNoturno ? 'text-zinc-300 hover:bg-white/5 hover:text-white' : 'text-zinc-700 hover:bg-black/5 hover:text-zinc-900'}`}>
-                              <svg className={`w-3.5 h-3.5 opacity-50 ${temaNoturno ? 'text-white' : 'text-black'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
-                              {sugestao}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      <p className={`text-[10px] mt-1.5 leading-relaxed ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Usado nas métricas de previsão na Dashboard.</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="group">
-                        <label className={labelArox}>Abertura</label>
-                        <input type="time" value={horarioAbertura} onChange={e => setHorarioAbertura(e.target.value)} className={inputArox} />
-                      </div>
-                      <div className="group">
-                        <label className={labelArox}>Fechamento</label>
-                        <input type="time" value={horarioFechamento} onChange={e => setHorarioFechamento(e.target.value)} className={inputArox} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className={`p-6 sm:p-8 flex-col gap-6 w-full sm:w-1/3 ${temaNoturno ? 'bg-[#111111]/30' : 'bg-zinc-50/50'}`}>
-                <div className={`p-4 rounded-xl border flex flex-col gap-3 mb-6 shadow-sm ${temaNoturno ? 'bg-[#1A1A1A] border-white/10' : 'bg-white border-zinc-200'}`}>
-                  <div className="flex items-start justify-between">
-                    <div className="flex flex-col">
-                      <span className={labelArox}>Assinatura Ativa</span>
-                      <span className="text-[15px] font-semibold tracking-tight">{nomePlanoDisplay}</span>
-                    </div>
-                    <div className={`px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wider ${isPremium ? (temaNoturno ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200') : (temaNoturno ? 'bg-white/5 text-zinc-400 border-white/10' : 'bg-zinc-100 text-zinc-600 border-zinc-200')}`}>
-                      {isPremium ? 'Premium' : 'Básico'}
-                    </div>
-                  </div>
-                  <div className={`pt-3 border-t flex flex-col gap-0.5 ${temaNoturno ? 'border-white/5' : 'border-zinc-200'}`}>
-                    <span className={labelArox}>Membro Desde</span>
-                    <span className={`text-[12px] font-mono font-medium ${temaNoturno ? 'text-zinc-300' : 'text-zinc-700'}`}>{planoUsuario?.criado_em ? new Intl.DateTimeFormat('pt-BR').format(new Date(planoUsuario.criado_em)) : 'Não registrada'}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <h3 className="text-[14px] font-semibold tracking-tight mb-2">Credenciais</h3>
-                  <input type={mostrarSenhas ? "text" : "password"} placeholder="Senha Atual" value={senhaAtual} onChange={e => setSenhaAtual(e.target.value)} className={inputArox} />
-                  <div className="grid grid-cols-1 gap-3">
-                    <input type={mostrarSenhas ? "text" : "password"} placeholder="Nova Senha" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} className={inputArox} />
-                    <input type={mostrarSenhas ? "text" : "password"} placeholder="Confirmar Nova" value={confirmarSenha} onChange={e => setConfirmarSenha(e.target.value)} className={inputArox} />
+          <div className="flex flex-col lg:flex-row gap-6 sm:gap-8 w-full">
+            
+            <div className="flex flex-col w-full lg:w-2/3 gap-6 sm:gap-8">
+              {/* BRANDING CARD */}
+              <div className={cardPanel}>
+                  <div className="space-y-1 border-b pb-4" style={{borderColor: temaNoturno ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}}>
+                    <h3 className="text-[16px] font-bold tracking-tight">Identidade Visual</h3>
+                    <p className={`text-[12px] font-medium ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Informações e estética da sua marca.</p>
                   </div>
                   
-                  <button disabled={!senhaValida || !senhaAtual} onClick={() => alterarSenhaConta(senhaAtual, novaSenha)} className={`w-full py-2.5 rounded-lg text-[13px] font-bold mt-2 transition-all shadow-sm outline-none flex items-center justify-center gap-2 ${senhaValida && senhaAtual ? (temaNoturno ? 'bg-white text-zinc-900 hover:bg-zinc-200 active:scale-[0.98]' : 'bg-zinc-900 text-white hover:bg-zinc-800 active:scale-[0.98]') : (temaNoturno ? 'bg-white/5 text-zinc-500 cursor-not-allowed' : 'bg-black/5 text-zinc-400 cursor-not-allowed')}`}>
-                    Atualizar Senha
-                  </button>
-                </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full">
+                    <div className="w-full">
+                      <label className={labelArox}>Nome do Estabelecimento</label>
+                      <input type="text" value={nomeEmpresaEdicao} onChange={e => setNomeEmpresaEdicao(e.target.value)} className={inputArox} />
+                    </div>
+                    <div className="w-full">
+                      <label className={labelArox}>Gestor Responsável</label>
+                      <input type="text" value={nomeUsuarioEdicao} onChange={e => setNomeUsuarioEdicao(e.target.value)} className={inputArox} />
+                    </div>
+                    <div className="sm:col-span-2 w-full">
+                      <label className={labelArox}>Logotipo (URL)</label>
+                      <div className="flex gap-4 items-center w-full">
+                        <div className={`w-14 h-14 rounded-xl border shrink-0 overflow-hidden flex items-center justify-center p-0.5 shadow-sm ${temaNoturno ? 'border-white/10 bg-[#161a20]' : 'border-zinc-200 bg-white'}`}>
+                          <img src={logoEmpresaEdicao || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'} alt="Preview" className="w-full h-full object-cover rounded-[10px]" onError={(e) => e.target.src='https://cdn-icons-png.flaticon.com/512/3135/3135715.png'} />
+                        </div>
+                        <input type="text" placeholder="https://..." value={logoEmpresaEdicao} onChange={e => setLogoEmpresaEdicao(e.target.value)} className={inputArox} />
+                      </div>
+                    </div>
+                  </div>
+              </div>
 
-                
+              {/* OPERAÇÃO CARD */}
+              <div className={cardPanel}>
+                  <div className="space-y-1 border-b pb-4" style={{borderColor: temaNoturno ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}}>
+                    <h3 className="text-[16px] font-bold tracking-tight">Parâmetros Operacionais</h3>
+                    <p className={`text-[12px] font-medium ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Inteligência de clima e alertas de caixa.</p>
+                  </div>
+                  
+                  {isCarregandoOperacao ? (
+                    <div className={`animate-pulse h-12 w-full rounded-xl ${temaNoturno ? 'bg-white/5' : 'bg-black/5'}`}></div>
+                  ) : (
+                    <div className="flex flex-col gap-5 w-full">
+                      <div className="w-full relative">
+                        <label className={labelArox}>Localização Estratégica</label>
+                        <input 
+                          type="text" placeholder="Ex: Parnamirim, RN, BR" value={localizacao} onChange={handleLocalizacaoChange}
+                          onFocus={() => { if(localizacao.trim().length > 1) setMostrarSugestoes(true); }} onBlur={() => setTimeout(() => setMostrarSugestoes(false), 200)}
+                          className={inputArox} 
+                        />
+                        {mostrarSugestoes && sugestoesLocalizacao.length > 0 && (
+                          <ul className={`absolute left-0 right-0 z-50 mt-2 py-2 rounded-[16px] border shadow-2xl overflow-hidden max-h-56 overflow-y-auto scrollbar-hide backdrop-blur-3xl ${temaNoturno ? 'bg-[#18181b]/95 border-white/10' : 'bg-white/95 border-zinc-200'}`}>
+                            {sugestoesLocalizacao.map((sugestao, idx) => (
+                              <li key={idx} onClick={() => selecionarSugestao(sugestao)} className={`px-4 py-2.5 text-[13px] font-semibold cursor-pointer transition-colors flex items-center gap-3 ${temaNoturno ? 'text-zinc-200 hover:bg-white/10' : 'text-zinc-800 hover:bg-black/5'}`}>
+                                <svg className={`w-4 h-4 opacity-50 ${temaNoturno ? 'text-white' : 'text-black'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                                {sugestao}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-5 w-full">
+                        <div className="w-full">
+                          <label className={labelArox}>Horário de Abertura</label>
+                          <input type="time" value={horarioAbertura} onChange={e => setHorarioAbertura(e.target.value)} className={inputArox} />
+                        </div>
+                        <div className="w-full">
+                          <label className={labelArox}>Horário de Fechamento</label>
+                          <input type="time" value={horarioFechamento} onChange={e => setHorarioFechamento(e.target.value)} className={inputArox} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
               </div>
             </div>
 
-            <div className={`p-5 sm:p-6 border-t shrink-0 flex justify-end ${temaNoturno ? 'border-white/[0.06] bg-[#0A0A0A]' : 'border-zinc-200 bg-white'}`}>
-              <button onClick={handleSalvarGeral} className={`w-full sm:w-auto px-8 py-2.5 rounded-lg text-[13px] font-bold transition-all active:scale-[0.98] shadow-sm flex items-center justify-center gap-2 outline-none ${temaNoturno ? 'bg-white text-zinc-900 hover:bg-zinc-200' : 'bg-zinc-900 text-white hover:bg-zinc-800'}`}>
-                Salvar Workspace
-              </button>
+            {/* BARRA LATERAL (PLANOS E SEGURANÇA) */}
+            <div className="flex flex-col w-full lg:w-1/3 gap-6 sm:gap-8 shrink-0">
+                <div className={`p-6 sm:p-8 rounded-[24px] border shadow-sm relative overflow-hidden flex flex-col gap-4 ${temaNoturno ? 'bg-gradient-to-br from-[#121418] to-[#0A0A0A] border-white/10' : 'bg-gradient-to-br from-zinc-50 to-white border-zinc-200'}`}>
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[40px] rounded-full"></div>
+                  
+                  <div className="flex flex-col relative z-10">
+                    <span className={labelArox}>Plano e Licença</span>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-[20px] font-black tracking-tight">{nomePlanoDisplay}</span>
+                      <div className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${isPremium ? (temaNoturno ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-indigo-100 text-indigo-700 border border-indigo-200') : (temaNoturno ? 'bg-white/10 text-zinc-400 border border-white/10' : 'bg-zinc-200 text-zinc-700 border border-zinc-300')}`}>
+                        {isPremium ? 'Ativo' : 'Básico'}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className={`pt-4 border-t flex flex-col gap-1 relative z-10 ${temaNoturno ? 'border-white/10' : 'border-zinc-200'}`}>
+                    <span className={labelArox}>Ativação do Ambiente</span>
+                    <span className={`text-[13px] font-semibold ${temaNoturno ? 'text-zinc-300' : 'text-zinc-700'}`}>{planoUsuario?.criado_em ? new Intl.DateTimeFormat('pt-BR').format(new Date(planoUsuario.criado_em)) : 'Não registrada'}</span>
+                  </div>
+                </div>
+
+                <div className={cardPanel}>
+                  <div className="space-y-1 border-b pb-4" style={{borderColor: temaNoturno ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}}>
+                    <h3 className="text-[16px] font-bold tracking-tight">Segurança</h3>
+                    <p className={`text-[12px] font-medium ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Atualize sua credencial de acesso.</p>
+                  </div>
+
+                  <div className="flex flex-col gap-4 w-full">
+                    <input type={mostrarSenhas ? "text" : "password"} placeholder="Senha Atual" value={senhaAtual} onChange={e => setSenhaAtual(e.target.value)} className={inputArox} />
+                    <input type={mostrarSenhas ? "text" : "password"} placeholder="Nova Senha" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} className={inputArox} />
+                    <input type={mostrarSenhas ? "text" : "password"} placeholder="Confirmar Nova" value={confirmarSenha} onChange={e => setConfirmarSenha(e.target.value)} className={inputArox} />
+                    
+                    <button disabled={!senhaValida || !senhaAtual} onClick={() => alterarSenhaConta(senhaAtual, novaSenha)} className={`w-full py-3.5 rounded-xl text-[12px] uppercase tracking-wider font-bold mt-2 transition-all shadow-sm outline-none flex items-center justify-center gap-2 ${senhaValida && senhaAtual ? (temaNoturno ? 'bg-white text-zinc-900 hover:bg-zinc-200 active:scale-[0.98]' : 'bg-zinc-900 text-white hover:bg-zinc-800 active:scale-[0.98]') : (temaNoturno ? 'bg-white/5 text-zinc-600 cursor-not-allowed border border-white/10' : 'bg-black/5 text-zinc-400 cursor-not-allowed border border-black/10')}`}>
+                      Atualizar Senha
+                    </button>
+                  </div>
+                </div>
             </div>
+            
           </div>
         )}
 
-        {/* ABA: CATÁLOGO */}
         {abaPrincipal === 'catalogo' && (
            <AdminProdutos empresaId={ID_EMPRESA_REAL} temaNoturno={temaNoturno} {...props} />
         )}
 
-        {/* ABA: DELIVERY */}
         {abaPrincipal === 'delivery' && (
            <AdminDelivery empresaId={ID_EMPRESA_REAL} temaNoturno={temaNoturno} {...props} />
         )}
 
-        {/* ABA: TAGS */}
         {abaPrincipal === 'tags' && (
            <ModalConfigTags sessao={sessao} tagsGlobais={tagsGlobais} setTagsGlobais={setTagsGlobais} temaNoturno={temaNoturno} {...props} />
         )}
 
+        </div>
       </main>
+
+      {/* FOOTER SALVAR GERAL */}
+      {abaPrincipal === 'workspace' && (
+        <div className={`h-[80px] border-t shrink-0 flex items-center justify-end px-4 sm:px-8 shadow-[0_-10px_30px_rgba(0,0,0,0.05)] ${temaNoturno ? 'border-white/[0.06] bg-[#0A0A0A]/90' : 'border-zinc-200 bg-white/90'} backdrop-blur-xl z-20 absolute bottom-0 w-full`}>
+          <button onClick={handleSalvarGeral} className={`w-full sm:w-auto px-10 py-3.5 rounded-xl text-[13px] font-bold uppercase tracking-wider transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-2 outline-none ${temaNoturno ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-zinc-900 text-white hover:bg-black'}`}>
+            Salvar Modificações
+          </button>
+        </div>
+      )}
     </div>
   );
 }

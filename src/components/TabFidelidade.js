@@ -218,11 +218,14 @@ export default function TabFidelidade({ temaNoturno, sessao, mostrarAlerta, clie
         {abaInterna === 'clientes' && (
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-start md:justify-end arox-cinematic" style={{animationDelay: '0ms'}}>
             <input type="file" accept=".xlsx, .xls, .csv" className="hidden" ref={fileInputRef} onChange={acionarImportacao} />
-            <div className="hidden sm:flex bg-transparent rounded-xl border border-dashed overflow-hidden shadow-sm" style={{borderColor: temaNoturno ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}}>
-               <button onClick={() => fileInputRef.current?.click()} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 active:bg-zinc-500/10 ${temaNoturno ? 'text-zinc-300 hover:text-white border-r border-white/10' : 'text-zinc-600 hover:text-black border-r border-black/10'}`}>Excel / CSV</button>
-               <button onClick={() => setMostrarModalTexto(true)} className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 active:bg-zinc-500/10 ${temaNoturno ? 'text-zinc-300 hover:text-white' : 'text-zinc-600 hover:text-black'}`}>Colar Lista</button>
+            
+            {/* CORREÇÃO AQUI: flex ao invés de hidden sm:flex */}
+            <div className="flex w-full sm:w-auto bg-transparent rounded-xl border border-dashed overflow-hidden shadow-sm" style={{borderColor: temaNoturno ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}}>
+               <button onClick={() => fileInputRef.current?.click()} className={`flex-1 sm:flex-none px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 active:bg-zinc-500/10 ${temaNoturno ? 'text-zinc-300 hover:text-white border-r border-white/10' : 'text-zinc-600 hover:text-black border-r border-black/10'}`}>Excel / CSV</button>
+               <button onClick={() => setMostrarModalTexto(true)} className={`flex-1 sm:flex-none px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 active:bg-zinc-500/10 ${temaNoturno ? 'text-zinc-300 hover:text-white' : 'text-zinc-600 hover:text-black'}`}>Colar Lista</button>
             </div>
-            <button onClick={() => { setClienteEditando(null); setNovoCliente({nome:'', telefone:'', aniversario:'', pontos:0}); setMostrarModalNovo(true); }} className={`flex-1 sm:flex-none px-5 py-2 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all duration-300 active:scale-95 border border-transparent ${btnArox}`}>+ Integrar Cliente</button>
+            
+            <button onClick={() => { setClienteEditando(null); setNovoCliente({nome:'', telefone:'', aniversario:'', pontos:0}); setMostrarModalNovo(true); }} className={`w-full sm:w-auto px-5 py-2.5 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all duration-300 active:scale-95 border border-transparent ${btnArox}`}>+ Integrar Cliente</button>
           </div>
         )}
       </div>

@@ -79,8 +79,6 @@ export default function TabFaturamento({
   const [activeId, setActiveId] = useState(null); 
 
   const strHoje = getHoje?.() || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-  const isCicloAtrasado = caixaAtual?.status === 'aberto' && caixaAtual?.data_abertura && caixaAtual.data_abertura < strHoje;
-
   const strMesAtual = getMesAtual?.() || '';
   const strAnoAtual = getAnoAtual?.() || '';
   
@@ -860,21 +858,6 @@ export default function TabFaturamento({
   return (
     <div className={`w-full max-w-full pb-8 mt-4 font-sans px-4 md:px-0 ${temaNoturno ? 'text-zinc-100 selection:bg-zinc-800' : 'text-zinc-900 selection:bg-zinc-200'}`}>
       
-      {/* BANNER PADRÃO - CICLO ATRASADO */}
-      {isCicloAtrasado && (
-        <div className={`w-full mb-6 p-4 rounded-2xl border shadow-sm flex items-center gap-4 arox-cinematic transition-colors ${temaNoturno ? 'bg-[#18181b]/60 border-amber-500/20 shadow-black/50 backdrop-blur-md' : 'bg-white/80 border-amber-300/50 shadow-sm backdrop-blur-md'}`}>
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0 ${temaNoturno ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-600'}`}>
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          </div>
-          <div className="flex-1">
-            <h3 className={`text-[14px] font-bold tracking-tight ${temaNoturno ? 'text-amber-400' : 'text-amber-700'}`}>Ciclo Operacional Estendido</h3>
-            <p className={`text-[12px] mt-0.5 font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-600'}`}>
-              O caixa do dia <strong className={temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}>{caixaAtual?.data_abertura?.split('-').reverse().join('/')}</strong> permanece ativo. Os lançamentos atuais estão sendo integrados a este período.
-            </p>
-          </div>
-        </div>
-      )}
-
       <style dangerouslySetInnerHTML={{__html: `
         .arox-cinematic { animation: arox-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(10px); }
         @keyframes arox-fade-up { 100% { opacity: 1; transform: translateY(0); } }

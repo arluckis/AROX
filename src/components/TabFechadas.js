@@ -10,9 +10,7 @@ export default function TabFechadas({
   caixaAtual
 }) {
   const hojeCalendario = getHoje ? getHoje() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-  
   const cicloAtualData = (caixaAtual?.status === 'aberto' && caixaAtual?.data_abertura) ? caixaAtual.data_abertura : hojeCalendario;
-  const isCicloAtrasado = caixaAtual?.status === 'aberto' && caixaAtual?.data_abertura && caixaAtual.data_abertura < hojeCalendario;
 
   const [dataFiltro, setDataFiltro] = useState(cicloAtualData);
 
@@ -47,21 +45,6 @@ export default function TabFechadas({
 
   return (
     <div className={`w-full max-w-full font-sans arox-cinematic pb-20 px-4 md:px-0 ${bgPrincipal}`}>
-      
-      {/* BANNER PADRÃO - CICLO ATRASADO */}
-      {isCicloAtrasado && (
-        <div className={`w-full mb-6 p-4 rounded-2xl border shadow-sm flex items-center gap-4 arox-cinematic transition-colors ${temaNoturno ? 'bg-[#18181b]/60 border-amber-500/20 shadow-black/50 backdrop-blur-md' : 'bg-white/80 border-amber-300/50 shadow-sm backdrop-blur-md'}`}>
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0 ${temaNoturno ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-600'}`}>
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          </div>
-          <div className="flex-1">
-            <h3 className={`text-[14px] font-bold tracking-tight ${temaNoturno ? 'text-amber-400' : 'text-amber-700'}`}>Ciclo Operacional Estendido</h3>
-            <p className={`text-[12px] mt-0.5 font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-600'}`}>
-              O caixa do dia <strong className={temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}>{caixaAtual?.data_abertura?.split('-').reverse().join('/')}</strong> permanece ativo. Os lançamentos atuais estão sendo integrados a este período.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* HEADER OPERACIONAL PREMIUM */}
       <div className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 w-full pb-6 border-b transition-colors duration-300 ${bordaDestaque}`}>
@@ -119,7 +102,6 @@ export default function TabFechadas({
               const valorTotalComanda = c.pagamentos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
               const isDelivery = c.tipo === 'Delivery';
               
-              // LÓGICA DE DIA DIFERENTE (MADRUGADA)
               let isDiaDiferente = false;
               let dataHoraAberturaStr = '';
               if (c.hora_abertura || c.created_at) {
@@ -129,7 +111,6 @@ export default function TabFechadas({
                 dataHoraAberturaStr = `${dataObj.toLocaleDateString('pt-BR', {day:'2-digit', month:'short'}).replace(' de ', ' ')}, `;
               }
 
-              // Estilo Premium Diferenciado para Madrugada
               const cardBg = isDiaDiferente 
                 ? (temaNoturno ? 'bg-indigo-500/[0.02] border-indigo-500/20 hover:border-indigo-500/40' : 'bg-indigo-50/50 border-indigo-200 hover:border-indigo-300')
                 : (temaNoturno ? 'bg-[#0A0A0A] border-white/[0.04] hover:border-white/[0.08]' : 'bg-white border-black/[0.04] hover:border-black/[0.08]');
@@ -148,7 +129,6 @@ export default function TabFechadas({
                     </div>
                   )}
 
-                  {/* Sutil indicador lateral para madrugadas */}
                   {isDiaDiferente && (
                     <div className={`absolute left-0 top-0 bottom-0 w-1 ${temaNoturno ? 'bg-indigo-500/50' : 'bg-indigo-400'}`}></div>
                   )}
