@@ -157,7 +157,7 @@ export default function Header({
           btnBg: isDark ? 'bg-emerald-500/10 ring-emerald-500/20 text-emerald-400/90 hover:bg-emerald-500/15' : 'bg-emerald-500/10 ring-emerald-500/20 text-emerald-700 hover:bg-emerald-500/15',
           dot: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]', 
           ping: 'bg-emerald-500/30 animate-[pulse_4s_ease-in-out_infinite]',
-          label: statusOperacao === 'pendente' ? 'Sistema ativo' : `Caixa • ${dataCaixaFormatada}`,
+          label: statusOperacao === 'pendente' ? 'Sistema ativo' : `Ciclo • ${dataCaixaFormatada}`,
           mobileLabel: statusOperacao === 'pendente' ? 'Ativo' : dataCaixaFormatada,
           msgText: ''
         };
