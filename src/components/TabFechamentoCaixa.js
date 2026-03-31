@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 
 const arredondar = (valor) => Math.round((parseFloat(String(valor).replace(',', '.')) || 0) * 100) / 100;
@@ -36,8 +36,9 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
   const [solicitouSenhaAuto, setSolicitouSenhaAuto] = useState(false);
   const [isConsolidating, setIsConsolidating] = useState(false);
 
-  // NOVO ESTADO: Extrato Detalhado / Investigação de Turno
+  // NOVO ESTADO: Extrato Detalhado / Dossiê de Turno Cinematográfico
   const [extratoExpandido, setExtratoExpandido] = useState(false);
+  const [buscaExtrato, setBuscaExtrato] = useState('');
 
   const formatarHora = (isoString) => {
     if (!isoString) return '--:--';
@@ -151,9 +152,9 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
         setHistoricoLiberado(true);
         setSenhaHistorico('');
       } else { 
-        mostrarAlerta("Autorização Negada", "Credenciais de auditoria inválidas ou revogadas."); 
+        mostrarAlerta("Autorização Negada", "Credencial gerencial obrigatória."); 
       }
-    } catch(err) { mostrarAlerta("Erro de Conexão", "Não foi possível validar a senha no momento."); }
+    } catch(err) { mostrarAlerta("Erro de Conexão", "Não foi possível validar o protocolo no momento."); }
   };
 
   const handleVerificarSenhaApuracao = async () => {
@@ -165,9 +166,9 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
         setMostrarEsperado(true);
         setSenhaApuracao('');
       } else { 
-        mostrarAlerta("Autorização Negada", "Credenciais de auditoria inválidas ou revogadas."); 
+        mostrarAlerta("Autorização Negada", "Credencial gerencial obrigatória."); 
       }
-    } catch(err) { mostrarAlerta("Erro de Conexão", "Não foi possível validar a senha no momento."); }
+    } catch(err) { mostrarAlerta("Erro de Conexão", "Não foi possível validar o protocolo no momento."); }
   };
 
   const handleVerificarSenha = async () => {
@@ -185,15 +186,15 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
           mostrarConfirmacao('Estornar Fechamento', 'Esta ação invalidará o fechamento original e criará um registro de auditoria. Deseja prosseguir?', excluirCaixaConfirmado);
         }
       } else { 
-        mostrarAlerta("Autorização Negada", "Credenciais de auditoria inválidas ou revogadas."); 
+        mostrarAlerta("Autorização Negada", "Credencial gerencial obrigatória."); 
       }
     } catch(err) { 
-      mostrarAlerta("Erro de Conexão", "Não foi possível validar a senha no momento."); 
+      mostrarAlerta("Erro de Conexão", "Não foi possível validar o protocolo no momento."); 
       setSenhaModal({ visivel: false, senha: '' });
     }
   };
 
-  // --- DERIVAÇÃO DE VALORES E COMANDAS (EXTRATO) ---
+  // 🧠 === INTELIGÊNCIA DE AUDITORIA DO TURNO (DOSSIÊ COMPLETO BLINDADO) === 🧠
   const getPagamentosDoTurno = () => {
     if (!comandas || !caixaAtual) return [];
     const timeAbertura = new Date(caixaAtual.data_abertura).getTime();
@@ -206,26 +207,64 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
     });
   };
 
-  const calcularComandasPendentes = () => {
-    if (!comandas || !caixaAtual) return { total: 0, lista: [] };
-    const timeAbertura = new Date(caixaAtual.data_abertura).getTime();
-    
-    const pendentes = comandas.filter(c => {
-       if (c.status !== 'aberta' && c.status !== 'pre_fechada') return false;
-       const timeCriacao = new Date(c.created_at || c.data_hora || c.data).getTime();
-       return timeCriacao >= timeAbertura; // Só pendentes deste ciclo
+  const comandasDoTurno = useMemo(() => {
+    if (!comandas || !caixaAtual) return [];
+    const dataCaixa = caixaAtual.data_abertura;
+    const caixaId = String(caixaAtual.id);
+
+    return comandas.filter(c => {
+      // A comanda pertence a este turno se foi registrada com a mesma data do ciclo OU atrelada explicitamente ao ID do caixa
+      return c.data === dataCaixa || String(c.caixa_id) === caixaId;
+    }).map(c => {
+       const subtotal = (c.produtos || []).reduce((sum, p) => sum + (Number(p.preco) || 0), 0);
+       const taxa = Number(c.taxa_entrega) || 0;
+       const desconto = Number(c.desconto) || 0;
+       const totalDevido = arredondar(subtotal + taxa - desconto);
+
+       // Somamos TODOS os pagamentos registrados nesta comanda (seguro contra nulos)
+       const totalPago = arredondar((c.pagamentos || []).reduce((sum, p) => sum + (Number(p.valor) || 0), 0));
+       
+       const diferenca = arredondar(totalPago - totalDevido);
+       const troco = diferenca > 0 ? diferenca : 0;
+       const pendente = diferenca < 0 ? Math.abs(diferenca) : 0;
+
+       let statusFinanceiro = 'PENDENTE';
+       if (pendente === 0) statusFinanceiro = 'PAGO';
+       else if (totalPago > 0) statusFinanceiro = 'PARCIAL';
+
+       return {
+          ...c,
+          totalDevido,
+          totalPago,
+          troco,
+          pendente,
+          statusFinanceiro
+       };
+    }).sort((a, b) => {
+       // Ordena primeiro as pendentes, depois por maior valor devido
+       if (a.pendente > 0 && b.pendente === 0) return -1;
+       if (a.pendente === 0 && b.pendente > 0) return 1;
+       return b.totalDevido - a.totalDevido;
     });
+  }, [comandas, caixaAtual]);
 
-    const total = pendentes.reduce((acc, c) => {
-       const subtotal = (c.produtos || []).reduce((sum, p) => sum + (p.preco || 0), 0);
-       return acc + (subtotal + (c.taxa_entrega || 0) - (c.desconto || 0));
-    }, 0);
+  const totaisDossie = useMemo(() => {
+    return comandasDoTurno.reduce((acc, c) => ({
+       devido: acc.devido + c.totalDevido,
+       pago: acc.pago + c.totalPago,
+       troco: acc.troco + c.troco,
+       pendente: acc.pendente + c.pendente,
+    }), { devido: 0, pago: 0, troco: 0, pendente: 0 });
+  }, [comandasDoTurno]);
 
-    return { total, lista: pendentes };
-  };
+  const comandasExtratoFiltradas = useMemo(() => {
+    if (!buscaExtrato.trim()) return comandasDoTurno;
+    const q = buscaExtrato.toLowerCase();
+    // Proteção absoluta contra nulos no c.nome e c.tipo
+    return comandasDoTurno.filter(c => (c.nome || '').toLowerCase().includes(q) || (c.tipo || '').toLowerCase().includes(q));
+  }, [comandasDoTurno, buscaExtrato]);
 
   const pagamentosDoTurno = getPagamentosDoTurno();
-  const { total: valorPendentes, lista: comandasPendentesList } = calcularComandasPendentes();
 
   const calcularPendenteMotoboy = () => {
     if (!comandas || comandas.length === 0 || !caixaAtual) return 0;
@@ -349,8 +388,8 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
   const cardHistoricoStyle = `relative p-6 md:p-8 rounded-[28px] transition-all duration-400 border backdrop-blur-xl shadow-sm hover:shadow-lg overflow-hidden flex flex-col w-full arox-cinematic
     ${temaNoturno ? 'bg-[#0A0A0A]/60 border-white/[0.06] hover:border-white/[0.1]' : 'bg-white/80 border-black/[0.04] hover:border-black/[0.08]'}`;
 
-  const btnAROXPrimario = `px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-2 active:scale-95 border ${temaNoturno ? 'bg-zinc-100 text-black border-transparent hover:bg-white' : 'bg-zinc-900 text-white border-transparent hover:bg-black'}`;
-  const btnAROXSecundario = `px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-2 active:scale-95 border ${temaNoturno ? 'bg-[#18181B] border-white/10 text-white hover:bg-zinc-800' : 'bg-white border-black/10 text-zinc-900 hover:bg-zinc-50'}`;
+  const btnAROXPrimario = `px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 border ${temaNoturno ? 'bg-zinc-100 text-black border-transparent hover:bg-white' : 'bg-zinc-900 text-white border-transparent hover:bg-black'}`;
+  const btnAROXSecundario = `px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 border ${temaNoturno ? 'bg-[#18181B] border-white/10 text-white hover:bg-zinc-800' : 'bg-white border-black/10 text-zinc-900 hover:bg-zinc-50'}`;
   
   const tabs = [{ id: 'atual', label: 'Ciclo Operacional' }, { id: 'historico', label: 'Trilha de Auditoria' }];
 
@@ -378,7 +417,8 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
   );
 
   return (
-    <div className={`w-full min-h-screen relative font-sans pt-4 pb-20 overflow-hidden ${bgPrincipal} ${textPrincipal}`}>
+    // IMPORTANTE: Removido min-h-screen e absolute. Agora este painel apenas preenche e usa o overflow do pai.
+    <div className={`w-full h-full flex flex-col relative font-sans overflow-hidden arox-cinematic ${bgPrincipal} ${textPrincipal}`}>
       
       <style dangerouslySetInnerHTML={{__html: `
         .arox-cinematic { animation: arox-fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(10px); }
@@ -393,9 +433,9 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}} />
 
-      <div className={`relative z-10 flex flex-col gap-6 w-full max-w-full mx-auto px-4 md:px-6 transition-all duration-400`}>
+      <div className={`relative z-10 flex flex-col gap-6 w-full h-full max-w-full mx-auto`}>
 
-        <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 shrink-0 border-b mb-4 ${bordaDestaque}`}>
+        <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 shrink-0 border-b mb-2 ${bordaDestaque}`}>
           <div className="flex flex-wrap items-center gap-4 md:gap-6">
             {tabs.map(tab => (
               <button 
@@ -430,7 +470,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
           )}
         </div>
 
-        <main className="flex-1 min-w-0 w-full relative">
+        <main className="flex-1 min-w-0 w-full relative overflow-y-auto scrollbar-hide pb-20">
             
             <div className={`w-full ${abaInterna === 'atual' ? 'block' : 'hidden'}`}>
               
@@ -494,7 +534,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                               <div className="mt-auto pt-6 w-full">
                                  <button onClick={() => setExtratoExpandido(true)} className={`w-full py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all duration-200 active:scale-[0.98] border shadow-sm flex justify-center items-center gap-3 ${temaNoturno ? 'bg-white/5 border-white/10 text-white hover:bg-white/10' : 'bg-black/5 border-black/10 text-zinc-900 hover:bg-black/10'}`}>
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                                    Ver Extrato do Turno
+                                    Abrir Dossiê de Auditoria
                                  </button>
                               </div>
                             </div>
@@ -505,13 +545,13 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                             </div>
                             <p className={`text-[12px] mb-6 font-medium text-center px-4 ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                              Insira a credencial gerencial para revelar os valores esperados deste ciclo.
+                              Validar senha de acesso para revelar os valores esperados deste ciclo.
                             </p>
                             
                             <div className="w-full max-w-[260px] space-y-4">
                               {renderIOSInput(senhaApuracao, setSenhaApuracao, handleVerificarSenhaApuracao)}
                               <button onClick={handleVerificarSenhaApuracao} className={`w-full py-3.5 rounded-[16px] text-[11px] font-bold uppercase tracking-widest transition-all duration-200 active:scale-[0.98] shadow-md border flex justify-center items-center gap-3 ${temaNoturno ? 'bg-zinc-100 text-black border-transparent hover:bg-white' : 'bg-zinc-900 text-white border-transparent hover:bg-black'}`}>
-                                Desbloquear
+                                Validar senha de autenticação
                               </button>
                             </div>
                           </div>
@@ -620,7 +660,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                     <div className="w-full max-w-[320px] space-y-4">
                       {renderIOSInput(senhaHistorico, setSenhaHistorico, handleVerificarSenhaHistorico)}
                       <button onClick={handleVerificarSenhaHistorico} className={`w-full py-4 rounded-[18px] text-[12px] font-bold uppercase tracking-widest transition-all duration-200 active:scale-[0.98] shadow-md border flex justify-center items-center gap-3 ${temaNoturno ? 'bg-zinc-100 text-black border-transparent hover:bg-white' : 'bg-zinc-900 text-white border-transparent hover:bg-black'}`}>
-                        Desbloquear Histórico
+                        Validar senha de autenticação
                       </button>
                     </div>
                   </div>
@@ -634,7 +674,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                         <span className={`min-w-[130px] text-center text-[12px] font-bold uppercase tracking-wider ${temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}`}>
                           {renderDataLabel()}
                         </span>
-                        <button onClick={() => alterarData(1)} disabled={isHoje} className={`p-2.5 rounded-lg transition-colors active:scale-95 disabled:opacity-20 disabled:hover:bg-transparent ${temaNoturno ? 'hover:bg-white/[0.08] text-zinc-400 hover:text-white' : 'hover:bg-black/[0.05] text-zinc-500 hover:text-black'}`}>
+                        <button onClick={() => alterarData(1)} disabled={isHoje} className={`p-2.5 rounded-lg transition-colors active:scale-95 disabled:opacity-20 disabled:hover:bg-transparent disabled:active:scale-100 ${temaNoturno ? 'hover:bg-white/[0.08] text-zinc-400 hover:text-white' : 'hover:bg-black/[0.05] text-zinc-500 hover:text-black'}`}>
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" /></svg>
                         </button>
                       </div>
@@ -645,14 +685,14 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
                         <p className={`text-[14px] font-bold ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Nenhum fechamento registrado nesta data.</p>
                       </div>
                     ) : (
-                      <div className="relative pt-2 pb-12 w-full">
+                      <div className="relative pt-2 w-full">
                         <div className={`absolute top-6 bottom-12 left-[18px] md:left-[26px] w-[2px] rounded-full ${temaNoturno ? 'bg-gradient-to-b from-white/[0.15] to-transparent' : 'bg-gradient-to-b from-black/[0.15] to-transparent'}`} />
 
                         <div className="flex flex-col gap-8 relative z-10 w-full">
                           {historicoCaixas.map((caixa, index) => {
                             const isEstornado = caixa.status === 'estornado';
-                            const isDiferenca = caixa.relatorio_fechamento?.diferencaDinheiro !== 0;
                             const diferenca = caixa.relatorio_fechamento?.diferencaDinheiro || 0;
+                            const isDiferenca = diferenca !== 0;
                             
                             let corMarcador = temaNoturno ? 'bg-zinc-300 ring-white/[0.1]' : 'bg-zinc-600 ring-black/[0.1]';
                             if (isEstornado) corMarcador = 'bg-rose-500 ring-rose-500/30';
@@ -730,84 +770,155 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
         </main>
       </div>
 
-      {/* MODAL DE DETALHAMENTO DE TURNO (EXTRATO) */}
+      {/* MODAL DE DOSSIÊ COMPLETO DE AUDITORIA DO TURNO (CINEMATOGRÁFICO) */}
       {extratoExpandido && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
-          <div className={`absolute inset-0 transition-opacity duration-300 backdrop-blur-sm ${temaNoturno ? 'bg-black/60' : 'bg-black/30'}`} onClick={() => setExtratoExpandido(false)} />
-          <div className={`relative w-full max-w-2xl h-auto max-h-[90vh] rounded-[32px] flex flex-col shadow-2xl animate-in zoom-in-[0.98] fade-in duration-200 border overflow-hidden ${temaNoturno ? 'bg-[#0A0A0C] border-white/[0.08]' : 'bg-white border-black/[0.05]'}`}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 lg:p-8">
+          <div className={`absolute inset-0 transition-opacity duration-500 backdrop-blur-xl ${temaNoturno ? 'bg-black/80' : 'bg-zinc-900/50'}`} onClick={() => setExtratoExpandido(false)} />
+          <div className={`relative w-full max-w-[1400px] h-[95vh] rounded-[32px] flex flex-col shadow-2xl animate-in zoom-in-[0.98] fade-in duration-300 border overflow-hidden ${temaNoturno ? 'bg-[#0A0A0A] border-white/[0.08]' : 'bg-[#FAFAFA] border-black/[0.05]'}`}>
             
-            <div className={`shrink-0 px-6 py-5 border-b flex items-center justify-between z-10 ${temaNoturno ? 'bg-[#0A0A0C]/90 border-white/5 backdrop-blur-md' : 'bg-white/90 border-black/5 backdrop-blur-md'}`}>
+            {/* Cabeçalho do Dossiê */}
+            <div className={`shrink-0 px-6 py-6 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between z-20 gap-4 shadow-sm ${temaNoturno ? 'bg-[#0A0A0A]/95 border-white/10' : 'bg-white/95 border-black/10'}`}>
               <div>
-                <h2 className="text-[18px] font-bold tracking-tight">Extrato do Turno</h2>
-                <p className={`text-[12px] font-medium mt-0.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Transações em tempo real.</p>
+                <h2 className="text-[22px] font-bold tracking-tight">Dossiê de Auditoria</h2>
+                <p className={`text-[13px] font-medium mt-1 ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                  Integração total de contas, recebimentos e inconsistências operacionais do ciclo ativo.
+                </p>
               </div>
-              <button onClick={() => setExtratoExpandido(false)} className={`p-2 rounded-xl transition-colors ${temaNoturno ? 'hover:bg-white/10 text-zinc-400' : 'hover:bg-black/5 text-zinc-600'}`}>
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
+              <div className="flex items-center gap-4 w-full sm:w-auto">
+                <div className={`relative flex items-center w-full sm:w-64 h-10 rounded-xl border px-3 transition-colors ${temaNoturno ? 'bg-white/5 border-white/10 focus-within:border-white/30' : 'bg-black/5 border-black/10 focus-within:border-black/30'}`}>
+                  <svg className={`w-4 h-4 mr-2 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  <input type="text" placeholder="Localizar comanda..." value={buscaExtrato} onChange={(e) => setBuscaExtrato(e.target.value)} className="w-full h-full bg-transparent outline-none text-[13px] font-bold" />
+                </div>
+                <button onClick={() => setExtratoExpandido(false)} className={`shrink-0 p-2.5 rounded-xl transition-colors border ${temaNoturno ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white' : 'bg-white border-black/10 hover:bg-black/5 text-black'}`}>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 scrollbar-hide flex flex-col gap-8">
-              
-              {/* Comandas Pendentes */}
-              <div className="w-full">
-                <h3 className={`text-[11px] font-bold uppercase tracking-widest mb-3 flex items-center gap-2 ${temaNoturno ? 'text-amber-400' : 'text-amber-600'}`}>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  Comandas Pendentes (Valor Retido)
-                </h3>
-                <div className={`rounded-[20px] border shadow-sm flex flex-col overflow-hidden ${temaNoturno ? 'bg-amber-500/5 border-amber-500/10' : 'bg-amber-50 border-amber-200'}`}>
-                   {comandasPendentesList.length === 0 ? (
-                      <div className="p-5 text-center text-[12px] font-medium opacity-60">Todas as comandas deste ciclo foram pagas.</div>
-                   ) : (
-                      <>
-                        <div className="flex flex-col max-h-48 overflow-y-auto scrollbar-hide divide-y divide-dashed px-2" style={{borderColor: temaNoturno ? 'rgba(245,158,11,0.2)' : 'rgba(217,119,6,0.2)'}}>
-                          {comandasPendentesList.map(c => {
-                             const subtotal = (c.produtos||[]).reduce((s,p)=>s+(p.preco||0),0);
-                             const vFinal = subtotal + (c.taxa_entrega||0) - (c.desconto||0);
-                             return (
-                               <div key={c.id} className={`flex justify-between items-center py-3 px-2 text-[12px] font-semibold ${temaNoturno ? 'text-zinc-300' : 'text-zinc-800'}`}>
-                                 <span className="truncate flex-1 pr-4">{c.nome}</span>
-                                 <span className="shrink-0">R$ {vFinal.toFixed(2)}</span>
-                               </div>
-                             )
-                          })}
-                        </div>
-                        <div className={`p-4 border-t flex justify-between items-center ${temaNoturno ? 'border-amber-500/20 bg-amber-500/10' : 'border-amber-200 bg-amber-100'}`}>
-                           <span className="text-[12px] font-bold uppercase tracking-wider">Total Pendente</span>
-                           <span className={`text-[16px] font-black ${temaNoturno ? 'text-amber-400' : 'text-amber-700'}`}>R$ {valorPendentes.toFixed(2)}</span>
-                        </div>
-                      </>
-                   )}
-                </div>
-              </div>
-
-              {/* Movimentações de Caixa */}
-              <div className="w-full">
-                <h3 className={`text-[11px] font-bold uppercase tracking-widest mb-3 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                  Trilha de Entradas e Saídas (Gerais)
-                </h3>
-                <div className={`rounded-[20px] border shadow-sm flex flex-col overflow-hidden ${temaNoturno ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/10'}`}>
-                   {movimentacoes.length === 0 ? (
-                      <div className="p-5 text-center text-[12px] font-medium opacity-60">Nenhum lançamento avulso.</div>
-                   ) : (
-                      <div className="flex flex-col max-h-40 overflow-y-auto scrollbar-hide divide-y px-2" style={{borderColor: temaNoturno ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}}>
-                        {movimentacoes.map(m => (
-                           <div key={m.id} className={`flex justify-between items-center py-3 px-2 text-[12px] font-medium ${temaNoturno ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                             <span className="truncate flex-1 pr-4">{m.descricao}</span>
-                             <span className={`shrink-0 font-bold ${m.tipo === 'sangria' ? 'text-rose-500' : 'text-emerald-500'}`}>{m.tipo === 'sangria' ? '-' : '+'} R$ {m.valor.toFixed(2)}</span>
-                           </div>
-                        ))}
+            {/* Corpo do Dossiê - 2 Colunas */}
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 scrollbar-hide">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
+                
+                {/* Coluna Esquerda: Resumo e Entradas Avulsas */}
+                <div className="lg:col-span-4 flex flex-col gap-6">
+                   <div className={`p-6 rounded-[24px] border shadow-sm ${temaNoturno ? 'bg-[#121212] border-white/5' : 'bg-white border-black/5'}`}>
+                      <h3 className={`text-[11px] font-bold uppercase tracking-widest mb-6 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Desempenho Financeiro</h3>
+                      
+                      <div className="flex flex-col gap-5">
+                         <div className="flex justify-between items-end border-b pb-3 border-dashed border-zinc-500/20">
+                            <span className={`text-[13px] font-semibold ${temaNoturno ? 'text-zinc-300' : 'text-zinc-600'}`}>Valor Faturado (Devido)</span>
+                            <span className="text-[18px] font-black tracking-tight tabular-nums">R$ {totaisDossie.devido.toFixed(2)}</span>
+                         </div>
+                         <div className="flex justify-between items-end border-b pb-3 border-dashed border-zinc-500/20">
+                            <span className={`text-[13px] font-semibold ${temaNoturno ? 'text-zinc-300' : 'text-zinc-600'}`}>Montante Recebido</span>
+                            <span className="text-[18px] font-black tracking-tight tabular-nums text-emerald-500">R$ {totaisDossie.pago.toFixed(2)}</span>
+                         </div>
+                         <div className="flex justify-between items-end border-b pb-3 border-dashed border-zinc-500/20">
+                            <span className={`text-[13px] font-semibold ${temaNoturno ? 'text-zinc-300' : 'text-zinc-600'}`}>Troco / Excedente Gerado</span>
+                            <span className="text-[18px] font-black tracking-tight tabular-nums text-blue-500">R$ {totaisDossie.troco.toFixed(2)}</span>
+                         </div>
+                         <div className="flex justify-between items-end pt-2">
+                            <span className={`text-[13px] font-semibold ${temaNoturno ? 'text-amber-400' : 'text-amber-600'}`}>Déficit (Falta Receber)</span>
+                            <span className={`text-[18px] font-black tracking-tight tabular-nums ${temaNoturno ? 'text-amber-400' : 'text-amber-600'}`}>R$ {totaisDossie.pendente.toFixed(2)}</span>
+                         </div>
                       </div>
-                   )}
-                </div>
-              </div>
+                   </div>
 
+                   <div className={`flex-1 p-6 rounded-[24px] border shadow-sm flex flex-col min-h-[300px] ${temaNoturno ? 'bg-[#121212] border-white/5' : 'bg-white border-black/5'}`}>
+                      <h3 className={`text-[11px] font-bold uppercase tracking-widest mb-4 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Lançamentos Extras (Caixa)</h3>
+                      {movimentacoes.length === 0 ? (
+                        <div className="flex-1 flex items-center justify-center opacity-50 text-[12px] font-medium">Nenhum lançamento avulso registrado.</div>
+                      ) : (
+                        <div className="flex flex-col gap-2 overflow-y-auto scrollbar-hide pr-2">
+                           {movimentacoes.map(m => (
+                             <div key={m.id} className={`p-3 rounded-xl border flex justify-between items-center ${temaNoturno ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/10'}`}>
+                                <span className="text-[12px] font-semibold truncate flex-1 pr-3">{m.descricao}</span>
+                                <span className={`text-[13px] font-black shrink-0 ${m.tipo === 'sangria' ? 'text-rose-500' : 'text-emerald-500'}`}>
+                                  {m.tipo === 'sangria' ? '-' : '+'} R$ {m.valor.toFixed(2)}
+                                </span>
+                             </div>
+                           ))}
+                        </div>
+                      )}
+                   </div>
+                </div>
+
+                {/* Coluna Direita: Auditoria Detalhada de Comandas */}
+                <div className="lg:col-span-8 flex flex-col">
+                   <div className="flex justify-between items-center mb-6">
+                      <h3 className={`text-[14px] font-bold uppercase tracking-widest ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                        Mapeamento de Contas ({comandasExtratoFiltradas.length})
+                      </h3>
+                   </div>
+
+                   <div className="grid grid-cols-1 gap-4 overflow-y-auto scrollbar-hide pb-10">
+                      {comandasExtratoFiltradas.length === 0 ? (
+                        <div className="py-20 text-center opacity-50 border border-dashed rounded-[24px] border-zinc-500/20">
+                          Nenhuma comanda vinculada a esta operação.
+                        </div>
+                      ) : (
+                        comandasExtratoFiltradas.map((c, idx) => (
+                          <div key={c.id} className={`p-5 rounded-[24px] border shadow-sm flex flex-col sm:flex-row justify-between gap-6 arox-cinematic transition-all duration-300 hover:shadow-md ${temaNoturno ? 'bg-[#121212] border-white/5 hover:border-white/10' : 'bg-white border-black/5 hover:border-black/10'}`} style={{animationDelay: `${idx * 20}ms`}}>
+                             
+                             <div className="flex flex-col gap-2 flex-1 min-w-0">
+                                <div className="flex items-center gap-3">
+                                   <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${c.statusFinanceiro === 'PAGO' ? (temaNoturno ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700') : c.statusFinanceiro === 'PARCIAL' ? (temaNoturno ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-700') : (temaNoturno ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700')}`}>
+                                      {c.statusFinanceiro}
+                                   </span>
+                                   <span className={`text-[10px] font-bold tracking-wider uppercase opacity-60`}>{c.tipo}</span>
+                                </div>
+                                <h4 className="text-[16px] font-bold tracking-tight truncate mt-1">{c.nome}</h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                   <span className={`text-[11px] font-medium opacity-60`}>Itens: {(c.produtos || []).length}</span>
+                                   {(c.pagamentos || []).length > 0 && (
+                                     <>
+                                       <span className="w-1 h-1 rounded-full bg-zinc-500 opacity-50"></span>
+                                       <span className={`text-[11px] font-medium opacity-60`}>Via: {Array.from(new Set((c.pagamentos || []).map(p => p.forma))).join(', ')}</span>
+                                     </>
+                                   )}
+                                </div>
+                             </div>
+
+                             <div className="flex items-end sm:items-center gap-6 shrink-0">
+                                <div className="flex flex-col gap-1.5 text-right w-full min-w-[140px]">
+                                   <div className="flex justify-between sm:justify-end items-baseline gap-4 w-full">
+                                      <span className={`text-[11px] font-bold uppercase tracking-wider ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Conta Real</span>
+                                      <span className="text-[14px] font-black tabular-nums">R$ {c.totalDevido.toFixed(2)}</span>
+                                   </div>
+                                   <div className="flex justify-between sm:justify-end items-baseline gap-4 w-full">
+                                      <span className={`text-[11px] font-bold uppercase tracking-wider ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Recebido</span>
+                                      <span className={`text-[14px] font-black tabular-nums ${c.totalPago > 0 ? 'text-emerald-500' : ''}`}>R$ {c.totalPago.toFixed(2)}</span>
+                                   </div>
+                                   
+                                   {(c.troco > 0 || c.pendente > 0) && (
+                                     <div className={`flex justify-between sm:justify-end items-baseline gap-4 w-full pt-1.5 mt-1 border-t border-dashed ${temaNoturno ? 'border-zinc-500/30' : 'border-zinc-500/20'}`}>
+                                        <span className={`text-[11px] font-black uppercase tracking-wider ${c.troco > 0 ? 'text-blue-500' : 'text-amber-500'}`}>
+                                          {c.troco > 0 ? 'Troco Pago' : 'Falta'}
+                                        </span>
+                                        <span className={`text-[14px] font-black tabular-nums ${c.troco > 0 ? 'text-blue-500' : 'text-amber-500'}`}>
+                                          R$ {c.troco > 0 ? c.troco.toFixed(2) : c.pendente.toFixed(2)}
+                                        </span>
+                                     </div>
+                                   )}
+                                </div>
+                             </div>
+
+                          </div>
+                        ))
+                      )}
+                   </div>
+                </div>
+
+              </div>
             </div>
+
           </div>
         </div>
       )}
 
+      {/* MODAL DE ENTRADA EXTRA / SANGRIA */}
       {movModal.visivel && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
           <div className={`absolute inset-0 transition-opacity duration-300 animate-in fade-in backdrop-blur-md ${temaNoturno ? 'bg-black/60' : 'bg-white/40'}`} onClick={() => setMovModal({ visivel: false, tipo: '', valor: '', descricao: '' })} />
           <div className={`relative w-full max-w-[420px] p-8 md:p-10 rounded-[32px] shadow-2xl animate-in zoom-in-[0.98] fade-in duration-200 border ${temaNoturno ? 'bg-[#0A0A0C] border-white/[0.08]' : 'bg-white/90 backdrop-blur-2xl border-black/[0.05]'}`}>
             <h2 className="text-[20px] font-bold tracking-tight mb-8">{movModal.tipo === 'sangria' ? 'Retirada (Sangria)' : 'Entrada Extra'}</h2>
@@ -836,12 +947,13 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
         </div>
       )}
 
+      {/* MODAL DE SENHA PARA OPERAÇÕES CRÍTICAS */}
       {senhaModal.visivel && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
           <div className={`absolute inset-0 transition-opacity duration-300 animate-in fade-in backdrop-blur-md ${temaNoturno ? 'bg-black/60' : 'bg-white/40'}`} onClick={() => setSenhaModal({ visivel: false, senha: '' })} />
           <div className={`relative w-full max-w-[420px] p-8 md:p-10 rounded-[32px] shadow-2xl animate-in zoom-in-[0.98] fade-in duration-200 border ${temaNoturno ? 'bg-[#0A0A0C] border-white/[0.08]' : 'bg-white/90 backdrop-blur-2xl border-black/[0.05]'}`}>
-            <h2 className="text-[20px] font-bold tracking-tight mb-2">Autorização Gerencial</h2>
-            <p className={`text-[12px] mb-8 font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Senha de administrador exigida para confirmar operação.</p>
+            <h2 className="text-[20px] font-bold tracking-tight mb-2">Validar senha de acesso</h2>
+            <p className={`text-[12px] mb-8 font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Credencial gerencial obrigatória para operação.</p>
             
             <div className="mb-8 w-full">
                {renderIOSInput(senhaModal.senha, (val) => setSenhaModal({...senhaModal, senha: val}), handleVerificarSenha)}
@@ -855,8 +967,9 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
         </div>
       )}
 
+      {/* MODAL PARA EDITAR VALORES FÍSICOS DECLARADOS */}
       {modalEdicao.visivel && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
           <div className={`absolute inset-0 transition-opacity duration-300 animate-in fade-in backdrop-blur-md ${temaNoturno ? 'bg-black/60' : 'bg-white/40'}`} onClick={() => setModalEdicao({ visivel: false, dinheiro: '', cartao: '', pix: '' })} />
           <div className={`relative w-full max-w-[420px] p-8 md:p-10 rounded-[32px] shadow-2xl animate-in zoom-in-[0.98] fade-in duration-200 border ${temaNoturno ? 'bg-[#0A0A0C] border-white/[0.08]' : 'bg-white/90 backdrop-blur-2xl border-black/[0.05]'}`}>
             <h2 className="text-[20px] font-bold tracking-tight mb-2">Editar Valores de Fechamento</h2>

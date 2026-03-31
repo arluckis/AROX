@@ -157,7 +157,7 @@ export default function Header({
           btnBg: isDark ? 'bg-emerald-500/10 ring-emerald-500/20 text-emerald-400/90 hover:bg-emerald-500/15' : 'bg-emerald-500/10 ring-emerald-500/20 text-emerald-700 hover:bg-emerald-500/15',
           dot: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]', 
           ping: 'bg-emerald-500/30 animate-[pulse_4s_ease-in-out_infinite]',
-          label: statusOperacao === 'pendente' ? 'Sistema ativo' : `Ciclo • ${dataCaixaFormatada}`,
+          label: statusOperacao === 'pendente' ? 'Sistema ativo' : `Caixa • ${dataCaixaFormatada}`,
           mobileLabel: statusOperacao === 'pendente' ? 'Ativo' : dataCaixaFormatada,
           msgText: ''
         };
@@ -348,7 +348,7 @@ export default function Header({
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
               </span>
               <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.1em] sm:tracking-[0.15em] truncate ${isDark ? 'text-amber-500' : 'text-amber-600'}`}>
-                TURNO ESTENDIDO — DADOS SENDO DIRECIONADOS AO DIA {caixaAtual?.data_abertura?.substring(0,10).split('-').reverse().join('/')}
+                TURNO ESTENDIDO— DADOS CONTÁBEIS SENDO DIRECIONADOS PARA O DIA {caixaAtual?.data_abertura ? caixaAtual.data_abertura.substring(0,10).split('-').reverse().join('/') : ''}
               </span>
             </div>
           </motion.div>
