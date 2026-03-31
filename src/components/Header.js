@@ -348,7 +348,7 @@ export default function Header({
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
               </span>
               <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.1em] sm:tracking-[0.15em] truncate ${isDark ? 'text-amber-500' : 'text-amber-600'}`}>
-                TURNO ESTENDIDO — DADOS CONTÁBEIS SENDO DIRECIONADOS PARA O DIA {caixaAtual?.data_abertura?.substring(0,10).split('-').reverse().join('/')}
+                TURNO ESTENDIDO — DADOS SENDO DIRECIONADOS AO DIA {caixaAtual?.data_abertura?.substring(0,10).split('-').reverse().join('/')}
               </span>
             </div>
           </motion.div>
