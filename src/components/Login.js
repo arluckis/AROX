@@ -276,11 +276,10 @@ export default function Login({ getHoje, setSessao, setScenePhase }) {
           </div>
           
           <h1 className="text-[2rem] lg:text-[4.5rem] font-medium leading-[1.05] tracking-tight text-white drop-shadow-lg pointer-events-none">
-            Gestão <br className="hidden lg:block"/> em escala.
+            Domínio <br className="hidden lg:block"/> em tempo real.
           </h1>
           <p className="mt-4 lg:mt-6 text-zinc-400 text-[14px] lg:text-[16px] leading-relaxed max-w-md font-light pointer-events-none">
-            Ecossistema centralizado de vendas, comandas e inteligência financeira. Disponibilidade e velocidade absolutas para a sua operação.
-          </p>
+            Sincronia absoluta entre fluxo de vendas e inteligência financeira. O núcleo de alta performance que converte sua operação em rentabilidade máxima.</p>
 
           {/* NOVO BOTÃO COMERCIAL: Demonstração */}
           <div className="mt-8 flex gap-4 pointer-events-auto">
@@ -315,10 +314,10 @@ export default function Login({ getHoje, setSessao, setScenePhase }) {
           
           <div className="mb-8">
             <h2 className="text-[1.25rem] font-medium tracking-tight text-zinc-100">
-              {stepTrocaSenha ? 'Credencial Master' : (!mostrarFormPadrao && lastLogin) ? `${getSaudacao()}, ${(lastLogin.nome_usuario || 'Operador').split(' ')[0]}` : 'Acesso ao Workspace'}
+              {stepTrocaSenha ? 'Redefina sua senha' : (!mostrarFormPadrao && lastLogin) ? `${getSaudacao()}, ${(lastLogin.nome_usuario || 'Operador').split(' ')[0]}` : 'Acesso ao Workspace'}
             </h2>
             <p className="mt-1.5 text-[13px] text-zinc-500 font-light">
-               {stepTrocaSenha ? 'Estabeleça a chave raiz da sua instância administrativa.' : (!mostrarFormPadrao && lastLogin) ? 'Autorize a conexão segura.' : 'Identificação segura requerida.'}
+               {stepTrocaSenha ? 'Crie uma nova senha para acessar sua conta AROX.' : (!mostrarFormPadrao && lastLogin) ? 'Autenticar sessão protegida.' : 'Assinatura digital exigida.'}
             </p>
           </div>
 
