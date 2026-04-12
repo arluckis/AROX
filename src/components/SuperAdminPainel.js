@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import AdminSidebar from './AdminSidebar';
 import AdminWorkspaceDrawer from './AdminWorkspaceDrawer';
+import AdminErros from '@/components/AdminErros'; // <-- A importação que faltava
 
 const CICLOS_PREMIUM = [
   { id: 'mensal', nome: 'Mensal', precoMes: 97 },
@@ -94,10 +95,8 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
     setTrustedIps(trustedIps.filter(ip => ip.id !== id));
   };
 
-  // --- MOTOR DE TELEMETRIA: CLASSIFICAÇÃO DE STATUS ---
   const classificarStatusOperacional = (empresa, dono) => {
     if (!dono || !dono.ultimo_ping_at) return { nivel: 'abandonado', tag: 'Abandonado', corBg: 'bg-zinc-500/10', corTxt: 'text-zinc-500', dot: 'bg-zinc-500 opacity-40' };
-    
     const diffMinutos = (Date.now() - new Date(dono.ultimo_ping_at).getTime()) / 60000;
     const temAtividade = empresa.uso_registros > 0;
     
@@ -107,11 +106,9 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
     return { nivel: 'abandonado', tag: 'Fantasma', corBg: 'bg-zinc-500/10', corTxt: 'text-zinc-500', dot: 'bg-zinc-600' };
   };
 
-  // --- MOTOR DE TELEMETRIA: HEALTH SCORE ---
   const calcularHealthScore = (empresa, dono) => {
     let score = 30; 
     if (empresa.ativo === false) return { nota: 0, label: 'Bloqueado', cor: 'text-rose-600' };
-    
     if (empresa.uso_registros > 500) score += 30;
     else if (empresa.uso_registros > 100) score += 20;
     else if (empresa.uso_registros > 0) score += 10;
@@ -124,7 +121,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
     }
 
     if (empresa.plano !== 'free' && empresa.plano) score += 20;
-
     score = Math.min(Math.max(score, 0), 100);
 
     if (score >= 80) return { nota: score, label: 'Elite', cor: 'text-emerald-500', bg: 'bg-emerald-500/10' };
@@ -203,10 +199,9 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
     else setEtapaWizard(etapaWizard - 1);
   };
 
-  // Função para calcular Validade Automaticamente
   const calcularValidade = (planoId) => {
     if (planoId === 'free') {
-       const d = new Date(); d.setDate(d.getDate() + 7); // 7 dias de trial padrão
+       const d = new Date(); d.setDate(d.getDate() + 7);
        return d.toISOString();
     }
     const ciclo = CICLOS_PREMIUM.find(c => c.id === planoId);
@@ -219,52 +214,35 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
     return null;
   };
 
-  // --- PROVISIONAMENTO CINEMATOGRÁFICO ---
   const iniciarProvisionamento = (e) => {
     e.preventDefault();
     setEtapaWizard(5);
-    const stepsText = [
-      "Estabelecendo handshake seguro...",
-      "Alocando shard de dados isolado no cluster...",
-      "Provisionando identidade do workspace...",
-      "Sincronizando telemetria operacional...",
-      "Ativando módulos de inteligência..."
-    ];
+    const stepsText = ["Estabelecendo handshake seguro...", "Alocando shard de dados isolado no cluster...", "Provisionando identidade do workspace...", "Sincronizando telemetria operacional...", "Ativando módulos de inteligência..."];
     let current = 0;
     setCinematicText(stepsText[0]);
     setProgressoCinematic(10);
-    
     const interval = setInterval(() => {
       current++;
-      if (current < stepsText.length) { 
-        setCinematicText(stepsText[current]); 
-        setProgressoCinematic((current / stepsText.length) * 100);
-      } else { 
-        clearInterval(interval); 
-        setProgressoCinematic(100);
-        setTimeout(executarCriacaoSupabase, 800); 
-      }
+      if (current < stepsText.length) { setCinematicText(stepsText[current]); setProgressoCinematic((current / stepsText.length) * 100); } 
+      else { clearInterval(interval); setProgressoCinematic(100); setTimeout(executarCriacaoSupabase, 800); }
     }, 1200); 
   };
 
   const executarCriacaoSupabase = async () => {
     try {
       const planoFinal = formData.tipoPlano === 'free' ? 'free' : formData.ciclo;
-      const dataHoje = new Date().toISOString();
       const validade = calcularValidade(planoFinal);
 
-      const payloadEmpresa = { 
+      const { data: novaEmpresa, error: errEmp } = await supabase.from('empresas').insert([{ 
         nome: formData.nomeRestaurante, ativo: true, plano: planoFinal, cidade: formData.cidade,
         horario_abertura: formData.abertura || '08:00:00', horario_fechamento: formData.fechamento || '23:00:00', 
         tipo_operacao: formData.tipoOperacao, codigo_integracao: formData.codigoIntegracao,
-        data_inicio_plano: dataHoje, validade_plano: validade
-      };
-
-      const { data: novaEmpresa, error: errEmp } = await supabase.from('empresas').insert([payloadEmpresa]).select().single();
-      if (errEmp) throw new Error(`Erro ao criar workspace: ${errEmp.message}`);
+        data_inicio_plano: new Date().toISOString(), validade_plano: validade
+      }]).select().single();
+      if (errEmp) throw errEmp;
 
       const { error: errUsr } = await supabase.from('usuarios').insert([{ empresa_id: novaEmpresa.id, nome_usuario: formData.nomeDono, email: formData.email, senha: formData.senha, role: 'dono', primeiro_login: true }]);
-      if (errUsr) throw new Error(`Erro ao criar credencial: ${errUsr.message}`);
+      if (errUsr) throw errUsr;
 
       await supabase.from('config_fidelidade').insert([{ empresa_id: novaEmpresa.id }]);
 
@@ -273,10 +251,7 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
       setEtapaWizard(1); 
       carregarEcossistema();
       setTimeout(() => setAbaAtiva('clientes'), 1000);
-    } catch (error) { 
-      mostrarNotificacao(error.message, 'erro'); 
-      setEtapaWizard(4); 
-    } 
+    } catch (error) { mostrarNotificacao(error.message, 'erro'); setEtapaWizard(4); } 
   };
 
   const formatForInput = (isoString) => isoString ? new Date(isoString).toISOString().split('T')[0] : '';
@@ -284,14 +259,10 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
   const abrirModalEdicao = (empresa, dono) => {
     setEmpresaEditando(empresa.id);
     setDadosEdicao({ 
-      nomeRestaurante: empresa.nome, 
-      plano: empresa.plano || 'free', 
-      nomeDono: dono?.nome_usuario || '', 
-      email: dono?.email || '', 
-      novaSenhaTemporaria: '', 
-      usuarioId: dono?.id || null,
-      data_inicio_plano: formatForInput(empresa.data_inicio_plano),
-      validade_plano: formatForInput(empresa.validade_plano)
+      nomeRestaurante: empresa.nome, plano: empresa.plano || 'free', 
+      nomeDono: dono?.nome_usuario || '', email: dono?.email || '', 
+      novaSenhaTemporaria: '', usuarioId: dono?.id || null,
+      data_inicio_plano: formatForInput(empresa.data_inicio_plano), validade_plano: formatForInput(empresa.validade_plano)
     });
     setModalEdicaoAberto(true);
   };
@@ -299,21 +270,18 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
   const salvarEdicao = async () => {
     setLoading(true);
     try {
-      const payloadEmpresa = { 
-        nome: dadosEdicao.nomeRestaurante, 
-        plano: dadosEdicao.plano,
+      const { error: errE } = await supabase.from('empresas').update({ 
+        nome: dadosEdicao.nomeRestaurante, plano: dadosEdicao.plano,
         data_inicio_plano: dadosEdicao.data_inicio_plano ? new Date(dadosEdicao.data_inicio_plano + 'T12:00:00Z').toISOString() : null,
         validade_plano: dadosEdicao.validade_plano ? new Date(dadosEdicao.validade_plano + 'T12:00:00Z').toISOString() : null
-      };
-
-      const { error: errE } = await supabase.from('empresas').update(payloadEmpresa).eq('id', empresaEditando);
-      if (errE) throw new Error("Erro ao atualizar workspace.");
+      }).eq('id', empresaEditando);
+      if (errE) throw errE;
       
       if (dadosEdicao.usuarioId) {
         let updatePayload = { nome_usuario: dadosEdicao.nomeDono, email: dadosEdicao.email };
         if (dadosEdicao.novaSenhaTemporaria.trim() !== '') { updatePayload.senha = dadosEdicao.novaSenhaTemporaria; updatePayload.primeiro_login = true; }
         const { error: errU } = await supabase.from('usuarios').update(updatePayload).eq('id', dadosEdicao.usuarioId);
-        if (errU) throw new Error(`Erro ao atualizar credenciais: ${errU.message}`);
+        if (errU) throw errU;
       }
 
       setModalEdicaoAberto(false);
@@ -326,47 +294,39 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
   const alternarStatusEmpresa = async () => {
     setConfirmModalOpen(false);
     try {
-      const novoStatus = !confirmConfig.status;
-      const { error } = await supabase.from('empresas').update({ ativo: novoStatus }).eq('id', confirmConfig.id);
-      if (error) throw new Error("Erro ao atualizar status da conta.");
+      const { error } = await supabase.from('empresas').update({ ativo: !confirmConfig.status }).eq('id', confirmConfig.id);
+      if (error) throw error;
       carregarEcossistema();
-      mostrarNotificacao(`Workspace ${novoStatus ? 'reativado' : 'suspenso'}.`, 'sucesso');
+      mostrarNotificacao(`Workspace atualizado.`, 'sucesso');
     } catch (err) { mostrarNotificacao(err.message, 'erro'); }
   };
 
-  // --- EXCLUSÃO SEGURA EXTREMA ---
   const confirmarExclusaoExtrema = async () => {
     setConfirmModalOpen(false);
-    mostrarNotificacao('Iniciando desintegração do ambiente...', 'info');
     try {
       const { error } = await supabase.rpc('excluir_workspace_seguro', { p_empresa_id: confirmConfig.id });
       if (error) throw error;
-      
       carregarEcossistema();
-      mostrarNotificacao(`Workspace e todas as dependências vaporizados.`, 'sucesso');
+      mostrarNotificacao(`Workspace vaporizado.`, 'sucesso');
     } catch (err) { mostrarNotificacao(`Falha na exclusão: ${err.message}`, 'erro'); }
   };
 
   const entrarComoCliente = (dono) => {
     if (!dono || !dono.empresa_id) return mostrarNotificacao("Gestor não localizado para este workspace.", 'erro');
-    const sessionObj = { ...dono, data: getHoje() };
-    localStorage.setItem('bessa_session', JSON.stringify(sessionObj));
+    localStorage.setItem('bessa_session', JSON.stringify({ ...dono, data: getHoje() }));
     window.location.href = '/'; 
   };
 
   const empresasFiltradas = useMemo(() => {
     if (!termoPesquisa) return empresas;
-    const termo = termoPesquisa.toLowerCase();
-    return empresas.filter(emp => emp.nome.toLowerCase().includes(termo) || (emp.usuarios?.[0]?.nome_usuario || '').toLowerCase().includes(termo));
+    return empresas.filter(emp => emp.nome.toLowerCase().includes(termoPesquisa.toLowerCase()) || (emp.usuarios?.[0]?.nome_usuario || '').toLowerCase().includes(termoPesquisa.toLowerCase()));
   }, [empresas, termoPesquisa]);
 
   const stats = useMemo(() => {
     const ativos = empresas.filter(e => e.ativo !== false);
     const mrr = ativos.filter(e => e.plano !== 'free').reduce((acc, emp) => acc + (CICLOS_PREMIUM.find(c => c.id === emp.plano)?.precoMes || 0), 0);
     const scoreMedio = ativos.reduce((acc, emp) => acc + emp.health.nota, 0) / (ativos.length || 1);
-    const emRisco = ativos.filter(e => e.health.nota < 50).length;
-
-    return { total: empresas.length, ativos: ativos.length, receitaEstimada: mrr, scoreMedio: scoreMedio.toFixed(0), emRisco };
+    return { total: empresas.length, ativos: ativos.length, receitaEstimada: mrr, scoreMedio: scoreMedio.toFixed(0), emRisco: ativos.filter(e => e.health.nota < 50).length };
   }, [empresas]);
 
   return (
@@ -396,7 +356,11 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
         <main className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8 pt-6 z-10 flex flex-col relative">
           <div className="w-full max-w-[1400px] mx-auto flex-1 flex flex-col space-y-10">
             
-            {/* DASHBOARD RESTAURADO COM TELEMETRIA */}
+            {/* O SEGREDO AQUI: A renderização do painel de Erros dentro do corpo principal */}
+            {abaAtiva === 'erros' && (
+              <AdminErros temaNoturno={temaNoturno} onFechar={() => setAbaAtiva('dashboard')} />
+            )}
+
             {abaAtiva === 'dashboard' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <header className="mb-8 border-b pb-6 border-black/5 dark:border-white/5">
@@ -424,7 +388,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
-                  {/* Monitor de Banco Mantido */}
                   <div className={`lg:col-span-2 p-6 md:p-8 rounded-[24px] border flex flex-col items-center justify-center text-center ${temaNoturno ? 'bg-[#111111]/80 border-white/[0.04]' : 'bg-white border-black/[0.04]'}`}>
                      <svg className={`w-12 h-12 mb-4 ${temaNoturno ? 'text-zinc-700' : 'text-zinc-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                      <h4 className={`text-[15px] font-bold ${temaNoturno ? 'text-white' : 'text-slate-900'}`}>Monitoramento de Banco de Dados</h4>
@@ -451,7 +414,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
               </div>
             )}
 
-            {/* WORKSPACES COM SCORE E STATUS LIVE */}
             {abaAtiva === 'clientes' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex-1 flex flex-col">
                 <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6 border-black/5 dark:border-white/5">
@@ -476,7 +438,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
                     
                     return (
                       <div key={emp.id} onClick={() => setWorkspaceSelecionado(emp)} className={`cursor-pointer group relative p-5 rounded-[20px] border transition-all hover:-translate-y-1 hover:shadow-lg flex flex-col ${temaNoturno ? 'bg-[#111] border-white/5 hover:border-white/20' : 'bg-white border-black/5 hover:border-black/10 shadow-sm'}`}>
-                        {/* Cabeçalho do Card */}
                         <div className="flex justify-between items-start mb-4">
                            <div className="flex items-center gap-3">
                              <div className="relative w-12 h-12 rounded-xl bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0 overflow-hidden">
@@ -493,7 +454,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
                            </div>
                         </div>
 
-                        {/* Inteligência Derivada */}
                         <div className={`mt-2 p-3 rounded-xl border flex justify-between items-center ${temaNoturno ? 'bg-[#1A1A1A] border-white/5' : 'bg-[#FAFAFA] border-black/5'}`}>
                            <div>
                              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Health Score</p>
@@ -505,7 +465,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
                            </div>
                         </div>
 
-                        {/* Ações Integradas com Delete Seguro */}
                         <div className="mt-5 pt-4 border-t border-black/5 dark:border-white/5 grid grid-cols-4 gap-2">
                            <button onClick={(e) => { e.stopPropagation(); abrirModalEdicao(emp, dono); }} className={`p-2 rounded-lg text-[11px] font-bold transition-colors flex items-center justify-center ${temaNoturno ? 'bg-white/5 hover:bg-white/10' : 'bg-black/5 hover:bg-black/10'}`} title="Editar">
                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
@@ -527,7 +486,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
               </div>
             )}
 
-            {/* AUDITORIA RESTAURADA INTACTA */}
             {abaAtiva === 'auditoria' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl">
                 <header className="mb-8 border-b pb-6 border-black/5 dark:border-white/5 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -605,7 +563,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
               </div>
             )}
 
-            {/* WIZARD NOVO WORKSPACE COM PROVISIONAMENTO CINEMATOGRÁFICO */}
             {abaAtiva === 'novo' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto pb-10">
                 {etapaWizard < 5 && (
@@ -757,7 +714,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
         </main>
       </div>
 
-      {/* MODAIS RESTAURADOS E EXPANDIDOS */}
       {modalEdicaoAberto && (
         <div className="fixed inset-0 z-[400] flex justify-end">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setModalEdicaoAberto(false)}></div>
@@ -776,7 +732,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
                 </select>
               </div>
 
-              {/* CONTROLE DE VALIDADE E PLANO */}
               <div className="grid grid-cols-2 gap-4">
                  <div>
                    <label className={`block text-[11px] font-bold uppercase tracking-widest mb-1.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Início do Plano</label>
@@ -820,7 +775,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
         </div>
       )}
 
-      {/* MODAL DE CONFIRMAÇÃO SEGURO (MÚLTIPLO USO) */}
       {confirmModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[400] animate-in fade-in">
            <div className={`rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col text-center border ${temaNoturno ? 'bg-[#0A0A0A] border-white/10' : 'bg-white border-black/5'}`}>
