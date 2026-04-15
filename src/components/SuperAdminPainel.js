@@ -3,7 +3,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import AdminSidebar from './AdminSidebar';
 import AdminWorkspaceDrawer from './AdminWorkspaceDrawer';
-import AdminErros from '@/components/AdminErros'; // <-- A importação que faltava
+import AdminErros from '@/components/AdminErros';
+import { SkeletonAdminDashboard } from '@/app/admin/SkeletonAdminDashboard';
 
 const CICLOS_PREMIUM = [
   { id: 'mensal', nome: 'Mensal', precoMes: 97 },
@@ -22,7 +23,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
   const [logsAuditoria, setLogsAuditoria] = useState([]);
   const [termoPesquisa, setTermoPesquisa] = useState('');
   
-  // Auditoria / Whitelist Controls
   const [meuIp, setMeuIp] = useState('');
   const [trustedIps, setTrustedIps] = useState([]);
   const [esconderMeuIp, setEsconderMeuIp] = useState(true);
@@ -37,7 +37,6 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
   const [confirmConfig, setConfirmConfig] = useState({ id: null, status: null, nome: '', acao: 'status' });
   const [toast, setToast] = useState({ visivel: false, texto: '', tipo: 'info' });
 
-  // Wizard e Provisionamento
   const [etapaWizard, setEtapaWizard] = useState(1);
   const [cinematicText, setCinematicText] = useState('');
   const [progressoCinematic, setProgressoCinematic] = useState(0);
@@ -356,62 +355,65 @@ export default function SuperAdminPainel({ fazerLogout, temaNoturno, setTemaNotu
         <main className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8 pt-6 z-10 flex flex-col relative">
           <div className="w-full max-w-[1400px] mx-auto flex-1 flex flex-col space-y-10">
             
-            {/* O SEGREDO AQUI: A renderização do painel de Erros dentro do corpo principal */}
             {abaAtiva === 'erros' && (
               <AdminErros temaNoturno={temaNoturno} onFechar={() => setAbaAtiva('dashboard')} />
             )}
 
             {abaAtiva === 'dashboard' && (
-              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <header className="mb-8 border-b pb-6 border-black/5 dark:border-white/5">
-                  <h2 className="text-[32px] font-bold tracking-tight">Centro de Inteligência</h2>
-                  <p className="text-[14px] mt-1 text-zinc-500 font-medium">Telemetria de performance e estado global da operação.</p>
-                </header>
-                
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-8">
-                  <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-white/5' : 'bg-white border-black/5'}`}>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">MRR Projetado</p>
-                    <h3 className="text-[28px] font-black tracking-tighter">R$ {stats.receitaEstimada.toFixed(2)}</h3>
-                  </div>
-                  <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-white/5' : 'bg-white border-black/5'}`}>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Health Score Médio</p>
-                    <h3 className={`text-[28px] font-black tracking-tighter ${stats.scoreMedio >= 70 ? 'text-emerald-500' : 'text-amber-500'}`}>{stats.scoreMedio}/100</h3>
-                  </div>
-                  <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-white/5' : 'bg-white border-black/5'}`}>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Clientes Operando</p>
-                    <h3 className="text-[28px] font-black tracking-tighter text-indigo-500">{stats.ativos}</h3>
-                  </div>
-                  <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-rose-500/20' : 'bg-rose-50/50 border-rose-200'}`}>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-rose-500 mb-2">Risco de Churn</p>
-                    <h3 className="text-[28px] font-black tracking-tighter text-rose-500">{stats.emRisco} <span className="text-sm font-medium opacity-70">contas</span></h3>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
-                  <div className={`lg:col-span-2 p-6 md:p-8 rounded-[24px] border flex flex-col items-center justify-center text-center ${temaNoturno ? 'bg-[#111111]/80 border-white/[0.04]' : 'bg-white border-black/[0.04]'}`}>
-                     <svg className={`w-12 h-12 mb-4 ${temaNoturno ? 'text-zinc-700' : 'text-zinc-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                     <h4 className={`text-[15px] font-bold ${temaNoturno ? 'text-white' : 'text-slate-900'}`}>Monitoramento de Banco de Dados</h4>
-                     <p className={`text-[12px] font-medium mt-1 max-w-sm ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Aguardando permissão de root role para cálculo real de tamanho em disco.</p>
+              loading ? (
+                <SkeletonAdminDashboard temaNoturno={temaNoturno} />
+              ) : (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <header className="mb-8 border-b pb-6 border-black/5 dark:border-white/5">
+                    <h2 className="text-[32px] font-bold tracking-tight">Centro de Inteligência</h2>
+                    <p className="text-[14px] mt-1 text-zinc-500 font-medium">Telemetria de performance e estado global da operação.</p>
+                  </header>
+                  
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-8">
+                    <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-white/5' : 'bg-white border-black/5'}`}>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">MRR Projetado</p>
+                      <h3 className="text-[28px] font-black tracking-tighter">R$ {stats.receitaEstimada.toFixed(2)}</h3>
+                    </div>
+                    <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-white/5' : 'bg-white border-black/5'}`}>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Health Score Médio</p>
+                      <h3 className={`text-[28px] font-black tracking-tighter ${stats.scoreMedio >= 70 ? 'text-emerald-500' : 'text-amber-500'}`}>{stats.scoreMedio}/100</h3>
+                    </div>
+                    <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-white/5' : 'bg-white border-black/5'}`}>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Clientes Operando</p>
+                      <h3 className="text-[28px] font-black tracking-tighter text-indigo-500">{stats.ativos}</h3>
+                    </div>
+                    <div className={`p-6 rounded-[20px] border shadow-sm ${temaNoturno ? 'bg-[#111] border-rose-500/20' : 'bg-rose-50/50 border-rose-200'}`}>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-rose-500 mb-2">Risco de Churn</p>
+                      <h3 className="text-[28px] font-black tracking-tighter text-rose-500">{stats.emRisco} <span className="text-sm font-medium opacity-70">contas</span></h3>
+                    </div>
                   </div>
 
-                  <div className={`p-6 rounded-[24px] border flex flex-col ${temaNoturno ? 'bg-[#111111]/80 border-white/[0.04]' : 'bg-white border-black/[0.04]'}`}>
-                    <h4 className={`text-[13px] font-bold uppercase tracking-widest mb-6 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Ranking Operacional</h4>
-                    <div className="flex flex-col gap-4 flex-1">
-                      {empresas.sort((a,b) => b.uso_registros - a.uso_registros).slice(0,5).map((emp, i) => (
-                        emp.uso_registros > 0 && (
-                          <div key={emp.id} className="flex items-center gap-3">
-                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[11px] ${i === 0 ? (temaNoturno ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') : (temaNoturno ? 'bg-white/5 text-zinc-400' : 'bg-black/5 text-zinc-600')}`}>#{i+1}</div>
-                             <div className="flex-1 min-w-0">
-                               <div className={`text-[13px] font-semibold truncate ${temaNoturno ? 'text-zinc-200' : 'text-slate-800'}`}>{emp.nome}</div>
-                               <div className={`text-[11px] font-medium mt-0.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>{emp.uso_registros} comandas cadastradas</div>
-                             </div>
-                          </div>
-                        )
-                      ))}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-6">
+                    <div className={`lg:col-span-2 p-6 md:p-8 rounded-[24px] border flex flex-col items-center justify-center text-center ${temaNoturno ? 'bg-[#111111]/80 border-white/[0.04]' : 'bg-white border-black/[0.04]'}`}>
+                       <svg className={`w-12 h-12 mb-4 ${temaNoturno ? 'text-zinc-700' : 'text-zinc-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                       <h4 className={`text-[15px] font-bold ${temaNoturno ? 'text-white' : 'text-slate-900'}`}>Monitoramento de Banco de Dados</h4>
+                       <p className={`text-[12px] font-medium mt-1 max-w-sm ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>Aguardando permissão de root role para cálculo real de tamanho em disco.</p>
+                    </div>
+
+                    <div className={`p-6 rounded-[24px] border flex flex-col ${temaNoturno ? 'bg-[#111111]/80 border-white/[0.04]' : 'bg-white border-black/[0.04]'}`}>
+                      <h4 className={`text-[13px] font-bold uppercase tracking-widest mb-6 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-400'}`}>Ranking Operacional</h4>
+                      <div className="flex flex-col gap-4 flex-1">
+                        {empresas.sort((a,b) => b.uso_registros - a.uso_registros).slice(0,5).map((emp, i) => (
+                          emp.uso_registros > 0 && (
+                            <div key={emp.id} className="flex items-center gap-3">
+                               <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-[11px] ${i === 0 ? (temaNoturno ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600') : (temaNoturno ? 'bg-white/5 text-zinc-400' : 'bg-black/5 text-zinc-600')}`}>#{i+1}</div>
+                               <div className="flex-1 min-w-0">
+                                 <div className={`text-[13px] font-semibold truncate ${temaNoturno ? 'text-zinc-200' : 'text-slate-800'}`}>{emp.nome}</div>
+                                 <div className={`text-[11px] font-medium mt-0.5 ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>{emp.uso_registros} comandas cadastradas</div>
+                               </div>
+                            </div>
+                          )
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )
             )}
 
             {abaAtiva === 'clientes' && (

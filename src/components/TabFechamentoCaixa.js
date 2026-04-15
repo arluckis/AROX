@@ -1,5 +1,5 @@
 'use client';
-import React from 'react';
+import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 
 // Lógica de Negócio e Hooks
@@ -8,13 +8,28 @@ import ErrorBoundary from './ui/ErrorBoundary';
 import { SkeletonCardCaixa } from './TabFechamentoCaixa/SkeletonsCaixa';
 import { renderIOSInput } from './TabFechamentoCaixa/WidgetsCaixa';
 
-// Componentes Assíncronos Blindados
-const ApuracaoSistema = dynamic(() => import('./TabFechamentoCaixa/WidgetsCaixa').then(m => m.ApuracaoSistema), { ssr: false, loading: () => <SkeletonCardCaixa /> });
-const DeclaracaoFisica = dynamic(() => import('./TabFechamentoCaixa/WidgetsCaixa').then(m => m.DeclaracaoFisica), { ssr: false, loading: () => <SkeletonCardCaixa /> });
-const AcertoMotoboys = dynamic(() => import('./TabFechamentoCaixa/WidgetsCaixa').then(m => m.AcertoMotoboys), { ssr: false, loading: () => <SkeletonCardCaixa /> });
+// Componentes Assíncronos Blindados com Alturas Independentes
+const ApuracaoSistema = dynamic(() => import('./TabFechamentoCaixa/WidgetsCaixa').then(m => m.ApuracaoSistema), { ssr: false, loading: () => <SkeletonCardCaixa altura="min-h-[300px]" /> });
+const DeclaracaoFisica = dynamic(() => import('./TabFechamentoCaixa/WidgetsCaixa').then(m => m.DeclaracaoFisica), { ssr: false, loading: () => <SkeletonCardCaixa altura="min-h-[300px]" /> });
+const AcertoMotoboys = dynamic(() => import('./TabFechamentoCaixa/WidgetsCaixa').then(m => m.AcertoMotoboys), { ssr: false, loading: () => <SkeletonCardCaixa altura="min-h-[300px]" /> });
 
-export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, comandas, fetchData, mostrarAlerta, mostrarConfirmacao }) {
-  const ctx = useFechamentoCaixa({ sessao, caixaAtual, comandas, fetchData, mostrarAlerta, mostrarConfirmacao });
+export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, comandas, fetchData, mostrarAlerta }) {
+  
+  // Estado local para o Modal Premium de Confirmação
+  const [modalConfirm, setModalConfirm] = useState({ visivel: false, titulo: '', mensagem: '', onConfirm: null });
+  
+  const localMostrarConfirmacao = (titulo, mensagem, onConfirm) => {
+    setModalConfirm({ visivel: true, titulo, mensagem, onConfirm });
+  };
+
+  const ctx = useFechamentoCaixa({ 
+    sessao, 
+    caixaAtual, 
+    comandas, 
+    fetchData, 
+    mostrarAlerta, 
+    mostrarConfirmacao: localMostrarConfirmacao // Injetamos o modal local no hook!
+  });
 
   const bgPrincipal = temaNoturno ? 'bg-[#050505]' : 'bg-[#FAFAFA]';
   const textPrincipal = temaNoturno ? 'text-zinc-100' : 'text-zinc-900';
@@ -35,6 +50,8 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
         @keyframes arox-fade-up { 100% { opacity: 1; transform: translateY(0); } }
         @keyframes ios-pop { 0% { opacity: 0; transform: scale(0.3); } 50% { transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
         .animate-ios-pop { animation: ios-pop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .arox-scale-in { animation: arox-zoom 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+        @keyframes arox-zoom { 0% { transform: scale(0.95); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}} />
@@ -77,7 +94,11 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
 
                   </div>
                   <div className="pt-4 pb-12 w-full arox-cinematic" style={{animationDelay: '200ms'}}>
-                    <button onClick={() => mostrarConfirmacao('Fechar Ciclo', `Confirma o encerramento do ciclo atual?`, ctx.encerrarCaixaConfirmado)} disabled={ctx.isConsolidating} className={`relative w-full py-5 rounded-[20px] text-[13px] font-bold uppercase tracking-wider transition-all duration-200 active:scale-[0.98] shadow-md border disabled:opacity-80 flex justify-center items-center gap-3 ${temaNoturno ? 'bg-zinc-100 text-black border-transparent hover:bg-white' : 'bg-zinc-900 text-white border-transparent hover:bg-black'}`}>
+                    <button 
+                      onClick={() => localMostrarConfirmacao('Fechar Ciclo', 'Confirma o encerramento do ciclo atual?', ctx.encerrarCaixaConfirmado)} 
+                      disabled={ctx.isConsolidating} 
+                      className={`relative w-full py-5 rounded-[20px] text-[13px] font-bold uppercase tracking-wider transition-all duration-200 active:scale-[0.98] shadow-md border disabled:opacity-80 flex justify-center items-center gap-3 ${temaNoturno ? 'bg-zinc-100 text-black border-transparent hover:bg-white' : 'bg-zinc-900 text-white border-transparent hover:bg-black'}`}
+                    >
                       {ctx.isConsolidating ? <><svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Fechando e Consolidando...</> : 'Confirmar e Fechar Ciclo'}
                     </button>
                   </div>
@@ -235,7 +256,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
       {ctx.movModal.visivel && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
           <div className={`absolute inset-0 transition-opacity backdrop-blur-md ${temaNoturno ? 'bg-black/60' : 'bg-white/40'}`} onClick={() => ctx.setMovModal({ visivel: false, tipo: '', valor: '', descricao: '' })} />
-          <div className={`relative w-full max-w-[420px] p-8 md:p-10 rounded-[32px] shadow-2xl border ${temaNoturno ? 'bg-[#0A0A0C] border-white/[0.08]' : 'bg-white/90 backdrop-blur-2xl border-black/[0.05]'}`}>
+          <div className={`relative w-full max-w-[420px] p-8 md:p-10 rounded-[32px] shadow-2xl border arox-scale-in ${temaNoturno ? 'bg-[#0A0A0C] border-white/[0.08]' : 'bg-white/90 backdrop-blur-2xl border-black/[0.05]'}`}>
             <h2 className="text-[20px] font-bold mb-8">{ctx.movModal.tipo === 'sangria' ? 'Retirada' : 'Entrada Extra'}</h2>
             <div className="space-y-6 mb-8">
               <div>
@@ -255,7 +276,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
       {ctx.senhaModal.visivel && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
           <div className={`absolute inset-0 backdrop-blur-md ${temaNoturno ? 'bg-black/60' : 'bg-white/40'}`} onClick={() => ctx.setSenhaModal({ visivel: false, senha: '' })} />
-          <div className={`relative w-full max-w-[420px] p-8 md:p-10 rounded-[32px] shadow-2xl border ${temaNoturno ? 'bg-[#0A0A0C] border-white/[0.08]' : 'bg-white/90 backdrop-blur-2xl border-black/[0.05]'}`}>
+          <div className={`relative w-full max-w-[420px] p-8 md:p-10 rounded-[32px] shadow-2xl border arox-scale-in ${temaNoturno ? 'bg-[#0A0A0C] border-white/[0.08]' : 'bg-white/90 backdrop-blur-2xl border-black/[0.05]'}`}>
             <h2 className="text-[20px] font-bold mb-2">Validar senha</h2>
             <p className="text-[12px] mb-8 font-medium opacity-50">Credencial gerencial obrigatória.</p>
             <div className="mb-8 w-full">{renderIOSInput(ctx.senhaModal.senha, (val) => ctx.setSenhaModal({...ctx.senhaModal, senha: val}), ctx.handleVerificarSenha, temaNoturno)}</div>
@@ -267,7 +288,7 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
       {ctx.modalEdicao.visivel && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
           <div className={`absolute inset-0 backdrop-blur-md ${temaNoturno ? 'bg-black/60' : 'bg-white/40'}`} onClick={() => ctx.setModalEdicao({ visivel: false, dinheiro: '', cartao: '', pix: '' })} />
-          <div className={`relative w-full max-w-[420px] p-8 md:p-10 rounded-[32px] shadow-2xl border ${temaNoturno ? 'bg-[#0A0A0C] border-white/[0.08]' : 'bg-white/90 backdrop-blur-2xl border-black/[0.05]'}`}>
+          <div className={`relative w-full max-w-[420px] p-8 md:p-10 rounded-[32px] shadow-2xl border arox-scale-in ${temaNoturno ? 'bg-[#0A0A0C] border-white/[0.08]' : 'bg-white/90 backdrop-blur-2xl border-black/[0.05]'}`}>
             <h2 className="text-[20px] font-bold mb-8">Editar Valores</h2>
             <div className="space-y-6 mb-8">
               <div><label className={labelStyle}>Dinheiro</label><div className={`relative flex items-center bg-transparent rounded-xl border ${temaNoturno ? 'border-white/[0.08] bg-white/5' : 'border-black/10 bg-black/5'}`}><span className="absolute left-4 font-bold opacity-50">R$</span><input type="number" value={ctx.modalEdicao.dinheiro} onChange={e => ctx.setModalEdicao({...ctx.modalEdicao, dinheiro: e.target.value})} className={`w-full bg-transparent py-3 pr-4 pl-12 outline-none font-bold ${temaNoturno ? 'text-white' : 'text-black'}`} /></div></div>
@@ -275,6 +296,34 @@ export default function TabFechamentoCaixa({ temaNoturno, sessao, caixaAtual, co
               <div><label className={labelStyle}>Pix</label><div className={`relative flex items-center bg-transparent rounded-xl border ${temaNoturno ? 'border-white/[0.08] bg-white/5' : 'border-black/10 bg-black/5'}`}><span className="absolute left-4 font-bold opacity-50">R$</span><input type="number" value={ctx.modalEdicao.pix} onChange={e => ctx.setModalEdicao({...ctx.modalEdicao, pix: e.target.value})} className={`w-full bg-transparent py-3 pr-4 pl-12 outline-none font-bold ${temaNoturno ? 'text-white' : 'text-black'}`} /></div></div>
             </div>
             <div className="flex justify-end gap-3"><button onClick={() => ctx.setModalEdicao({ visivel: false, dinheiro: '', cartao: '', pix: '' })} className={`px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>Cancelar</button><button onClick={ctx.salvarEdicaoFechamento} className={btnAROXPrimario}>Salvar</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* NOVO MODAL PREMIUM DE CONFIRMAÇÃO EXCLUSIVO */}
+      {modalConfirm.visivel && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+          <div className={`absolute inset-0 transition-opacity duration-300 backdrop-blur-md ${temaNoturno ? 'bg-black/60' : 'bg-white/40'}`} onClick={() => setModalConfirm({ visivel: false, titulo: '', mensagem: '', onConfirm: null })} />
+          <div className={`relative w-full max-w-sm p-8 md:p-10 rounded-[32px] shadow-2xl border arox-scale-in flex flex-col items-center text-center ${temaNoturno ? 'bg-[#0A0A0C] border-white/10' : 'bg-white/90 backdrop-blur-2xl border-black/10'}`}>
+            <div className={`relative w-16 h-16 rounded-full flex items-center justify-center mb-6 border shadow-sm ${temaNoturno ? 'bg-white/5 text-white border-white/10' : 'bg-black/5 text-black border-black/10'}`}>
+               <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight mb-2">{modalConfirm.titulo}</h2>
+            <p className={`text-[13px] mb-8 leading-relaxed font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>{modalConfirm.mensagem}</p>
+            <div className="flex flex-col gap-3 w-full relative z-10">
+              <button 
+                onClick={() => { if(modalConfirm.onConfirm) modalConfirm.onConfirm(); setModalConfirm({ visivel: false, titulo: '', mensagem: '', onConfirm: null }); }} 
+                className={`w-full py-3.5 text-[11px] font-bold uppercase tracking-wider rounded-xl shadow-md active:scale-[0.98] transition-all ${temaNoturno ? 'bg-zinc-100 text-black hover:bg-white' : 'bg-zinc-900 text-white hover:bg-black'}`}
+              >
+                Confirmar Ação
+              </button>
+              <button 
+                onClick={() => setModalConfirm({ visivel: false, titulo: '', mensagem: '', onConfirm: null })} 
+                className={`w-full py-3.5 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors border border-transparent ${temaNoturno ? 'hover:bg-white/5 text-zinc-400 hover:text-white' : 'hover:bg-black/5 text-zinc-600 hover:text-black'}`}
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}

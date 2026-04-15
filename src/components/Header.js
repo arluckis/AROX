@@ -27,7 +27,7 @@ export default function Header({
 
   // === CORREÇÃO VISUAL DE TEMA E PLANETA ===
   const isPlanetVisible = abaAtiva === 'comandas' && (!caixaAtual || caixaAtual.status !== 'aberto');
-  const isDark = isPlanetVisible ? true : temaNoturno;
+  const isDark = temaNoturno; // Modificado para respeitar sempre a preferência do usuário
 
   // === LÓGICA DE STATUS OPERACIONAL BASE ===
   const isOperacaoAtiva = caixaAtual?.status === 'aberto';

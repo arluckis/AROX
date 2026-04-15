@@ -198,7 +198,6 @@ export function useFechamentoCaixa({ sessao, caixaAtual, comandas, fetchData, mo
     setIsConsolidating(false);
     if (error) return mostrarAlerta("Erro", error.message); 
     
-    mostrarAlerta("Turno Consolidado", "Escrituração processada com sucesso.");
     setValorInformadoDinheiro(''); setValorInformadoCartao(''); setValorInformadoPix('');
     setMostrarEsperado(false); setHistoricoLiberado(false); setSolicitouSenhaAuto(true); setAbaInterna('historico');
     fetchData(); 

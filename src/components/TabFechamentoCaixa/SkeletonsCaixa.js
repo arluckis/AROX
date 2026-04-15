@@ -14,11 +14,11 @@ const ShimmerCaixa = () => (
   `}} />
 );
 
-export function SkeletonCardCaixa({ temaNoturno }) {
+export function SkeletonCardCaixa({ temaNoturno, altura = "min-h-[300px]" }) {
   const bg = temaNoturno ? 'bg-[#18181b] border-white/[0.04]' : 'bg-[#f4f4f5] border-black/[0.02]';
   const sh = temaNoturno ? 'shimmer-d' : 'shimmer-l';
   return (
-    <div className={`p-6 md:p-8 rounded-[32px] border h-full w-full flex flex-col gap-6 ${temaNoturno ? 'bg-[#0A0A0A]' : 'bg-white'}`}>
+    <div className={`p-6 md:p-8 rounded-[32px] border w-full flex flex-col gap-6 ${altura} ${temaNoturno ? 'bg-[#0A0A0A]' : 'bg-white'}`}>
       <ShimmerCaixa />
       <div className={`h-6 w-1/2 rounded-md shimmer-box ${sh} ${bg}`}></div>
       <div className="flex-1 flex flex-col gap-4 justify-end">

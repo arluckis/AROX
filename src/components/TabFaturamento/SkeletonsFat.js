@@ -19,7 +19,7 @@ const SkeletonBlock = ({ isDark, className, delay = 0 }) => {
   return <div className={`shimmer-wrapper ${isDark ? 'shimmer-dark' : 'shimmer-light'} ${bgClass} rounded-xl ${className}`} style={{ animationDelay: `${delay}ms` }} />;
 };
 
-export function SkeletonWidgetFat({ temaNoturno, altura = "h-[220px]" }) {
+export function SkeletonWidgetFat({ temaNoturno, altura = "min-h-[220px]" }) {
   return (
     <div className={`w-full ${altura} p-6 rounded-[24px] border flex flex-col ${temaNoturno ? 'bg-[#0A0A0A]/80 border-white/[0.04]' : 'bg-white/80 border-black/[0.04]'}`}>
       <PremiumShimmerStyles />

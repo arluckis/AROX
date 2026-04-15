@@ -7,19 +7,17 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, rectSortingStr
 import { CSS } from '@dnd-kit/utilities';
 import { GripHorizontal } from 'lucide-react';
 
-// Lógica de Negócio (O Cérebro)
 import { useMetricasFaturamento } from '@/hooks/useMetricasFaturamento';
 
-// Importação Dinâmica dos Músicos (Com os Esqueletos de Luxo)
 import ErrorBoundary from './ui/ErrorBoundary';
 import { SkeletonWidgetFat, SkeletonCardBase } from './TabFaturamento/SkeletonsFat';
 
-const WidgetTermometro = dynamic(() => import('./TabFaturamento/Widgets').then(mod => mod.WidgetTermometro), { ssr: false, loading: () => <SkeletonWidgetFat /> });
-const WidgetLinhaTemporal = dynamic(() => import('./TabFaturamento/Widgets').then(mod => mod.WidgetLinhaTemporal), { ssr: false, loading: () => <SkeletonWidgetFat /> });
-const WidgetPagamentos = dynamic(() => import('./TabFaturamento/Widgets').then(mod => mod.WidgetPagamentos), { ssr: false, loading: () => <SkeletonWidgetFat /> });
-const WidgetMapaCalor = dynamic(() => import('./TabFaturamento/Widgets').then(mod => mod.WidgetMapaCalor), { ssr: false, loading: () => <SkeletonWidgetFat /> });
-const WidgetProdutos = dynamic(() => import('./TabFaturamento/Widgets').then(mod => mod.WidgetProdutos), { ssr: false, loading: () => <SkeletonWidgetFat /> });
-const WidgetCombo = dynamic(() => import('./TabFaturamento/Widgets').then(mod => mod.WidgetCombo), { ssr: false, loading: () => <SkeletonWidgetFat /> });
+const WidgetTermometro = dynamic(() => import('./TabFaturamento/Widgets').then(mod => mod.WidgetTermometro), { ssr: false, loading: () => <SkeletonWidgetFat altura="min-h-[200px]" /> });
+const WidgetLinhaTemporal = dynamic(() => import('./TabFaturamento/Widgets').then(mod => mod.WidgetLinhaTemporal), { ssr: false, loading: () => <SkeletonWidgetFat altura="min-h-[200px]" /> });
+const WidgetPagamentos = dynamic(() => import('./TabFaturamento/Widgets').then(mod => mod.WidgetPagamentos), { ssr: false, loading: () => <SkeletonWidgetFat altura="min-h-[180px]" /> });
+const WidgetMapaCalor = dynamic(() => import('./TabFaturamento/Widgets').then(mod => mod.WidgetMapaCalor), { ssr: false, loading: () => <SkeletonWidgetFat altura="min-h-[200px]" /> });
+const WidgetProdutos = dynamic(() => import('./TabFaturamento/Widgets').then(mod => mod.WidgetProdutos), { ssr: false, loading: () => <SkeletonWidgetFat altura="min-h-[220px]" /> });
+const WidgetCombo = dynamic(() => import('./TabFaturamento/Widgets').then(mod => mod.WidgetCombo), { ssr: false, loading: () => <SkeletonWidgetFat altura="min-h-[180px]" /> });
 
 const SortableItem = ({ id, children, temaNoturno, isOverlay, index }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -44,9 +42,8 @@ export default function TabFaturamento({
 }) {
 
   const [mostrarMenuPersonalizar, setMostrarMenuPersonalizar] = useState(false);
-  const [widgets, setWidgets] = useState({ bruto: true, lucro: true, ticket: true, insights: true, termometro: true, linhaTemporal: true, pagamentos: true, mapaCalor: true, produtos: true, combo: true }); 
+  const [widgets, setWidgets] = useState({ bruto: true, lucro: true, ticket: true, termometro: true, linhaTemporal: true, pagamentos: true, mapaCalor: true, produtos: true, combo: true }); 
   const [ordemGraficos, setOrdemGraficos] = useState(['termometro', 'linhaTemporal', 'pagamentos', 'mapaCalor', 'produtos', 'combo']);
-  const [insightAtivo, setInsightAtivo] = useState(0);
   const [activeId, setActiveId] = useState(null); 
 
   const strHoje = getHoje?.() || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
@@ -56,7 +53,6 @@ export default function TabFaturamento({
   const fatTotalSafe = faturamentoTotal || 0; const lucroSafe = lucroEstimado || 0;
   const totalComandas = (comandasFiltradas || []).length; const ticketMedio = totalComandas > 0 ? (fatTotalSafe / totalComandas) : 0;
 
-  // Carrega o Cérebro
   const metricas = useMetricasFaturamento({
     comandas, comandasFiltradas, fTipo, fValor, fInicio, fFim, strHoje, strMesAtual, strAnoAtual, fatTotalSafe, dadosPizza, rankingProdutos, temaNoturno
   });
@@ -67,12 +63,6 @@ export default function TabFaturamento({
     if (ws) setWidgets(JSON.parse(ws));
     if (os) setOrdemGraficos(JSON.parse(os));
   }, []);
-
-  useEffect(() => {
-    if (!metricas.insightsDinamicos || metricas.insightsDinamicos.length <= 1) return;
-    const interval = setInterval(() => setInsightAtivo(prev => (prev + 1) % metricas.insightsDinamicos.length), 8000);
-    return () => clearInterval(interval);
-  }, [metricas.insightsDinamicos?.length]);
 
   const toggleWidget = (chave) => { const n = { ...widgets, [chave]: !widgets[chave] }; setWidgets(n); localStorage.setItem('bessa_widgets_faturamento_v10', JSON.stringify(n)); };
   const handleReorder = (novaOrdem) => { setOrdemGraficos(novaOrdem); localStorage.setItem('bessa_ordem_faturamento_v10', JSON.stringify(novaOrdem)); };
@@ -142,7 +132,6 @@ export default function TabFaturamento({
     <div className={`w-full max-w-full pb-8 mt-4 font-sans px-4 md:px-0 ${temaNoturno ? 'text-zinc-100 selection:bg-zinc-800' : 'text-zinc-900 selection:bg-zinc-200'}`}>
       <style dangerouslySetInnerHTML={{__html: `.arox-cinematic { animation: arox-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(10px); } @keyframes arox-fade-up { 100% { opacity: 1; transform: translateY(0); } }`}} />
 
-      {/* HEADER CONTROLES MANTIDO INTACTO */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full mb-6">
          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
             <div className={`flex p-1.5 rounded-xl border shadow-sm w-full sm:w-auto ${temaNoturno ? 'bg-[#0A0A0A]/80 backdrop-blur-md border-white/10' : 'bg-white/80 backdrop-blur-md border-black/10'}`}>
@@ -189,7 +178,7 @@ export default function TabFaturamento({
         {mostrarMenuPersonalizar && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden w-full">
             <div className={`p-5 rounded-[24px] border mb-6 flex flex-wrap gap-3 w-full shadow-sm ${temaNoturno ? 'bg-[#0A0A0A]/80 backdrop-blur-xl border-white/10' : 'bg-white/80 backdrop-blur-xl border-black/10'}`}>
-              {[{ id: 'insights', label: 'IA Storytelling' }, { id: 'bruto', label: 'Bruto' }, { id: 'lucro', label: 'Lucro' }, { id: 'ticket', label: 'Ticket' }, { id: 'termometro', label: 'Crescimento' }, { id: 'linhaTemporal', label: 'Linha Temporal' }, { id: 'pagamentos', label: 'Pagamentos' }, { id: 'produtos', label: 'Rentabilidade' }, { id: 'mapaCalor', label: 'Calor' }, { id: 'combo', label: 'Combos' }].map(item => (
+              {[{ id: 'bruto', label: 'Bruto' }, { id: 'lucro', label: 'Lucro' }, { id: 'ticket', label: 'Ticket' }, { id: 'termometro', label: 'Crescimento' }, { id: 'linhaTemporal', label: 'Linha Temporal' }, { id: 'pagamentos', label: 'Pagamentos' }, { id: 'produtos', label: 'Rentabilidade' }, { id: 'mapaCalor', label: 'Calor' }, { id: 'combo', label: 'Combos' }].map(item => (
                 <label key={item.id} className={`flex items-center gap-2.5 px-3.5 py-2 rounded-xl border cursor-pointer transition-colors text-[10px] font-bold uppercase tracking-wider ${widgets?.[item.id] ? (temaNoturno ? 'bg-white/10 border-white/20 text-zinc-100' : 'bg-black/5 border-black/10 text-zinc-900') : (temaNoturno ? 'bg-transparent border-white/5 text-zinc-500 hover:text-zinc-300' : 'bg-transparent border-black/5 text-zinc-500 hover:text-zinc-700')}`}>
                   <input type="checkbox" checked={!!widgets?.[item.id]} onChange={() => toggleWidget(item.id)} className="hidden" />
                   <div className={`w-4 h-4 rounded-[6px] border flex items-center justify-center transition-colors flex-shrink-0 ${widgets?.[item.id] ? (temaNoturno ? 'border-transparent bg-zinc-200 text-zinc-900' : 'border-transparent bg-zinc-800 text-white') : (temaNoturno ? 'border-zinc-700' : 'border-zinc-300')}`}>
@@ -204,28 +193,7 @@ export default function TabFaturamento({
       </AnimatePresence>
 
       <div className="flex flex-col gap-5 w-full">
-        
-        {/* NARRATIVA DE DADOS COM ERROR BOUNDARY */}
-        {widgets?.insights && metricas.insightsDinamicos && metricas.insightsDinamicos.length > 0 && (
-          <ErrorBoundary codigoErro="ERR-FAT-IA-001" modulo="Storytelling IA" temaNoturno={temaNoturno} fallbackClassName="w-full h-16">
-            <div className={`w-full overflow-hidden p-5 rounded-[24px] border shadow-sm flex items-center gap-4 arox-cinematic ${cardSurface}`}>
-               <div className="flex-shrink-0 ml-2">{metricas.insightsDinamicos[insightAtivo]?.icone}</div>
-               <div className="flex-1 relative h-10 flex flex-col justify-center w-full min-w-0">
-                  <AnimatePresence mode="wait">
-                    <motion.div key={insightAtivo} initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -10, opacity: 0 }} transition={{ duration: 0.3 }} className="absolute inset-0 flex flex-col justify-center w-full">
-                      <p className={`text-[10px] font-bold uppercase tracking-widest mb-0.5 truncate w-full ${temaNoturno ? 'text-zinc-500' : 'text-zinc-500'}`}>{metricas.insightsDinamicos[insightAtivo]?.titulo || ''}</p>
-                      <p className={`text-[13px] font-bold truncate w-full ${temaNoturno ? 'text-zinc-200' : 'text-zinc-800'}`}>{metricas.insightsDinamicos[insightAtivo]?.texto || ''}</p>
-                    </motion.div>
-                  </AnimatePresence>
-               </div>
-               <div className="hidden sm:flex gap-2 ml-4 pr-2 flex-shrink-0">
-                  {metricas.insightsDinamicos.map((_, i) => <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${i === insightAtivo ? (temaNoturno ? 'bg-zinc-300 w-4' : 'bg-zinc-600 w-4') : (temaNoturno ? 'bg-zinc-800' : 'bg-zinc-200')}`} />)}
-               </div>
-            </div>
-          </ErrorBoundary>
-        )}
 
-        {/* MÉTRICAS PRINCIPAIS COM ERROR BOUNDARIES */}
         {([widgets?.bruto, widgets?.lucro, widgets?.ticket].filter(Boolean).length > 0) && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 w-full">
             {widgets?.bruto && (
@@ -255,7 +223,6 @@ export default function TabFaturamento({
           </div>
         )}
 
-        {/* WIDGETS DRAGGABLE DND-KIT COM ISOLAMENTO PERFEITO */}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveId(e.active.id)} onDragEnd={handleDragEnd}>
           <SortableContext items={widgetsVisiveis} strategy={rectSortingStrategy}>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 w-full grid-flow-dense">

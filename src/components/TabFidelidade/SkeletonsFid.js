@@ -11,21 +11,6 @@ const BaseShimmer = () => (
   `}} />
 );
 
-export function SkeletonInsights({ temaNoturno }) {
-  const bg = temaNoturno ? 'bg-[#18181b] border-white/[0.04]' : 'bg-[#f4f4f5] border-black/[0.02]';
-  const sh = temaNoturno ? 'shimmer-d' : 'shimmer-l';
-  return (
-    <div className={`w-full p-6 md:p-8 rounded-[32px] border flex flex-col gap-6 ${temaNoturno ? 'bg-[#0A0A0A]' : 'bg-white'}`}>
-      <BaseShimmer />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full h-[280px]">
-         <div className={`rounded-[32px] h-full w-full shimmer-box ${sh} ${bg}`}></div>
-         <div className={`rounded-[32px] h-full w-full shimmer-box ${sh} ${bg}`}></div>
-      </div>
-      <div className={`rounded-[32px] h-[250px] w-full shimmer-box ${sh} ${bg}`}></div>
-    </div>
-  );
-}
-
 export function SkeletonRanking({ temaNoturno }) {
   const bg = temaNoturno ? 'bg-[#18181b] border-white/[0.04]' : 'bg-[#f4f4f5] border-black/[0.02]';
   const sh = temaNoturno ? 'shimmer-d' : 'shimmer-l';

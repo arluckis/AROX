@@ -2,18 +2,14 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
 
-// O Cérebro e a Blindagem
 import { useFidelidade } from '@/hooks/useFidelidade';
 import ErrorBoundary from './ui/ErrorBoundary';
-import { SkeletonInsights, SkeletonRanking } from './TabFidelidade/SkeletonsFid';
+import { SkeletonRanking } from './TabFidelidade/SkeletonsFid';
 
-// Os Músicos Assíncronos
-const InsightsInteligencia = dynamic(() => import('./TabFidelidade/WidgetsFid').then(m => m.InsightsInteligencia), { ssr: false, loading: () => <SkeletonInsights /> });
 const PerfilCliente = dynamic(() => import('./TabFidelidade/WidgetsFid').then(m => m.PerfilCliente), { ssr: false });
 
 export default function TabFidelidade({ temaNoturno, sessao, mostrarAlerta, clientesFidelidade, setClientesFidelidade, comandas }) {
   
-  // === CORREÇÃO AQUI: PASSANDO TEMA NOTURNO ===
   const ctx = useFidelidade({ temaNoturno, sessao, mostrarAlerta, clientesFidelidade, setClientesFidelidade, comandas });
   
   const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -29,7 +25,7 @@ export default function TabFidelidade({ temaNoturno, sessao, mostrarAlerta, clie
   const modalBackdrop = temaNoturno ? 'bg-black/60' : 'bg-white/40';
   const surfaceModal = temaNoturno ? 'bg-[#0A0A0C] border-white/[0.08]' : 'bg-white/90 backdrop-blur-2xl border-black/[0.05] shadow-2xl';
 
-  const tabs = [{ id: 'clientes', label: 'Clientes' }, { id: 'ranking', label: 'Pódio' }, { id: 'insights', label: 'Inteligência' }, { id: 'config', label: 'Regras da Premiação' }];
+  const tabs = [{ id: 'clientes', label: 'Clientes' }, { id: 'ranking', label: 'Pódio' }, { id: 'config', label: 'Regras da Premiação' }];
 
   return (
     <div className={`w-full h-full flex flex-col font-sans overflow-hidden ${bgPrincipal} ${textPrincipal}`}>
@@ -145,14 +141,6 @@ export default function TabFidelidade({ temaNoturno, sessao, mostrarAlerta, clie
                   </div>
                 </div>
               )}
-            </div>
-          </ErrorBoundary>
-        )}
-
-        {ctx.abaInterna === 'insights' && (
-          <ErrorBoundary codigoErro="ERR-FID-INT-303" modulo="Inteligência CRM" temaNoturno={temaNoturno} fallbackClassName="w-full h-[500px]">
-            <div className="animate-in fade-in duration-500 w-full mx-auto pt-4 md:pt-6 arox-cinematic">
-              <InsightsInteligencia temaNoturno={temaNoturno} analiseGlobal={ctx.analiseGlobal} diaGlobalSelect={ctx.diaGlobalSelect} setDiaGlobalSelect={ctx.setDiaGlobalSelect} diasSemana={diasSemana} maxVolumeGlobal={ctx.maxVolumeGlobal} top5DiaSelecionado={ctx.top5DiaSelecionado} />
             </div>
           </ErrorBoundary>
         )}
