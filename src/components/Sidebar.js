@@ -13,7 +13,7 @@ export default function Sidebar({
   const [tabTravada, setTabTravada] = useState(false); 
 
   const isPlanetVisible = abaAtiva === 'comandas' && (!caixaAtual || caixaAtual.status !== 'aberto');
-  const isDark = isPlanetVisible ? true : temaNoturno;
+  const isDark = temaNoturno; // Modificado para respeitar sempre a preferência do usuário
 
   useEffect(() => {
     const buscarPlano = async () => {

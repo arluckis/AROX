@@ -6,7 +6,12 @@ import dynamic from 'next/dynamic';
 // O Motor Extraído (Lógica e Dados)
 import { useAroxCore } from '@/hooks/useAroxCore';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
-import { SkeletonTabContent } from '@/components/ui/Skeletons';
+
+// Importando nossos Esqueletos Posicionados Exclusivos (Adeus Genérico!)
+import { 
+  SkeletonTabComandas, SkeletonTabFechadas, SkeletonTabFaturamento, 
+  SkeletonTabFechamentoCaixa, SkeletonTabFidelidade, SkeletonPainelComanda 
+} from '@/components/ui/Skeletons';
 
 // Importações Fixas (Obrigatorias para o Boot Sequence e UX)
 import Login from '@/components/Login';
@@ -17,12 +22,12 @@ import SystemLoader from '@/components/SystemLoader';
 import AroxCinematicScene from '@/components/scenes/AroxCinematicScene';
 
 // Importações Dinâmicas (Baixadas apenas quando necessário)
-const TabComandas = dynamic(() => import('@/components/TabComandas'), { ssr: false, loading: () => <SkeletonTabContent /> });
-const TabFechadas = dynamic(() => import('@/components/TabFechadas'), { ssr: false, loading: () => <SkeletonTabContent /> });
-const TabFaturamento = dynamic(() => import('@/components/TabFaturamento'), { ssr: false, loading: () => <SkeletonTabContent /> });
-const PainelComanda = dynamic(() => import('@/components/PainelComanda'), { ssr: false, loading: () => <SkeletonTabContent /> });
-const TabFechamentoCaixa = dynamic(() => import('@/components/TabFechamentoCaixa'), { ssr: false, loading: () => <SkeletonTabContent /> });
-const TabFidelidade = dynamic(() => import('@/components/TabFidelidade'), { ssr: false, loading: () => <SkeletonTabContent /> });
+const TabComandas = dynamic(() => import('@/components/TabComandas'), { ssr: false, loading: () => <SkeletonTabComandas /> });
+const TabFechadas = dynamic(() => import('@/components/TabFechadas'), { ssr: false, loading: () => <SkeletonTabFechadas /> });
+const TabFaturamento = dynamic(() => import('@/components/TabFaturamento'), { ssr: false, loading: () => <SkeletonTabFaturamento /> });
+const PainelComanda = dynamic(() => import('@/components/PainelComanda'), { ssr: false, loading: () => <SkeletonPainelComanda /> });
+const TabFechamentoCaixa = dynamic(() => import('@/components/TabFechamentoCaixa'), { ssr: false, loading: () => <SkeletonTabFechamentoCaixa /> });
+const TabFidelidade = dynamic(() => import('@/components/TabFidelidade'), { ssr: false, loading: () => <SkeletonTabFidelidade /> });
 
 const ModalConfigEmpresa = dynamic(() => import('@/components/ModalConfigEmpresa'), { ssr: false });
 const ModalConfigTags = dynamic(() => import('@/components/ModalConfigTags'), { ssr: false });
@@ -43,12 +48,12 @@ export default function Home() {
     }
   }, []);
   
-  const frasesLoading = useMemo(() => ["Autenticando sessão segura", "Sincronizando ambiente", "Estabelecendo conexão", "Aferindo módulos operacionais", "Preparando cockpit"], []);
+  const frasesLoading = useMemo(() => ["Autenticando sessão segura", "Sincronizando ambiente", "Estabelecendo conexão"], []);
   const [fraseCarregamento, setFraseCarregamento] = useState(frasesLoading[0]);
 
   useEffect(() => {
     let i = 0;
-    const interval = setInterval(() => { i = (i + 1) % frasesLoading.length; setFraseCarregamento(frasesLoading[i]); }, 3000); 
+    const interval = setInterval(() => { i = (i + 1) % frasesLoading.length; setFraseCarregamento(frasesLoading[i]); }, 5000); 
     return () => clearInterval(interval);
   }, [frasesLoading]);
 
@@ -95,6 +100,23 @@ export default function Home() {
 
   // Instanciação e Desestruturação do Core (Lógica e Dados)
   const core = useAroxCore({ sessao, setSessao, router, fazerLogout, setIsDataLoaded, setTemPendencia, setIsAntecipado });
+
+  // BLINDAGEM DE FUNÇÕES: Cria fallback seguro caso o hook core não exporte as funções do Modal
+  const safeMostrarAlerta = core.mostrarAlerta || ((titulo, mensagem) => {
+    if (core.setModalGlobal) {
+      core.setModalGlobal({ visivel: true, tipo: 'alerta', titulo, mensagem });
+    } else {
+      alert(`${titulo}\n\n${mensagem}`);
+    }
+  });
+
+  const safeMostrarConfirmacao = core.mostrarConfirmacao || ((titulo, mensagem, acaoConfirmar) => {
+    if (core.setModalGlobal) {
+      core.setModalGlobal({ visivel: true, tipo: 'confirmacao', titulo, mensagem, acaoConfirmar });
+    } else {
+      if (window.confirm(`${titulo}\n\n${mensagem}`)) acaoConfirmar();
+    }
+  });
 
   useEffect(() => {
     if (appMode !== 'loading') return;
@@ -204,8 +226,6 @@ export default function Home() {
 
   return (
     <>
-      
-
       <div className={`fixed inset-0 z-0 transition-opacity duration-[1500ms] ease-out ${(appMode === 'shell' && !isTransitioningRef.current && !isPreComandaActiveGlobally) ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <AroxCinematicScene scenePhase={scenePhase} customConfig={sceneCustomConfig} temaAnterior={temaNoturno ? 'dark' : 'light'} />
       </div>
@@ -259,8 +279,7 @@ export default function Home() {
                 logoEmpresa={core.logoEmpresa} setTemaNoturno={setTemaNoturno} mostrarMenuPerfil={core.mostrarMenuPerfil}
                 setMostrarMenuPerfil={core.setMostrarMenuPerfil} nomeEmpresa={core.nomeEmpresa} sessao={sessao}
                 setMostrarAdminDelivery={core.setMostrarAdminDelivery} setMostrarConfigEmpresa={core.setMostrarConfigEmpresa} 
-                setMostrarAdminUsuarios={core.setMostrarAdminUsuarios} setMostrarAdminProdutos={core.setMostrarAdminProdutos} 
-                setMostrarConfigTags={core.setMostrarConfigTags} fazerLogout={fazerLogout}
+                setMostrarAdminProdutos={core.setMostrarAdminProdutos} setMostrarConfigTags={core.setMostrarConfigTags} fazerLogout={fazerLogout}
                 fetchData={core.fetchApenasAtualizacoes} clientesFidelidade={core.clientesFidelidade} vincularClienteFidelidade={core.vincularClienteFidelidade}
               />
 
@@ -277,9 +296,9 @@ export default function Home() {
                     ) : core.abaAtiva === 'faturamento' ? (
                       <TabFaturamento temaNoturno={temaNoturno} filtroTempo={core.filtroTempo} setFiltroTempo={core.setFiltroTempo} getHoje={core.getHoje} getMesAtual={core.getMesAtual} getAnoAtual={core.getAnoAtual} faturamentoTotal={core.faturamentoTotal} lucroEstimado={core.lucroEstimado} dadosPizza={core.dadosPizza} rankingProdutos={core.rankingProdutos} comandasFiltradas={core.comandasFiltradas} comandas={core.comandas} caixaAtual={core.caixaAtual} />
                     ) : core.abaAtiva === 'caixa' ? (
-                      <TabFechamentoCaixa temaNoturno={temaNoturno} sessao={sessao} caixaAtual={core.caixaAtual} comandas={core.comandas} fetchData={core.fetchApenasAtualizacoes} mostrarAlerta={core.mostrarAlerta} mostrarConfirmacao={core.mostrarConfirmacao} />
+                      <TabFechamentoCaixa temaNoturno={temaNoturno} sessao={sessao} caixaAtual={core.caixaAtual} comandas={core.comandas} fetchData={core.fetchApenasAtualizacoes} mostrarAlerta={safeMostrarAlerta} mostrarConfirmacao={safeMostrarConfirmacao} />
                     ) : core.abaAtiva === 'fidelidade' ? (
-                      <TabFidelidade temaNoturno={temaNoturno} sessao={sessao} mostrarAlerta={core.mostrarAlerta} mostrarConfirmacao={core.mostrarConfirmacao} metaFidelidade={core.metaFidelidade} setMetaFidelidade={core.setMetaFidelidade} clientesFidelidade={core.clientesFidelidade} setClientesFidelidade={core.setClientesFidelidade} comandas={core.comandas} />
+                      <TabFidelidade temaNoturno={temaNoturno} sessao={sessao} mostrarAlerta={safeMostrarAlerta} mostrarConfirmacao={safeMostrarConfirmacao} metaFidelidade={core.metaFidelidade} setMetaFidelidade={core.setMetaFidelidade} clientesFidelidade={core.clientesFidelidade} setClientesFidelidade={core.setClientesFidelidade} comandas={core.comandas} />
                     ) : null}
                   </ErrorBoundary>
                 </div>
@@ -287,7 +306,6 @@ export default function Home() {
             </div>
 
             {/* MODAIS (Agora Carregados Dinamicamente sob demanda) */}
-            {core.mostrarAdminUsuarios && sessao && <AdminUsuarios empresaId={sessao.empresa_id} usuarioAtualId={sessao.id} temaNoturno={temaNoturno} onFechar={() => core.setMostrarAdminUsuarios(false)} />}
             {core.mostrarAdminProdutos && sessao && <AdminProdutos empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => { core.setMostrarAdminProdutos(false); core.fetchApenasAtualizacoes(); }} />}
             {core.mostrarAdminDelivery && sessao && <AdminDelivery empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => core.setMostrarAdminDelivery(false)} />}
             {core.mostrarModalPeso && <ModalPeso opcoesPeso={core.configPeso} temaNoturno={temaNoturno} onAdicionar={core.adicionarProdutoNaComanda} onCancelar={() => core.setMostrarModalPeso(false)} />}
