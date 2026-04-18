@@ -5,7 +5,8 @@ import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 
 export default function Header({
   comandaAtiva, setIdSelecionado, setMenuMobileAberto, temaNoturno,
-  abaAtiva, fetchData, sessao, caixaAtual, setAbaAtiva
+  abaAtiva, fetchData, sessao, caixaAtual, setAbaAtiva,
+  sidebarExpandida = false // Nova prop cirúrgica adicionada aqui
 }) {
   const [editandoNome, setEditandoNome] = useState(false);
   const [tempNome, setTempNome] = useState('');
@@ -27,7 +28,7 @@ export default function Header({
 
   // === CORREÇÃO VISUAL DE TEMA E PLANETA ===
   const isPlanetVisible = abaAtiva === 'comandas' && (!caixaAtual || caixaAtual.status !== 'aberto');
-  const isDark = temaNoturno; // Modificado para respeitar sempre a preferência do usuário
+  const isDark = temaNoturno; 
 
   // === LÓGICA DE STATUS OPERACIONAL BASE ===
   const isOperacaoAtiva = caixaAtual?.status === 'aberto';
@@ -104,7 +105,7 @@ export default function Header({
   const getThemeStyles = () => {
     if (statusOperacao === 'inativa') return { 
       headerBg: isDark ? 'bg-[#09090b]/70 shadow-[inset_0_-1px_0_0_rgba(255,255,255,0.03)]' : 'bg-white/70 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.04)]',
-      btnBg: isDark ? 'bg-white/5 ring-white/10 text-zinc-400 hover:bg-white/10' : 'bg-black/5 ring-black/5 text-zinc-600 hover:bg-black/10',
+      btnBg: isDark ? 'bg-white/5 ring-white/10 text-zinc-400 hover:bg-white/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.2)]' : 'bg-black/5 ring-black/5 text-zinc-600 hover:bg-black/10 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)]',
       dot: 'bg-zinc-500/50',
       ping: 'hidden',
       label: 'Sistema inativo',
@@ -117,8 +118,8 @@ export default function Header({
         return {
           headerBg: isDark ? 'bg-[#09090b]/75 shadow-[inset_0_-1px_0_0_rgba(255,255,255,0.03)]' : 'bg-white/75 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.04)]',
           btnBg: isDark 
-            ? 'bg-amber-500/10 ring-amber-500/20 text-amber-400/90 shadow-[inset_0_1px_4px_rgba(245,158,11,0.05)] hover:bg-amber-500/15' 
-            : 'bg-amber-500/10 ring-amber-500/20 text-amber-700 shadow-[inset_0_1px_4px_rgba(245,158,11,0.05)] hover:bg-amber-500/15',
+            ? 'bg-amber-500/10 ring-amber-500/20 text-amber-400/90 shadow-[inset_0_1px_4px_rgba(245,158,11,0.05),0_2px_8px_-2px_rgba(0,0,0,0.2)] hover:bg-amber-500/15' 
+            : 'bg-amber-500/10 ring-amber-500/20 text-amber-700 shadow-[inset_0_1px_4px_rgba(245,158,11,0.05),0_2px_8px_-2px_rgba(0,0,0,0.05)] hover:bg-amber-500/15',
           dot: 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.4)]', 
           ping: 'bg-amber-400/40 animate-[pulse_4s_ease-in-out_infinite]',
           label: 'Finalizar ciclo',
@@ -129,8 +130,8 @@ export default function Header({
         return {
           headerBg: isDark ? 'bg-[#09090b]/80 shadow-[inset_0_-1px_0_0_rgba(255,255,255,0.04)]' : 'bg-white/80 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.05)]',
           btnBg: isDark 
-            ? 'bg-orange-500/10 ring-orange-500/20 text-orange-400/90 shadow-[inset_0_1px_6px_rgba(249,115,22,0.05)] hover:bg-orange-500/15' 
-            : 'bg-orange-500/10 ring-orange-500/20 text-orange-700 shadow-[inset_0_1px_6px_rgba(249,115,22,0.05)] hover:bg-orange-500/15',
+            ? 'bg-orange-500/10 ring-orange-500/20 text-orange-400/90 shadow-[inset_0_1px_6px_rgba(249,115,22,0.05),0_2px_8px_-2px_rgba(0,0,0,0.2)] hover:bg-orange-500/15' 
+            : 'bg-orange-500/10 ring-orange-500/20 text-orange-700 shadow-[inset_0_1px_6px_rgba(249,115,22,0.05),0_2px_8px_-2px_rgba(0,0,0,0.05)] hover:bg-orange-500/15',
           dot: 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]', 
           ping: 'bg-orange-500/40 animate-[pulse_3s_ease-in-out_infinite]',
           label: 'Encerramento pendente',
@@ -143,8 +144,8 @@ export default function Header({
             ? 'bg-gradient-to-b from-rose-950/10 to-[#09090b]/90 shadow-[inset_0_-1px_0_0_rgba(225,29,72,0.08)]' 
             : 'bg-gradient-to-b from-rose-50/50 to-white/90 shadow-[inset_0_-1px_0_0_rgba(225,29,72,0.08)]',
           btnBg: isDark 
-            ? 'bg-rose-500/10 ring-rose-500/20 text-rose-400/90 shadow-[inset_0_0_12px_rgba(225,29,72,0.1)] hover:bg-rose-500/15 transition-all duration-500' 
-            : 'bg-rose-500/10 ring-rose-500/20 text-rose-700 shadow-[inset_0_0_12px_rgba(225,29,72,0.08)] hover:bg-rose-500/15 transition-all duration-500',
+            ? 'bg-rose-500/10 ring-rose-500/20 text-rose-400/90 shadow-[inset_0_0_12px_rgba(225,29,72,0.1),0_2px_8px_-2px_rgba(0,0,0,0.2)] hover:bg-rose-500/15 transition-all duration-500' 
+            : 'bg-rose-500/10 ring-rose-500/20 text-rose-700 shadow-[inset_0_0_12px_rgba(225,29,72,0.08),0_2px_8px_-2px_rgba(0,0,0,0.05)] hover:bg-rose-500/15 transition-all duration-500',
           dot: 'bg-rose-500 shadow-[0_0_10px_rgba(225,29,72,0.6)]', 
           ping: 'bg-rose-500/40 animate-[pulse_2s_ease-in-out_infinite]',
           label: 'Encerrar operação',
@@ -154,7 +155,7 @@ export default function Header({
       default:
         return {
           headerBg: isDark ? 'bg-[#09090b]/70 shadow-[inset_0_-1px_0_0_rgba(255,255,255,0.03)]' : 'bg-white/70 shadow-[inset_0_-1px_0_0_rgba(0,0,0,0.04)]',
-          btnBg: isDark ? 'bg-emerald-500/10 ring-emerald-500/20 text-emerald-400/90 hover:bg-emerald-500/15' : 'bg-emerald-500/10 ring-emerald-500/20 text-emerald-700 hover:bg-emerald-500/15',
+          btnBg: isDark ? 'bg-emerald-500/10 ring-emerald-500/20 text-emerald-400/90 hover:bg-emerald-500/15 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.2)]' : 'bg-emerald-500/10 ring-emerald-500/20 text-emerald-700 hover:bg-emerald-500/15 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)]',
           dot: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]', 
           ping: 'bg-emerald-500/30 animate-[pulse_4s_ease-in-out_infinite]',
           label: statusOperacao === 'pendente' ? 'Sistema ativo' : `Ciclo • ${dataCaixaFormatada}`,
@@ -356,17 +357,27 @@ export default function Header({
       </AnimatePresence>
 
       <header 
-        className={`flex items-center justify-between px-3 sm:px-6 h-[72px] shrink-0 transition-all duration-[800ms] ease-out backdrop-blur-2xl ${currentStyle.headerBg}`}
+        className={`flex items-center justify-between px-3 sm:px-6 h-[72px] shrink-0 transition-all duration-[800ms] ease-out backdrop-blur-[24px] ${currentStyle.headerBg}`}
       >
         
         {/* Esquerda: Identidade & Navegação */}
         <div className="flex items-center gap-3 sm:gap-4 shrink-0 relative z-20 w-auto sm:w-[280px]">
           
-          <div className="flex items-center cursor-default shrink-0">
-            <span className={`font-black tracking-tighter text-[17px] leading-none select-none flex items-center ${isDark ? 'text-white' : 'text-zinc-900'}`}>
-              AROX
-            </span>
-          </div>
+          <AnimatePresence initial={false}>
+            {!sidebarExpandida && (
+              <motion.div
+                initial={{ opacity: 0, width: 0, filter: 'blur(4px)', x: -10 }}
+                animate={{ opacity: 1, width: 'auto', filter: 'blur(0px)', x: 0 }}
+                exit={{ opacity: 0, width: 0, filter: 'blur(4px)', x: -10 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="flex items-center cursor-default shrink-0 overflow-hidden"
+              >
+                <span className={`font-black tracking-[-0.04em] text-[18px] leading-none select-none flex items-center pr-3 bg-clip-text text-transparent ${isDark ? 'bg-gradient-to-b from-white to-zinc-400' : 'bg-gradient-to-b from-zinc-900 to-zinc-500'}`}>
+                  AROX
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <AnimatePresence mode="popLayout" initial={false}>
             {comandaAtiva ? (
@@ -404,7 +415,7 @@ export default function Header({
           <div className="absolute left-1/2 -translate-x-1/2 top-0 h-full flex justify-center items-center pointer-events-none z-0 w-full px-4">
             <motion.h1 
               initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
-              className={`font-semibold text-[14px] sm:text-[15px] tracking-tight truncate max-w-full ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}
+              className={`font-semibold text-[15px] sm:text-[16px] tracking-[-0.015em] truncate max-w-full ${isDark ? 'text-zinc-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]' : 'text-zinc-800 drop-shadow-[0_1px_2px_rgba(255,255,255,0.5)]'}`}
             >
               {mapAbaTitulo[abaAtiva] || 'Visão Geral'}
             </motion.h1>
@@ -624,7 +635,7 @@ export default function Header({
 
               <button 
                 onClick={irParaControleOperacional}
-                className={`flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all duration-700 ease-out group ring-1 ring-inset ${currentStyle.btnBg}`}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full transition-all duration-700 ease-out group ring-1 ring-inset ${currentStyle.btnBg}`}
               >
                 <span className="relative flex h-2 w-2 shrink-0">
                   {(statusOperacao === 'ativa' || statusOperacao === 'pendente') && (

@@ -98,9 +98,13 @@ export function useAroxCore({ sessao, setSessao, router, fazerLogout, setIsDataL
       
       let comandasMapeadas = [];
       if (comData) { comandasMapeadas = normalizarComandas(comData, todosCaixas || []).reverse(); setComandas(comandasMapeadas); }
+      
       const hoje = getHoje(); let hasPendencia = false;
-      if (caixaData && caixaData.data_abertura && caixaData.data_abertura < hoje) hasPendencia = true;
-      if (comandasMapeadas && comandasMapeadas.filter(c => c.status === 'aberta' && c.data && c.data < hoje).length > 0) hasPendencia = true;
+      
+      // Correção: Pendência só ocorre se houver comandas abertas de ciclos passados (que não pertencem ao caixa aberto atual)
+      if (comandasMapeadas && comandasMapeadas.filter(c => c.status === 'aberta' && c.data && c.data < hoje && (!caixaData || c.caixa_id !== caixaData.id)).length > 0) {
+        hasPendencia = true;
+      }
 
       setTemPendencia(hasPendencia);
       if (caixaData && !hasPendencia) setCaixaAtual(caixaData);

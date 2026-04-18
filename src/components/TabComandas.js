@@ -58,7 +58,10 @@ export default function TabComandas({
         
         if (e.key >= '1' && e.key <= '9') {
           const index = parseInt(e.key) - 1;
-          const comandasHoje = comandasAbertas.filter(c => !c.data || c.data >= dataHoje);
+          const comandasHoje = comandasAbertas.filter(c => {
+            if (caixaAtual?.status === 'aberto' && c.caixa_id === caixaAtual.id) return true;
+            return !c.data || c.data >= dataHoje;
+          });
           if (comandasHoje[index]) {
             e.preventDefault();
             setIdSelecionado(comandasHoje[index].id);
@@ -70,8 +73,16 @@ export default function TabComandas({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [modoExclusao, caixaAtual, adicionarComanda, comandasAbertas, dataHoje, setIdSelecionado]);
 
-  const comandasHoje = comandasAbertas.filter(c => !c.data || c.data >= dataHoje);
-  const comandasAntigas = comandasAbertas.filter(c => c.data && c.data < dataHoje);
+  const comandasHoje = comandasAbertas.filter(c => {
+    if (caixaAtual?.status === 'aberto' && c.caixa_id === caixaAtual.id) return true;
+    return !c.data || c.data >= dataHoje;
+  });
+
+  const comandasAntigas = comandasAbertas.filter(c => {
+    if (caixaAtual?.status === 'aberto' && c.caixa_id === caixaAtual.id) return false;
+    return c.data && c.data < dataHoje;
+  });
+
   const comandasParaRenderizar = modoExclusao ? comandasAbertas : comandasHoje;
 
   const calcularVolumeHoje = () => {

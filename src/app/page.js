@@ -3,17 +3,14 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 
-// O Motor Extraído (Lógica e Dados)
 import { useAroxCore } from '@/hooks/useAroxCore';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 
-// Importando nossos Esqueletos Posicionados Exclusivos (Adeus Genérico!)
 import { 
   SkeletonTabComandas, SkeletonTabFechadas, SkeletonTabFaturamento, 
   SkeletonTabFechamentoCaixa, SkeletonTabFidelidade, SkeletonPainelComanda 
 } from '@/components/ui/Skeletons';
 
-// Importações Fixas (Obrigatorias para o Boot Sequence e UX)
 import Login from '@/components/Login';
 import Header from '@/components/Header';
 import Sidebar from '@/components/Sidebar';
@@ -21,7 +18,6 @@ import PreComanda from '@/components/PreComanda';
 import SystemLoader from '@/components/SystemLoader';
 import AroxCinematicScene from '@/components/scenes/AroxCinematicScene';
 
-// Importações Dinâmicas (Baixadas apenas quando necessário)
 const TabComandas = dynamic(() => import('@/components/TabComandas'), { ssr: false, loading: () => <SkeletonTabComandas /> });
 const TabFechadas = dynamic(() => import('@/components/TabFechadas'), { ssr: false, loading: () => <SkeletonTabFechadas /> });
 const TabFaturamento = dynamic(() => import('@/components/TabFaturamento'), { ssr: false, loading: () => <SkeletonTabFaturamento /> });
@@ -30,7 +26,6 @@ const TabFechamentoCaixa = dynamic(() => import('@/components/TabFechamentoCaixa
 const TabFidelidade = dynamic(() => import('@/components/TabFidelidade'), { ssr: false, loading: () => <SkeletonTabFidelidade /> });
 
 const ModalConfigEmpresa = dynamic(() => import('@/components/ModalConfigEmpresa'), { ssr: false });
-const ModalConfigTags = dynamic(() => import('@/components/ModalConfigTags'), { ssr: false });
 const ModalPeso = dynamic(() => import('@/components/ModalPeso'), { ssr: false });
 const ModalPagamento = dynamic(() => import('@/components/ModalPagamento'), { ssr: false });
 const AdminProdutos = dynamic(() => import('@/components/AdminProdutos'), { ssr: false });
@@ -57,7 +52,6 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [frasesLoading]);
 
-  // Estados de Shell e Animações de Tela
   const [sessao, setSessao] = useState(null); 
   const [temaNoturno, setTemaNoturno] = useState(true);
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
@@ -79,7 +73,9 @@ export default function Home() {
   const [loaderExitStage, setLoaderExitStage] = useState('none');
   const isFirstLoad = useRef(true);
 
-  // Injeção do Motor Core com os métodos que afetam a animação de Shell
+  // Criamos o estado local para blindar erros do prompt e confirmacao
+  const [modalPromptInput, setModalPromptInput] = useState('');
+
   const fazerLogout = (silent = false) => {
     localStorage.removeItem('bessa_session'); localStorage.removeItem('arox_session_start'); setSessao(null); 
     preComandaDispensada.current = false; isTransitioningRef.current = false; setIsSceneActive(true); 
@@ -98,25 +94,13 @@ export default function Home() {
     return false;
   };
 
-  // Instanciação e Desestruturação do Core (Lógica e Dados)
   const core = useAroxCore({ sessao, setSessao, router, fazerLogout, setIsDataLoaded, setTemPendencia, setIsAntecipado });
 
-  // BLINDAGEM DE FUNÇÕES: Cria fallback seguro caso o hook core não exporte as funções do Modal
-  const safeMostrarAlerta = core.mostrarAlerta || ((titulo, mensagem) => {
-    if (core.setModalGlobal) {
-      core.setModalGlobal({ visivel: true, tipo: 'alerta', titulo, mensagem });
-    } else {
-      alert(`${titulo}\n\n${mensagem}`);
-    }
-  });
-
-  const safeMostrarConfirmacao = core.mostrarConfirmacao || ((titulo, mensagem, acaoConfirmar) => {
-    if (core.setModalGlobal) {
-      core.setModalGlobal({ visivel: true, tipo: 'confirmacao', titulo, mensagem, acaoConfirmar });
-    } else {
-      if (window.confirm(`${titulo}\n\n${mensagem}`)) acaoConfirmar();
-    }
-  });
+  // A função fallback para mostrar os alertas com segurança se o core não tiver exportado a var
+  const fecharModalGlobalSeguro = () => {
+     if (core.fecharModalGlobal) core.fecharModalGlobal();
+     setModalPromptInput('');
+  };
 
   useEffect(() => {
     if (appMode !== 'loading') return;
@@ -279,16 +263,15 @@ export default function Home() {
                 logoEmpresa={core.logoEmpresa} setTemaNoturno={setTemaNoturno} mostrarMenuPerfil={core.mostrarMenuPerfil}
                 setMostrarMenuPerfil={core.setMostrarMenuPerfil} nomeEmpresa={core.nomeEmpresa} sessao={sessao}
                 setMostrarAdminDelivery={core.setMostrarAdminDelivery} setMostrarConfigEmpresa={core.setMostrarConfigEmpresa} 
-                setMostrarAdminProdutos={core.setMostrarAdminProdutos} setMostrarConfigTags={core.setMostrarConfigTags} fazerLogout={fazerLogout}
+                setMostrarAdminProdutos={core.setMostrarAdminProdutos} fazerLogout={fazerLogout}
                 fetchData={core.fetchApenasAtualizacoes} clientesFidelidade={core.clientesFidelidade} vincularClienteFidelidade={core.vincularClienteFidelidade}
               />
 
               <div className="shell-content-panel flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8 pt-2 md:pt-6 z-10 flex flex-col relative">
                 <div className="w-full max-w-[1400px] mx-auto flex-1 flex flex-col">
-                  {/* O ESCUDO GLOBAL DA RENDERIZAÇÃO */}
                   <ErrorBoundary codigoErro="ERR-CORE-SYS-101" modulo="Painel de Navegação Central" temaNoturno={temaNoturno} fallbackClassName="w-full h-full flex-1 min-h-[50vh]">
                     {core.comandaAtiva ? (
-                      <PainelComanda temaNoturno={temaNoturno} comandaAtiva={core.comandaAtiva} abaDetalheMobile={core.abaDetalheMobile} setAbaDetalheMobile={core.setAbaDetalheMobile} filtroCategoriaCardapio={core.filtroCategoriaCardapio} setFiltroCategoriaCardapio={core.setFiltroCategoriaCardapio} menuCategorias={core.menuCategorias} adicionarProdutoNaComanda={core.adicionarProdutoNaComanda} excluirGrupoProdutos={core.excluirGrupoProdutos} setMostrarModalPeso={core.setMostrarModalPeso} tagsGlobais={core.tagsGlobais} toggleTag={core.toggleTag} editarProduto={core.editarProduto} excluirProduto={core.excluirProduto} setMostrarModalPagamento={core.setMostrarModalPagamento} encerrarMesa={core.encerrarMesa} setIdSelecionado={core.setIdSelecionado} alterarNomeComanda={core.alterarNomeComanda} adicionarClienteComanda={core.adicionarClienteComanda} alternarTipoComanda={core.alternarTipoComanda} modalAberto={core.mostrarModalPeso || core.mostrarModalPagamento} />
+                      <PainelComanda temaNoturno={temaNoturno} comandaAtiva={core.comandaAtiva} abaDetalheMobile={core.abaDetalheMobile} setAbaDetalheMobile={core.setAbaDetalheMobile} filtroCategoriaCardapio={core.filtroCategoriaCardapio} setFiltroCategoriaCardapio={core.setFiltroCategoriaCardapio} menuCategorias={core.menuCategorias} adicionarProdutoNaComanda={core.adicionarProdutoNaComanda} excluirGrupoProdutos={core.excluirGrupoProdutos} setMostrarModalPeso={core.setMostrarModalPeso} toggleTag={core.toggleTag} editarProduto={core.editarProduto} excluirProduto={core.excluirProduto} setMostrarModalPagamento={core.setMostrarModalPagamento} encerrarMesa={core.encerrarMesa} setIdSelecionado={core.setIdSelecionado} alterarNomeComanda={core.alterarNomeComanda} adicionarClienteComanda={core.adicionarClienteComanda} alternarTipoComanda={core.alternarTipoComanda} modalAberto={core.mostrarModalPeso || core.mostrarModalPagamento} />
                     ) : core.abaAtiva === 'comandas' ? (
                       <TabComandas temaNoturno={temaNoturno} comandasAbertas={core.comandasAbertas} modoExclusao={core.modoExclusao} setModoExclusao={core.setModoExclusao} selecionadasExclusao={core.selecionadasExclusao} toggleSelecaoExclusao={core.toggleSelecaoExclusao} confirmarExclusaoEmMassa={core.confirmarExclusaoEmMassa} adicionarComanda={core.adicionarComanda} setIdSelecionado={core.setIdSelecionado} caixaAtual={core.caixaAtual} abrirCaixaManual={core.abrirCaixaManual} abaAtiva={core.abaAtiva} />
                     ) : core.abaAtiva === 'fechadas' ? (
@@ -296,9 +279,9 @@ export default function Home() {
                     ) : core.abaAtiva === 'faturamento' ? (
                       <TabFaturamento temaNoturno={temaNoturno} filtroTempo={core.filtroTempo} setFiltroTempo={core.setFiltroTempo} getHoje={core.getHoje} getMesAtual={core.getMesAtual} getAnoAtual={core.getAnoAtual} faturamentoTotal={core.faturamentoTotal} lucroEstimado={core.lucroEstimado} dadosPizza={core.dadosPizza} rankingProdutos={core.rankingProdutos} comandasFiltradas={core.comandasFiltradas} comandas={core.comandas} caixaAtual={core.caixaAtual} />
                     ) : core.abaAtiva === 'caixa' ? (
-                      <TabFechamentoCaixa temaNoturno={temaNoturno} sessao={sessao} caixaAtual={core.caixaAtual} comandas={core.comandas} fetchData={core.fetchApenasAtualizacoes} mostrarAlerta={safeMostrarAlerta} mostrarConfirmacao={safeMostrarConfirmacao} />
+                      <TabFechamentoCaixa temaNoturno={temaNoturno} sessao={sessao} caixaAtual={core.caixaAtual} comandas={core.comandas} fetchData={core.fetchApenasAtualizacoes} />
                     ) : core.abaAtiva === 'fidelidade' ? (
-                      <TabFidelidade temaNoturno={temaNoturno} sessao={sessao} mostrarAlerta={safeMostrarAlerta} mostrarConfirmacao={safeMostrarConfirmacao} metaFidelidade={core.metaFidelidade} setMetaFidelidade={core.setMetaFidelidade} clientesFidelidade={core.clientesFidelidade} setClientesFidelidade={core.setClientesFidelidade} comandas={core.comandas} />
+                      <TabFidelidade temaNoturno={temaNoturno} sessao={sessao} metaFidelidade={core.metaFidelidade} setMetaFidelidade={core.setMetaFidelidade} clientesFidelidade={core.clientesFidelidade} setClientesFidelidade={core.setClientesFidelidade} comandas={core.comandas} />
                     ) : null}
                   </ErrorBoundary>
                 </div>
@@ -310,18 +293,43 @@ export default function Home() {
             {core.mostrarAdminDelivery && sessao && <AdminDelivery empresaId={sessao.empresa_id} temaNoturno={temaNoturno} onFechar={() => core.setMostrarAdminDelivery(false)} />}
             {core.mostrarModalPeso && <ModalPeso opcoesPeso={core.configPeso} temaNoturno={temaNoturno} onAdicionar={core.adicionarProdutoNaComanda} onCancelar={() => core.setMostrarModalPeso(false)} />}
             {core.mostrarModalPagamento && <ModalPagamento comanda={core.comandaAtiva} temaNoturno={temaNoturno} onConfirmar={core.processarPagamento} onCancelar={() => core.setMostrarModalPagamento(false)} clientesFidelidade={core.clientesFidelidade} metaFidelidade={core.metaFidelidade} />}
-            {core.mostrarConfigEmpresa && ( <ModalConfigEmpresa temaNoturno={temaNoturno} sessao={sessao} tagsGlobais={core.tagsGlobais} setTagsGlobais={core.setTagsGlobais} nomeEmpresaEdicao={core.nomeEmpresaEdicao} setNomeEmpresaEdicao={core.setNomeEmpresaEdicao} logoEmpresaEdicao={core.logoEmpresaEdicao} setLogoEmpresaEdicao={core.setLogoEmpresaEdicao} nomeUsuarioEdicao={core.nomeUsuarioEdicao} setNomeUsuarioEdicao={core.setNomeUsuarioEdicao} planoUsuario={core.dadosPlano} salvarConfigEmpresa={core.salvarConfigEmpresa} setMostrarConfigEmpresa={core.setMostrarConfigEmpresa} alterarSenhaConta={core.alterarSenhaConta} deletarWorkspace={core.deletarWorkspace} /> )}
-            {core.mostrarConfigTags && <ModalConfigTags temaNoturno={temaNoturno} tagsGlobais={core.tagsGlobais} setTagsGlobais={core.setTagsGlobais} sessao={sessao} setMostrarConfigTags={core.setMostrarConfigTags} />}
+            {core.mostrarConfigEmpresa && ( <ModalConfigEmpresa temaNoturno={temaNoturno} sessao={sessao} nomeEmpresaEdicao={core.nomeEmpresaEdicao} setNomeEmpresaEdicao={core.setNomeEmpresaEdicao} logoEmpresaEdicao={core.logoEmpresaEdicao} setLogoEmpresaEdicao={core.setLogoEmpresaEdicao} nomeUsuarioEdicao={core.nomeUsuarioEdicao} setNomeUsuarioEdicao={core.setNomeUsuarioEdicao} planoUsuario={core.dadosPlano} salvarConfigEmpresa={core.salvarConfigEmpresa} setMostrarConfigEmpresa={core.setMostrarConfigEmpresa} alterarSenhaConta={core.alterarSenhaConta} /> )}
 
-            {core.modalGlobal.visivel && (
+            {core.modalGlobal?.visivel && (
               <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] animate-in fade-in">
                 <div className={`rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col border text-center ${temaNoturno ? 'bg-[#09090b] border-white/10' : 'bg-white border-zinc-200'}`}>
                   <h2 className={`text-lg font-semibold tracking-tight mb-2 ${temaNoturno ? 'text-white' : 'text-zinc-900'}`}>{core.modalGlobal.titulo}</h2>
                   <p className={`text-sm mb-6 font-medium ${temaNoturno ? 'text-zinc-400' : 'text-zinc-500'}`}>{core.modalGlobal.mensagem}</p>
-                  {core.modalGlobal.tipo === 'prompt' && <input type="text" autoFocus className={`w-full p-3 rounded-lg border mb-6 outline-none font-medium text-sm transition-colors shadow-sm ${temaNoturno ? 'bg-white/5 border-white/10 text-white focus:border-white/20' : 'bg-white border-zinc-200 focus:border-zinc-400'}`} value={core.modalGlobal.valorInput} onChange={e => core.setModalGlobal({...core.modalGlobal, valorInput: e.target.value})} onKeyDown={e => { if (e.key === 'Enter') { if (core.modalGlobal.acaoConfirmar) core.modalGlobal.acaoConfirmar(core.modalGlobal.valorInput); core.fecharModalGlobal(); } }} />}
+                  
+                  {core.modalGlobal.tipo === 'prompt' && (
+                    <input 
+                      type="text" 
+                      autoFocus 
+                      className={`w-full p-3 rounded-lg border mb-6 outline-none font-medium text-sm transition-colors shadow-sm ${temaNoturno ? 'bg-white/5 border-white/10 text-white focus:border-white/20' : 'bg-white border-zinc-200 focus:border-zinc-400 text-zinc-900'}`} 
+                      value={modalPromptInput} 
+                      onChange={e => setModalPromptInput(e.target.value)} 
+                      onKeyDown={e => { 
+                        if (e.key === 'Enter') { 
+                          if (core.modalGlobal.acaoConfirmar) core.modalGlobal.acaoConfirmar(modalPromptInput); 
+                          fecharModalGlobalSeguro(); 
+                        } 
+                      }} 
+                    />
+                  )}
+                  
                   <div className="flex gap-3">
-                    {(core.modalGlobal.tipo === 'confirmacao' || core.modalGlobal.tipo === 'prompt') && <button onClick={core.fecharModalGlobal} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${temaNoturno ? 'bg-white/5 text-zinc-300 hover:bg-white/10' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>Cancelar</button>}
-                    <button onClick={() => { if (core.modalGlobal.acaoConfirmar) { if (core.modalGlobal.tipo === 'prompt') core.modalGlobal.acaoConfirmar(core.modalGlobal.valorInput); else core.modalGlobal.acaoConfirmar(); } core.fecharModalGlobal(); }} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold text-white transition-all shadow-md active:scale-[0.98] ${core.modalGlobal.titulo.toLowerCase().includes('excluir') || core.modalGlobal.titulo.toLowerCase().includes('atenção') ? 'bg-rose-600 hover:bg-rose-700' : 'bg-zinc-900 hover:bg-zinc-800'}`}>
+                    {(core.modalGlobal.tipo === 'confirmacao' || core.modalGlobal.tipo === 'prompt') && (
+                      <button onClick={fecharModalGlobalSeguro} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${temaNoturno ? 'bg-white/5 text-zinc-300 hover:bg-white/10' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}>Cancelar</button>
+                    )}
+                    
+                    <button onClick={() => { 
+                        if (core.modalGlobal.acaoConfirmar) { 
+                          if (core.modalGlobal.tipo === 'prompt') core.modalGlobal.acaoConfirmar(modalPromptInput); 
+                          else core.modalGlobal.acaoConfirmar(); 
+                        } 
+                        fecharModalGlobalSeguro(); 
+                      }} 
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-semibold text-white transition-all shadow-md active:scale-[0.98] ${core.modalGlobal.titulo.toLowerCase().includes('excluir') || core.modalGlobal.titulo.toLowerCase().includes('atenção') ? 'bg-rose-600 hover:bg-rose-700' : 'bg-zinc-900 hover:bg-zinc-800'}`}>
                       {core.modalGlobal.tipo === 'alerta' ? 'Entendido' : 'Confirmar'}
                     </button>
                   </div>
