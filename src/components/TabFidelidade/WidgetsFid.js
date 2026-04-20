@@ -264,12 +264,12 @@ export const PerfilCliente = ({ temaNoturno, clientePerfil, setClientePerfil, co
                    </div>
                 </div>
 
-                {/* Wrapper do Gráfico */}
-                <div className="h-64 w-full flex items-end justify-center mt-auto relative">
+                {/* Wrapper do Gráfico corrigido: altura dinâmica para o calendário (evita overflow), altura fixa para as barras de 24h */}
+                <div className={`w-full flex justify-center mt-auto relative ${viewMapa === 'hora' ? 'h-64 items-end' : ''}`}>
                    
                    {/* VISÃO CALENDÁRIO MENSAL (Malha Autêntica) */}
                    {viewMapa === 'mes' && (
-                     <div className="w-full flex flex-col h-full animate-in fade-in duration-500">
+                     <div className="w-full max-w-[400px] mx-auto flex flex-col h-full animate-in fade-in duration-500">
                        
                        {/* Controle de Mês */}
                        <div className="flex items-center justify-between mb-4 px-2">
